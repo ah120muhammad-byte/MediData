@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "MediData with OpenAI",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=OPENAI_API_KEY=${env:OPENAI_API_KEY}"
+      ]
+    }
+  ]
+}
