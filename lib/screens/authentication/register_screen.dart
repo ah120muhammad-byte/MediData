@@ -205,12 +205,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Registration failed: $error')));
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-    }
+  if (mounted) {
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
   }
 
   // ==========================================================================

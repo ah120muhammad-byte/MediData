@@ -1,124 +1,529 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_colors.dart';
-import '../../services/lecture_files_service.dart';
-import '../../services/lectures_service.dart';
-import 'lecture_file_tile.dart';
+
+import '../core/theme/app_colors.dart';
+
+enum LectureFileType {
+  pdf,
+  audio,
+  video,
+}
+
+class LectureFile {
+  final LectureFileType type;
+  final String title;
+  final String subtitle;
+  final String path;
+
+  const LectureFile({
+    required this.type,
+    required this.title,
+    required this.subtitle,
+    required this.path,
+  });
+
+  IconData get icon {
+    switch (type) {
+      case LectureFileType.pdf:
+        return Icons.picture_as_pdf_rounded;
+      case LectureFileType.audio:
+        return Icons.headphones_rounded;
+      case LectureFileType.video:
+        return Icons.play_circle_fill_rounded;
+    }
+  }
+
+  String get actionLabel {
+    switch (type) {
+      case LectureFileType.pdf:
+        return 'Open';
+      case LectureFileType.audio:
+        return 'Play';
+      case LectureFileType.video:
+        return 'Watch';
+    }
+  }
+}
+
+// ============================================================================
+// LECTURE EXAM
+// ============================================================================
+
+class LectureExam {
+  final String id;
+  final String lectureId;
+  final String title;
+  final String? description;
+  final int durationMinutes;
+  final int passingScore;
+  final bool isActive;
+
+  const LectureExam({
+    required this.id,
+    required this.lectureId,
+    required this.title,
+    this.description,
+    required this.durationMinutes,
+    required this.passingScore,
+    required this.isActive,
+  });
+}
 
 // ============================================================================
 // LECTURE CARD
 // ============================================================================
-//
-// Expandable card: gradient header (title + subtitle) + the lecture's
-// files listed inline underneath. Mirrors the "الدروس" reference design,
-// reskinned with AppColors.primary and the app's existing card language
-// (see level_card.dart / home_screen.dart _YourModuleCard).
 
-class LectureCard extends StatefulWidget {
-  final Lecture lecture;
-  final void Function(LectureFile file) onOpenFile;
-  final bool initiallyExpanded;
+class LectureCard extends StatelessWidget {
+  final String title;
+  final String? description;
+  final List<LectureFile> files;
+
+  final LectureExam? exam;
+
+  final bool expanded;
+  final bool isTablet;
+
+  final VoidCallback onTap;
+
+  final ValueChanged<LectureFile>? onFileOpen;
+  final ValueChanged<LectureFile>? onFileDownload;
+
+  final VoidCallback? onStartExam;
 
   const LectureCard({
     super.key,
-    required this.lecture,
-    required this.onOpenFile,
-    this.initiallyExpanded = false,
+    required this.title,
+    required this.description,
+    required this.files,
+    required this.expanded,
+    required this.isTablet,
+    required this.onTap,
+    this.exam,
+    this.onFileOpen,
+    this.onFileDownload,
+    this.onStartExam,
   });
-
-  @override
-  State<LectureCard> createState() => _LectureCardState();
-}
-
-class _LectureCardState extends State<LectureCard> {
-  late bool _expanded = widget.initiallyExpanded;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final size = MediaQuery.sizeOf(context);
-    final isTablet = size.shortestSide >= 600;
+    final radius = isTablet ? 21.0 : 17.0;
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
       width: double.infinity,
-      margin: EdgeInsets.only(bottom: isTablet ? 16 : 12),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(isTablet ? 22 : 18),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: expanded
+              ? AppColors.primary.withValues(alpha: 0.30)
+              : theme.colorScheme.onSurface.withValues(alpha: 0.05),
+          width: expanded ? 1.2 : 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.07),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(
+              alpha: isDark ? 0.20 : 0.055,
+            ),
+            blurRadius: expanded ? 16 : 12,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ====================================================
-          // HEADER (tap to expand/collapse)
-          // ====================================================
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isTablet ? 20 : 16,
-                  vertical: isTablet ? 18 : 15,
-                ),
+          _LectureHeader(
+            title: title,
+            description: description,
+            expanded: expanded,
+            isTablet: isTablet,
+            onTap: onTap,
+          ),
+
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 250),
+            firstCurve: Curves.easeOut,
+            secondCurve: Curves.easeOut,
+            sizeCurve: Curves.easeOut,
+            crossFadeState: expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: _LectureContentSection(
+              files: files,
+              exam: exam,
+              isTablet: isTablet,
+              onFileOpen: onFileOpen,
+              onFileDownload: onFileDownload,
+              onStartExam: onStartExam,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// LECTURE HEADER
+// ============================================================================
+
+class _LectureHeader extends StatelessWidget {
+  final String title;
+  final String? description;
+  final bool expanded;
+  final bool isTablet;
+  final VoidCallback onTap;
+
+  const _LectureHeader({
+    required this.title,
+    required this.description,
+    required this.expanded,
+    required this.isTablet,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.all(
+            isTablet ? 18 : 14,
+          ),
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: isTablet ? 58 : 50,
+                height: isTablet ? 58 : 50,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primary.withValues(alpha: 0.80),
-                    ],
+                  color: expanded
+                      ? AppColors.primary
+                      : AppColors.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(
+                    isTablet ? 17 : 14,
                   ),
                 ),
-                child: Row(
+                child: Icon(
+                  Icons.play_lesson_rounded,
+                  size: isTablet ? 30 : 26,
+                  color: expanded
+                      ? Colors.white
+                      : AppColors.primary,
+                ),
+              ),
+
+              SizedBox(
+                width: isTablet ? 15 : 12,
+              ),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.lecture.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: isTablet ? 16 : 14.5,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          if (widget.lecture.subtitle != null &&
-                              widget.lecture.subtitle!.trim().isNotEmpty) ...[
-                            SizedBox(height: isTablet ? 6 : 4),
-                            Text(
-                              widget.lecture.subtitle!,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: isTablet ? 13 : 12,
-                                color: Colors.white.withValues(alpha: 0.85),
-                              ),
-                            ),
-                          ],
-                        ],
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: isTablet ? 18 : 16,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                        color: theme.colorScheme.onSurface,
                       ),
                     ),
-                    SizedBox(width: isTablet ? 12 : 8),
-                    AnimatedRotation(
-                      turns: _expanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: Colors.white,
+
+                    if (description != null &&
+                        description!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        description!.trim(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: isTablet ? 13 : 12,
+                          height: 1.35,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.56,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              AnimatedRotation(
+                turns: expanded ? 0.5 : 0.0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: isTablet ? 30 : 26,
+                  color: theme.colorScheme.onSurface.withValues(
+                    alpha: 0.55,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// CONTENT SECTION
+// ============================================================================
+
+class _LectureContentSection extends StatelessWidget {
+  final List<LectureFile> files;
+  final LectureExam? exam;
+
+  final bool isTablet;
+
+  final ValueChanged<LectureFile>? onFileOpen;
+  final ValueChanged<LectureFile>? onFileDownload;
+
+  final VoidCallback? onStartExam;
+
+  const _LectureContentSection({
+    required this.files,
+    required this.exam,
+    required this.isTablet,
+    this.onFileOpen,
+    this.onFileDownload,
+    this.onStartExam,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final hasFiles = files.isNotEmpty;
+    final hasExam = exam != null && exam!.isActive;
+
+    if (!hasFiles && !hasExam) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          isTablet ? 18 : 14,
+          0,
+          isTablet ? 18 : 14,
+          isTablet ? 18 : 14,
+        ),
+        child: Column(
+          children: [
+            Divider(
+              height: 1,
+              color: theme.colorScheme.onSurface.withValues(
+                alpha: 0.06,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'No content available for this lecture.',
+              style: TextStyle(
+                fontSize: isTablet ? 13 : 12,
+                color: theme.colorScheme.onSurface.withValues(
+                  alpha: 0.52,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        isTablet ? 18 : 14,
+        0,
+        isTablet ? 18 : 14,
+        isTablet ? 18 : 14,
+      ),
+      child: Column(
+        children: [
+          Divider(
+            height: 1,
+            color: theme.colorScheme.onSurface.withValues(
+              alpha: 0.06,
+            ),
+          ),
+
+          if (hasFiles) ...[
+            const SizedBox(height: 10),
+
+            ...List.generate(
+              files.length,
+              (index) {
+                final file = files[index];
+
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == files.length - 1 ? 10 : 8,
+                  ),
+                  child: _LectureFileTile(
+                    file: file,
+                    isTablet: isTablet,
+                    onOpen: onFileOpen == null
+                        ? null
+                        : () => onFileOpen!(file),
+                    onDownload: onFileDownload == null
+                        ? null
+                        : () => onFileDownload!(file),
+                  ),
+                );
+              },
+            ),
+          ],
+
+          if (hasExam)
+            _LectureExamTile(
+              exam: exam!,
+              isTablet: isTablet,
+              onStartExam: onStartExam,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// FILE TILE
+// ============================================================================
+
+class _LectureFileTile extends StatelessWidget {
+  final LectureFile file;
+  final bool isTablet;
+  final VoidCallback? onOpen;
+  final VoidCallback? onDownload;
+
+  const _LectureFileTile({
+    required this.file,
+    required this.isTablet,
+    required this.onOpen,
+    required this.onDownload,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: EdgeInsets.all(
+        isTablet ? 13 : 10,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.onSurface.withValues(
+          alpha: 0.035,
+        ),
+        borderRadius: BorderRadius.circular(
+          isTablet ? 15 : 13,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: isTablet ? 48 : 43,
+            height: isTablet ? 48 : 43,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(
+                alpha: 0.10,
+              ),
+              borderRadius: BorderRadius.circular(
+                isTablet ? 13 : 11,
+              ),
+            ),
+            child: Icon(
+              file.icon,
+              size: isTablet ? 25 : 22,
+              color: AppColors.primary,
+            ),
+          ),
+
+          SizedBox(
+            width: isTablet ? 12 : 10,
+          ),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  file.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: isTablet ? 15 : 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+
+                const SizedBox(height: 3),
+
+                Text(
+                  file.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: isTablet ? 12 : 11,
+                    color: theme.colorScheme.onSurface.withValues(
+                      alpha: 0.48,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 6),
+
+          Material(
+            color: AppColors.primary.withValues(
+              alpha: 0.10,
+            ),
+            borderRadius: BorderRadius.circular(
+              isTablet ? 12 : 10,
+            ),
+            child: InkWell(
+              onTap: onOpen,
+              borderRadius: BorderRadius.circular(
+                isTablet ? 12 : 10,
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isTablet ? 11 : 9,
+                  vertical: isTablet ? 9 : 8,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _actionIcon(file.type),
+                      size: isTablet ? 18 : 16,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      file.actionLabel,
+                      style: TextStyle(
+                        fontSize: isTablet ? 12 : 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
                       ),
                     ),
                   ],
@@ -127,47 +532,179 @@ class _LectureCardState extends State<LectureCard> {
             ),
           ),
 
-          // ====================================================
-          // FILES (inline, no extra screen hop)
-          // ====================================================
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 220),
-            firstCurve: Curves.easeInOut,
-            secondCurve: Curves.easeInOut,
-            sizeCurve: Curves.easeInOut,
-            crossFadeState: _expanded
-                ? CrossFadeState.showFirst
-                : CrossFadeState.showSecond,
-            firstChild: widget.lecture.files.isEmpty
-                ? Padding(
-                    padding: EdgeInsets.all(isTablet ? 20 : 16),
-                    child: Text(
-                      'No content added for this lecture yet.',
+          const SizedBox(width: 4),
+
+          IconButton(
+            tooltip: 'Download',
+            onPressed: onDownload,
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              Icons.download_rounded,
+              size: isTablet ? 23 : 21,
+              color: theme.colorScheme.onSurface.withValues(
+                alpha: 0.58,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _actionIcon(LectureFileType type) {
+    switch (type) {
+      case LectureFileType.pdf:
+        return Icons.open_in_new_rounded;
+      case LectureFileType.audio:
+        return Icons.play_arrow_rounded;
+      case LectureFileType.video:
+        return Icons.play_arrow_rounded;
+    }
+  }
+}
+
+// ============================================================================
+// EXAM TILE
+// ============================================================================
+
+class _LectureExamTile extends StatelessWidget {
+  final LectureExam exam;
+  final bool isTablet;
+  final VoidCallback? onStartExam;
+
+  const _LectureExamTile({
+    required this.exam,
+    required this.isTablet,
+    required this.onStartExam,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: EdgeInsets.all(
+        isTablet ? 14 : 11,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(
+          alpha: 0.07,
+        ),
+        borderRadius: BorderRadius.circular(
+          isTablet ? 16 : 14,
+        ),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(
+            alpha: 0.14,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: isTablet ? 48 : 43,
+            height: isTablet ? 48 : 43,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              borderRadius: BorderRadius.circular(
+                isTablet ? 14 : 12,
+              ),
+            ),
+            child: Icon(
+              Icons.assignment_rounded,
+              size: isTablet ? 25 : 22,
+              color: theme.colorScheme.onPrimary,
+            ),
+          ),
+
+          SizedBox(
+            width: isTablet ? 13 : 10,
+          ),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  exam.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: isTablet ? 15 : 14,
+                    fontWeight: FontWeight.w800,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Row(
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: isTablet ? 16 : 14,
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.55,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${exam.durationMinutes} min',
                       style: TextStyle(
-                        fontSize: isTablet ? 13 : 12,
+                        fontSize: isTablet ? 12 : 11,
                         color: theme.colorScheme.onSurface.withValues(
                           alpha: 0.55,
                         ),
                       ),
                     ),
-                  )
-                : Padding(
-                    padding: EdgeInsets.symmetric(
-                      vertical: isTablet ? 10 : 8,
+
+                    const SizedBox(width: 10),
+
+                    Icon(
+                      Icons.check_circle_outline_rounded,
+                      size: isTablet ? 16 : 14,
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.55,
+                      ),
                     ),
-                    child: Column(
-                      children: widget.lecture.files
-                          .map(
-                            (file) => LectureFileTile(
-                              file: file,
-                              isTablet: isTablet,
-                              onTap: () => widget.onOpenFile(file),
-                            ),
-                          )
-                          .toList(),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Pass ${exam.passingScore}%',
+                      style: TextStyle(
+                        fontSize: isTablet ? 12 : 11,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.55,
+                        ),
+                      ),
                     ),
-                  ),
-            secondChild: const SizedBox(width: double.infinity),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          FilledButton(
+            onPressed: onStartExam,
+            style: FilledButton.styleFrom(
+              padding: EdgeInsets.symmetric(
+                horizontal: isTablet ? 14 : 11,
+                vertical: isTablet ? 11 : 9,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  isTablet ? 12 : 10,
+                ),
+              ),
+            ),
+            child: Text(
+              'Start Exam',
+              style: TextStyle(
+                fontSize: isTablet ? 12 : 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),

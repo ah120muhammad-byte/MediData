@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:medidata26/screens/main/downloads_screen.dart';
 import '../main/home_screen.dart';
 import '../../core/theme/app_brand.dart';
 import '../main/modules_screen.dart';
@@ -30,7 +31,7 @@ class _AppShellState extends State<AppShell> {
 
     HomeScreen(),
 
-    _PlaceholderPage(title: 'Downloads', icon: Icons.download_outlined),
+    DownloadsScreen(),
 
     _PlaceholderPage(title: 'Profile', icon: Icons.person_outline),
   ];
