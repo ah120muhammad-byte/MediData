@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "595177774591",
+    "project_id": "medidata-2ebfe",
+    "storage_bucket": "medidata-2ebfe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:595177774591:android:12d4d1547d41a9d98fdbca",
+        "android_client_info": {
+          "package_name": "com.example.medidata26"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7Vyu5IIqqD4SK8ee8ER5-xfv-K3Te9ww"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

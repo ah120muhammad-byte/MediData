@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/theme/app_brand.dart';
+import '../../services/notification_service.dart';
 import '../../services/student_profile_service.dart';
-import '../main/ai_assistant_screen.dart';
-import '../main/downloads_screen.dart';
-import '../main/exam_result_screen.dart';
-import '../main/exam_review_screen.dart';
-import '../main/exam_screen.dart';
-import '../main/home_screen.dart';
-import '../main/modules_screen.dart';
-import '../main/profile_screen.dart';
+import '../../widgets/notification_bell.dart';
+
+import 'ai_assistant_screen.dart';
+import 'downloads_screen.dart';
+import 'exam_result_screen.dart';
+import 'exam_review_screen.dart';
+import 'exam_screen.dart';
+import 'home_screen.dart';
+import 'modules_screen.dart';
+import 'profile_screen.dart';
+import 'search_screen.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({
+    super.key,
+  });
 
   @override
   State<AppShell> createState() =>
@@ -28,6 +35,18 @@ class _AppShellState
   final SupabaseClient _supabase =
       Supabase.instance.client;
 
+  final NotificationService
+      _notificationService =
+      NotificationService.instance;
+
+  // ==========================================================================
+  // MODULES SCREEN KEY
+  // ==========================================================================
+
+  final GlobalKey<ModulesScreenState>
+      _modulesScreenKey =
+      GlobalKey<ModulesScreenState>();
+
   // ==========================================================================
   // CURRENT PAGE
   // ==========================================================================
@@ -39,7 +58,9 @@ class _AppShellState
   // ==========================================================================
 
   late final List<Widget> _pages = [
-    const ModulesScreen(),
+    ModulesScreen(
+      key: _modulesScreenKey,
+    ),
 
     const AiAssistantScreen(),
 
@@ -57,6 +78,42 @@ class _AppShellState
           _openExamAttempt,
     ),
   ];
+
+  // ==========================================================================
+  // INIT
+  // ==========================================================================
+
+  @override
+  void initState() {
+    super.initState();
+
+    _notificationService
+        .setLectureTapHandler(
+      _openLectureFromNotification,
+    );
+
+    WidgetsBinding.instance
+        .addPostFrameCallback(
+      (_) async {
+        await _notificationService
+            .initialize();
+
+        _openPendingNotificationLecture();
+      },
+    );
+  }
+
+  // ==========================================================================
+  // DISPOSE
+  // ==========================================================================
+
+  @override
+  void dispose() {
+    _notificationService
+        .clearLectureTapHandler();
+
+    super.dispose();
+  }
 
   // ==========================================================================
   // BUILD
@@ -80,19 +137,21 @@ class _AppShellState
         bottom: false,
         child: Column(
           children: [
-            // ==================================================================
+            // =================================================================
             // APP HEADER
-            // ==================================================================
+            // =================================================================
 
             _AppHeader(
               isTablet: isTablet,
               onSearchPressed:
                   _openSearch,
+              onLectureTap:
+                  _openLectureFromNotification,
             ),
 
-            // ==================================================================
+            // =================================================================
             // PAGE CONTENT
-            // ==================================================================
+            // =================================================================
 
             Expanded(
               child: IndexedStack(
@@ -104,16 +163,36 @@ class _AppShellState
         ),
       ),
 
-      // =========================================================================
+      // =======================================================================
       // BOTTOM NAVIGATION
-      // =========================================================================
+      // =======================================================================
 
       bottomNavigationBar:
           _CustomBottomNavigation(
-        currentIndex: _currentIndex,
+        currentIndex:
+            _currentIndex,
         onItemSelected:
             _onNavigationChanged,
       ),
+    );
+  }
+
+  // ==========================================================================
+  // PENDING NOTIFICATION
+  // ==========================================================================
+
+  void _openPendingNotificationLecture() {
+    final lectureId =
+        _notificationService
+            .takePendingLectureId();
+
+    if (lectureId == null ||
+        lectureId.isEmpty) {
+      return;
+    }
+
+    _openLectureFromNotification(
+      lectureId,
     );
   }
 
@@ -134,7 +213,7 @@ class _AppShellState
   }
 
   // ==========================================================================
-  // OPEN LECTURE
+  // OPEN LECTURE FROM HOME
   // ==========================================================================
 
   void _openLectureFromHome({
@@ -142,24 +221,147 @@ class _AppShellState
     required String moduleName,
     required String lectureId,
   }) {
-    // ------------------------------------------------------------------------
-    // نفس نقطة الدخول المستخدمة من Home و Profile.
-    //
-    // نحول حاليا إلى Modules tab.
-    // لو عندك بالفعل route مباشر للمحاضرة يمكنك استبدال محتوى الدالة
-    // فقط، بدون تعديل Home/Profile.
-    // ------------------------------------------------------------------------
-
     setState(() {
       _currentIndex = 0;
     });
 
+    WidgetsBinding.instance
+        .addPostFrameCallback(
+      (_) {
+        _modulesScreenKey
+            .currentState
+            ?.openLecture(
+          moduleId: moduleId,
+          lectureId: lectureId,
+        );
+      },
+    );
+
     debugPrint(
-      'OPEN LECTURE => '
+      'OPEN LECTURE FROM HOME => '
       'moduleId=$moduleId, '
       'moduleName=$moduleName, '
       'lectureId=$lectureId',
     );
+  }
+
+  // ==========================================================================
+  // OPEN LECTURE FROM NOTIFICATION / SEARCH
+  // ==========================================================================
+
+  Future<void>
+      _openLectureFromNotification(
+    String lectureId,
+  ) async {
+    if (lectureId.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      // ----------------------------------------------------------------------
+      // FIND MODULE
+      // ----------------------------------------------------------------------
+
+      final response =
+          await _supabase
+              .from('lectures')
+              .select(
+                '''
+                id,
+                module_id,
+                title
+                ''',
+              )
+              .eq(
+                'id',
+                lectureId,
+              )
+              .maybeSingle();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (response == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This lecture is no longer available.',
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      final lecture =
+          Map<String, dynamic>.from(
+        response,
+      );
+
+      final moduleId =
+          lecture['module_id']
+              ?.toString();
+
+      if (moduleId == null ||
+          moduleId.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to find this lecture module.',
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      // ----------------------------------------------------------------------
+      // OPEN MODULES TAB
+      // ----------------------------------------------------------------------
+
+      setState(() {
+        _currentIndex = 0;
+      });
+
+      // ----------------------------------------------------------------------
+      // OPEN LECTURE AFTER FRAME
+      // ----------------------------------------------------------------------
+
+      WidgetsBinding.instance
+          .addPostFrameCallback(
+        (_) {
+          _modulesScreenKey
+              .currentState
+              ?.openLecture(
+            moduleId: moduleId,
+            lectureId: lectureId,
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint(
+        'Open lecture error: $e',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to open this lecture.',
+          ),
+        ),
+      );
+    }
   }
 
   // ==========================================================================
@@ -173,31 +375,31 @@ class _AppShellState
       return;
     }
 
-    // ------------------------------------------------------------------------
-    // Get the latest exam configuration.
-    // ------------------------------------------------------------------------
-
-    final response = await _supabase
-        .from('exams')
-        .select('''
-          id,
-          title,
-          duration_minutes,
-          passing_score
-        ''')
-        .eq(
-          'id',
-          attempt.examId,
-        )
-        .maybeSingle();
+    final response =
+        await _supabase
+            .from('exams')
+            .select(
+              '''
+              id,
+              title,
+              duration_minutes,
+              passing_score
+              ''',
+            )
+            .eq(
+              'id',
+              attempt.examId,
+            )
+            .maybeSingle();
 
     if (!mounted) {
       return;
     }
 
     if (response == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         const SnackBar(
           content: Text(
             'Exam information is no longer available.',
@@ -296,7 +498,7 @@ class _AppShellState
   }
 
   // ==========================================================================
-  // COMPLETED ATTEMPT ACTIONS
+  // COMPLETED EXAM ACTIONS
   // ==========================================================================
 
   void _showCompletedAttemptActions({
@@ -309,7 +511,9 @@ class _AppShellState
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (sheetContext) {
+      builder: (
+        sheetContext,
+      ) {
         return SafeArea(
           child: Padding(
             padding:
@@ -463,17 +667,15 @@ class _AppShellState
   // ==========================================================================
 
   void _openSearch() {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Search will be available soon.',
-          ),
-          duration:
-              Duration(seconds: 1),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            SearchScreen(
+          onOpenLecture:
+              _openLectureFromNotification,
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -484,12 +686,18 @@ class _AppShellState
 class _AppHeader
     extends StatelessWidget {
   final bool isTablet;
+
   final VoidCallback
       onSearchPressed;
+
+  final Future<void> Function(
+    String lectureId,
+  )? onLectureTap;
 
   const _AppHeader({
     required this.isTablet,
     required this.onSearchPressed,
+    this.onLectureTap,
   });
 
   @override
@@ -652,12 +860,12 @@ class _AppHeader
             ),
 
             // =================================================================
-            // SEARCH
+            // LEFT — SEARCH
             // =================================================================
 
             Positioned(
-              right:
-                  isTablet ? 10 : 6,
+              left:
+                  isTablet ? 8 : 4,
               child: Material(
                 color:
                     Colors.transparent,
@@ -668,14 +876,16 @@ class _AppHeader
                       onSearchPressed,
                   customBorder:
                       const CircleBorder(),
-                  child: Padding(
+                  child:
+                      Padding(
                     padding:
                         EdgeInsets.all(
                       isTablet
                           ? 10
                           : 8,
                     ),
-                    child: Icon(
+                    child:
+                        Icon(
                       Icons
                           .search_rounded,
                       size: isTablet
@@ -687,6 +897,20 @@ class _AppHeader
                     ),
                   ),
                 ),
+              ),
+            ),
+
+            // =================================================================
+            // RIGHT — NOTIFICATIONS
+            // =================================================================
+
+            Positioned(
+              right:
+                  isTablet ? 8 : 4,
+              child:
+                  NotificationBell(
+                onLectureTap:
+                    onLectureTap,
               ),
             ),
           ],
@@ -703,6 +927,7 @@ class _AppHeader
 class _CustomBottomNavigation
     extends StatelessWidget {
   final int currentIndex;
+
   final ValueChanged<int>
       onItemSelected;
 
@@ -728,7 +953,8 @@ class _CustomBottomNavigation
     ),
     _NavItem(
       label: 'Home',
-      icon: Icons.home_outlined,
+      icon:
+          Icons.home_outlined,
       selectedIcon:
           Icons.home_rounded,
     ),
@@ -753,9 +979,7 @@ class _CustomBottomNavigation
     BuildContext context,
   ) {
     final size =
-        MediaQuery.sizeOf(
-      context,
-    );
+        MediaQuery.sizeOf(context);
 
     final isTablet =
         size.shortestSide >= 600;
@@ -767,7 +991,9 @@ class _CustomBottomNavigation
         isTablet ? 20.0 : 10.0;
 
     final maxWidth =
-        isTablet ? 700.0 : double.infinity;
+        isTablet
+            ? 700.0
+            : double.infinity;
 
     final theme =
         Theme.of(context);
@@ -780,7 +1006,8 @@ class _CustomBottomNavigation
         child: Container(
           constraints:
               BoxConstraints(
-            maxWidth: maxWidth,
+            maxWidth:
+                maxWidth,
           ),
           margin:
               EdgeInsets.only(
@@ -802,10 +1029,10 @@ class _CustomBottomNavigation
                 BorderRadius.circular(
               isTablet ? 30 : 26,
             ),
-            border: Border.all(
-              color: theme
-                      .brightness ==
-                  Brightness.dark
+            border:
+                Border.all(
+              color: theme.brightness ==
+                      Brightness.dark
                   ? Colors.white
                       .withValues(
                     alpha: 0.05,
@@ -825,7 +1052,8 @@ class _CustomBottomNavigation
                           ? 0.30
                           : 0.14,
                 ),
-                blurRadius: 25,
+                blurRadius:
+                    25,
                 offset:
                     const Offset(
                   0,
@@ -847,8 +1075,9 @@ class _CustomBottomNavigation
                   selected:
                       currentIndex ==
                           index,
-                  onTap: () =>
-                      onItemSelected(
+                  onTap:
+                      () =>
+                          onItemSelected(
                     index,
                   ),
                   isTablet:
@@ -900,7 +1129,8 @@ class _AnimatedNavItem
     return GestureDetector(
       behavior:
           HitTestBehavior.opaque,
-      onTap: onTap,
+      onTap:
+          onTap,
       child: SizedBox(
         height:
             double.infinity,
@@ -921,14 +1151,16 @@ class _AnimatedNavItem
               ),
               curve:
                   Curves.easeOutBack,
-              top: selected
-                  ? (isTablet
-                      ? -22
-                      : -20)
-                  : (isTablet
-                      ? 18
-                      : 15),
-              child: AnimatedScale(
+              top:
+                  selected
+                      ? (isTablet
+                          ? -22
+                          : -20)
+                      : (isTablet
+                          ? 18
+                          : 15),
+              child:
+                  AnimatedScale(
                 duration:
                     const Duration(
                   milliseconds: 300,
@@ -936,12 +1168,19 @@ class _AnimatedNavItem
                 curve:
                     Curves.easeOutBack,
                 scale:
-                    selected ? 1.0 : 0.0,
-                child: Container(
+                    selected
+                        ? 1.0
+                        : 0.0,
+                child:
+                    Container(
                   width:
-                      isTablet ? 62 : 58,
+                      isTablet
+                          ? 62
+                          : 58,
                   height:
-                      isTablet ? 62 : 58,
+                      isTablet
+                          ? 62
+                          : 58,
                   decoration:
                       BoxDecoration(
                     color:
@@ -961,11 +1200,13 @@ class _AnimatedNavItem
                         color: Colors
                             .black
                             .withValues(
-                          alpha: isDark
-                              ? 0.35
-                              : 0.10,
+                          alpha:
+                              isDark
+                                  ? 0.35
+                                  : 0.10,
                         ),
-                        blurRadius: 12,
+                        blurRadius:
+                            12,
                         offset:
                             const Offset(
                           0,
@@ -999,31 +1240,35 @@ class _AnimatedNavItem
             AnimatedPadding(
               duration:
                   const Duration(
-                milliseconds: 300,
+                milliseconds:
+                    300,
               ),
               curve:
                   Curves.easeOut,
               padding:
                   EdgeInsets.only(
-                top: selected
-                    ? (isTablet
-                        ? 18
-                        : 17)
-                    : (isTablet
-                        ? 3
-                        : 2),
+                top:
+                    selected
+                        ? (isTablet
+                            ? 18
+                            : 17)
+                        : (isTablet
+                            ? 3
+                            : 2),
               ),
               child:
                   AnimatedOpacity(
                 duration:
                     const Duration(
-                  milliseconds: 220,
+                  milliseconds:
+                      220,
                 ),
                 opacity:
                     selected
                         ? 0.0
                         : 1.0,
-                child: Column(
+                child:
+                    Column(
                   mainAxisAlignment:
                       MainAxisAlignment
                           .center,
@@ -1038,7 +1283,8 @@ class _AnimatedNavItem
                           .colorScheme
                           .onSurface
                           .withValues(
-                        alpha: 0.50,
+                        alpha:
+                            0.50,
                       ),
                     ),
                     const SizedBox(
@@ -1058,12 +1304,14 @@ class _AnimatedNavItem
                                 ? 13
                                 : 11,
                         fontWeight:
-                            FontWeight.w500,
+                            FontWeight
+                                .w500,
                         color: theme
                             .colorScheme
                             .onSurface
                             .withValues(
-                          alpha: 0.50,
+                          alpha:
+                              0.50,
                         ),
                       ),
                     ),
@@ -1079,20 +1327,23 @@ class _AnimatedNavItem
             AnimatedPositioned(
               duration:
                   const Duration(
-                milliseconds: 300,
+                milliseconds:
+                    300,
               ),
               curve:
                   Curves.easeOut,
-              bottom: selected
-                  ? (isTablet
-                      ? 10
-                      : 8)
-                  : -10,
+              bottom:
+                  selected
+                      ? (isTablet
+                          ? 10
+                          : 8)
+                      : -10,
               child:
                   AnimatedOpacity(
                 duration:
                     const Duration(
-                  milliseconds: 220,
+                  milliseconds:
+                      220,
                 ),
                 opacity:
                     selected
