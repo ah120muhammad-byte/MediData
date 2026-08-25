@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/authentication/auth_gate.dart';
 import 'core/theme/app_theme.dart';
+import 'services/audio_player_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,7 +12,7 @@ Future<void> main() async {
     publishableKey: 'sb_publishable_vkiv3hr00CNPiGJKlQosNw_oZEG81zZ',
   );
 
-
+  await AudioPlayerService.instance.initialize();
   runApp(const MyApp());
 }
 

@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/lecture_card.dart';
+import 'exam_screen.dart';
+import '../../services/download_service.dart';
+import 'lecture_audio_player_screen.dart';
+import 'lecture_video_player_screen.dart';
 
 class LecturesScreen extends StatefulWidget {
   final String moduleId;
   final String moduleName;
   final VoidCallback onBack;
+  final String? initialLectureId;
 
   const LecturesScreen({
     super.key,
     required this.moduleId,
     required this.moduleName,
     required this.onBack,
+    this.initialLectureId,
   });
 
   @override
@@ -20,8 +25,7 @@ class LecturesScreen extends StatefulWidget {
 }
 
 class _LecturesScreenState extends State<LecturesScreen> {
-  final SupabaseClient _supabase =
-      Supabase.instance.client;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   late Future<List<_Lecture>> _lecturesFuture;
 
@@ -30,6 +34,9 @@ class _LecturesScreenState extends State<LecturesScreen> {
   @override
   void initState() {
     super.initState();
+
+    _expandedLectureId = widget.initialLectureId;
+
     _lecturesFuture = _loadLectures();
   }
 
@@ -40,8 +47,7 @@ class _LecturesScreenState extends State<LecturesScreen> {
   Future<List<_Lecture>> _loadLectures() async {
     final lecturesResponse = await _supabase
         .from('lectures')
-        .select(
-          '''
+        .select('''
           id,
           module_id,
           title,
@@ -49,39 +55,25 @@ class _LecturesScreenState extends State<LecturesScreen> {
           display_order,
           is_published,
           is_active
-          ''',
-        )
-        .eq(
-          'module_id',
-          widget.moduleId,
-        )
-        .eq(
-          'is_active',
-          true,
-        )
-        .eq(
-          'is_published',
-          true,
-        )
-        .order(
-          'display_order',
-          ascending: true,
-        );
+          ''')
+        .eq('module_id', widget.moduleId)
+        .eq('is_active', true)
+        .eq('is_published', true)
+        .order('display_order', ascending: true);
 
     final lectures = (lecturesResponse as List)
-        .map(
-          (item) => _Lecture.fromMap(
-            Map<String, dynamic>.from(item),
-          ),
-        )
+        .map((item) => _Lecture.fromMap(Map<String, dynamic>.from(item)))
         .toList();
 
     if (lectures.isEmpty) {
       return [];
     }
+    if (widget.initialLectureId != null &&
+        lectures.any((lecture) => lecture.id == widget.initialLectureId)) {
+      _expandedLectureId = widget.initialLectureId;
+    }
 
-    final lectureIds =
-        lectures.map((lecture) => lecture.id).toList();
+    final lectureIds = lectures.map((lecture) => lecture.id).toList();
 
     // =========================================================================
     // FILES
@@ -89,8 +81,7 @@ class _LecturesScreenState extends State<LecturesScreen> {
 
     final filesResponse = await _supabase
         .from('lecture_files')
-        .select(
-          '''
+        .select('''
           id,
           lecture_id,
           title,
@@ -100,27 +91,13 @@ class _LecturesScreenState extends State<LecturesScreen> {
           is_active,
           created_at,
           updated_at
-          ''',
-        )
-        .inFilter(
-          'lecture_id',
-          lectureIds,
-        )
-        .eq(
-          'is_active',
-          true,
-        )
-        .order(
-          'display_order',
-          ascending: true,
-        );
+          ''')
+        .inFilter('lecture_id', lectureIds)
+        .eq('is_active', true)
+        .order('display_order', ascending: true);
 
     final files = (filesResponse as List)
-        .map(
-          (item) => _LectureFile.fromMap(
-            Map<String, dynamic>.from(item),
-          ),
-        )
+        .map((item) => _LectureFile.fromMap(Map<String, dynamic>.from(item)))
         .toList();
 
     // =========================================================================
@@ -129,8 +106,7 @@ class _LecturesScreenState extends State<LecturesScreen> {
 
     final examsResponse = await _supabase
         .from('exams')
-        .select(
-          '''
+        .select('''
           id,
           lecture_id,
           title,
@@ -140,16 +116,9 @@ class _LecturesScreenState extends State<LecturesScreen> {
           is_active,
           created_at,
           updated_at
-          ''',
-        )
-        .inFilter(
-          'lecture_id',
-          lectureIds,
-        )
-        .eq(
-          'is_active',
-          true,
-        );
+          ''')
+        .inFilter('lecture_id', lectureIds)
+        .eq('is_active', true);
 
     final exams = (examsResponse as List)
         .map(
@@ -157,18 +126,10 @@ class _LecturesScreenState extends State<LecturesScreen> {
             id: item['id'].toString(),
             lectureId: item['lecture_id'].toString(),
             title: item['title']?.toString() ?? 'Exam',
-            description:
-                item['description']?.toString(),
-            durationMinutes:
-                (item['duration_minutes'] as num?)
-                        ?.toInt() ??
-                    0,
-            passingScore:
-                (item['passing_score'] as num?)
-                        ?.toInt() ??
-                    0,
-            isActive:
-                item['is_active'] as bool? ?? false,
+            description: item['description']?.toString(),
+            durationMinutes: (item['duration_minutes'] as num?)?.toInt() ?? 0,
+            passingScore: (item['passing_score'] as num?)?.toInt() ?? 0,
+            isActive: item['is_active'] as bool? ?? false,
           ),
         )
         .toList();
@@ -177,14 +138,10 @@ class _LecturesScreenState extends State<LecturesScreen> {
     // GROUP FILES
     // =========================================================================
 
-    final Map<String, List<_LectureFile>>
-        filesByLecture = {};
+    final Map<String, List<_LectureFile>> filesByLecture = {};
 
     for (final file in files) {
-      filesByLecture.putIfAbsent(
-        file.lectureId,
-        () => [],
-      );
+      filesByLecture.putIfAbsent(file.lectureId, () => []);
 
       filesByLecture[file.lectureId]!.add(file);
     }
@@ -199,10 +156,7 @@ class _LecturesScreenState extends State<LecturesScreen> {
     final Map<String, LectureExam> examByLecture = {};
 
     for (final exam in exams) {
-      examByLecture.putIfAbsent(
-        exam.lectureId,
-        () => exam,
-      );
+      examByLecture.putIfAbsent(exam.lectureId, () => exam);
     }
 
     // =========================================================================
@@ -247,52 +201,36 @@ class _LecturesScreenState extends State<LecturesScreen> {
   // START EXAM
   // ==========================================================================
 
-  Future<void> _confirmStartExam(
-    _Lecture lecture,
-  ) async {
+  Future<void> _confirmStartExam(_Lecture lecture) async {
     final exam = lecture.exam;
 
     if (exam == null) {
       return;
     }
 
-    final shouldStart =
-        await showDialog<bool>(
+    final shouldStart = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        final theme =
-            Theme.of(dialogContext);
+        final theme = Theme.of(dialogContext);
 
         return AlertDialog(
-          title: const Text(
-            'Start Exam?',
-          ),
+          title: const Text('Start Exam?'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 exam.title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
 
               if (exam.description != null &&
-                  exam.description!
-                      .trim()
-                      .isNotEmpty) ...[
+                  exam.description!.trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
                   exam.description!.trim(),
                   style: TextStyle(
-                    color: theme
-                        .colorScheme
-                        .onSurface
-                        .withValues(
-                          alpha: 0.65,
-                        ),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
                   ),
                 ),
               ],
@@ -304,14 +242,10 @@ class _LecturesScreenState extends State<LecturesScreen> {
                   Icon(
                     Icons.timer_outlined,
                     size: 20,
-                    color: theme
-                        .colorScheme
-                        .primary,
+                    color: theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 7),
-                  Text(
-                    'Duration: ${exam.durationMinutes} minutes',
-                  ),
+                  Text('Duration: ${exam.durationMinutes} minutes'),
                 ],
               ),
 
@@ -322,14 +256,10 @@ class _LecturesScreenState extends State<LecturesScreen> {
                   Icon(
                     Icons.check_circle_outline_rounded,
                     size: 20,
-                    color: theme
-                        .colorScheme
-                        .primary,
+                    color: theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 7),
-                  Text(
-                    'Passing score: ${exam.passingScore}%',
-                  ),
+                  Text('Passing score: ${exam.passingScore}%'),
                 ],
               ),
 
@@ -339,12 +269,7 @@ class _LecturesScreenState extends State<LecturesScreen> {
                 'Once you start the exam, the timer will begin.',
                 style: TextStyle(
                   fontSize: 13,
-                  color: theme
-                      .colorScheme
-                      .onSurface
-                      .withValues(
-                        alpha: 0.60,
-                      ),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.60),
                 ),
               ),
             ],
@@ -352,32 +277,23 @@ class _LecturesScreenState extends State<LecturesScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(false);
+                Navigator.of(dialogContext).pop(false);
               },
-              child: const Text(
-                'Cancel',
-              ),
+              child: const Text('Cancel'),
             ),
 
             FilledButton(
               onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(true);
+                Navigator.of(dialogContext).pop(true);
               },
-              child: const Text(
-                'Start Exam',
-              ),
+              child: const Text('Start Exam'),
             ),
           ],
         );
       },
     );
 
-    if (shouldStart != true ||
-        !mounted) {
+    if (shouldStart != true || !mounted) {
       return;
     }
 
@@ -387,176 +303,77 @@ class _LecturesScreenState extends State<LecturesScreen> {
     // هنا هنفتح ExamScreen في المرحلة القادمة.
     // ========================================================================
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Exam is ready. Exam screen will be opened next.',
-          ),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ExamScreen(
+          examId: exam.id,
+          examTitle: exam.title,
+          durationMinutes: exam.durationMinutes,
+          passingScore: exam.passingScore,
+          attemptId: null,
         ),
-      );
-  }
-
-  // ==========================================================================
-  // BUCKET
-  // ==========================================================================
-
-  String _bucketForType(String type) {
-    switch (type.toLowerCase().trim()) {
-      case 'pdf':
-        return 'Lecture pdfs';
-
-      case 'audio':
-        return 'Lecture audios';
-
-      case 'video':
-        return 'lecture videos';
-
-      default:
-        throw Exception(
-          'Unsupported lecture file type: $type',
-        );
-    }
-  }
-
-  // ==========================================================================
-  // STORAGE PATH
-  // ==========================================================================
-
-  String _extractStoragePath(
-    String value,
-    String bucket,
-  ) {
-    final trimmed = value.trim();
-
-    if (trimmed.isEmpty) {
-      return '';
-    }
-
-    if (!trimmed.startsWith('http://') &&
-        !trimmed.startsWith('https://')) {
-      return trimmed;
-    }
-
-    final uri = Uri.tryParse(trimmed);
-
-    if (uri == null) {
-      return trimmed;
-    }
-
-    final segments = uri.pathSegments;
-
-    final bucketIndex =
-        segments.indexWhere(
-      (segment) =>
-          Uri.decodeComponent(segment) ==
-          bucket,
+      ),
     );
-
-    if (bucketIndex == -1) {
-      throw Exception(
-        'Bucket "$bucket" was not found in file URL.',
-      );
-    }
-
-    if (bucketIndex + 1 >=
-        segments.length) {
-      return '';
-    }
-
-    final pathSegments =
-        segments.sublist(
-      bucketIndex + 1,
-    );
-
-    return pathSegments
-        .map(Uri.decodeComponent)
-        .join('/');
-  }
-
-  // ==========================================================================
-  // SIGNED URL
-  // ==========================================================================
-
-  Future<String> _createSignedUrl(
-    _LectureFile file,
-  ) async {
-    final bucket =
-        _bucketForType(file.fileType);
-
-    final path = _extractStoragePath(
-      file.fileUrl,
-      bucket,
-    );
-
-    if (path.isEmpty) {
-      throw Exception(
-        'Invalid storage path for "${file.title}".',
-      );
-    }
-
-    return _supabase.storage
-        .from(bucket)
-        .createSignedUrl(
-          path,
-          3600,
-        );
   }
 
   // ==========================================================================
   // OPEN
   // ==========================================================================
 
-  Future<void> _openFile(
-    BuildContext context,
-    _LectureFile file,
-  ) async {
+  Future<void> _openFile(BuildContext context, _LectureFile file) async {
+    final downloadsService = DownloadsService.instance;
+
     try {
-      _showLoadingSnackBar(
-        context,
-        'Preparing ${file.title}...',
-      );
-
-      final signedUrl =
-          await _createSignedUrl(file);
-
       if (!mounted) {
         return;
       }
 
       ScaffoldMessenger.of(context)
-          .hideCurrentSnackBar();
-
-      final launched =
-          await launchUrl(
-        Uri.parse(signedUrl),
-        mode:
-            LaunchMode.externalApplication,
-      );
-
-      if (!launched && mounted) {
-        _showErrorSnackBar(
-          context,
-          'Unable to open ${file.title}.',
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 30),
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Opening ${file.title}...')),
+              ],
+            ),
+          ),
         );
+
+      await downloadsService.openLectureFile(
+        id: file.id,
+        title: file.title,
+        fileType: file.fileType,
+        fileUrl: file.fileUrl,
+      );
+
+      if (!mounted) {
+        return;
       }
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
     } catch (e) {
+      debugPrint('Lecture file open error: $e');
+
       if (!mounted) {
         return;
       }
 
       ScaffoldMessenger.of(context)
-          .hideCurrentSnackBar();
-
-      _showErrorSnackBar(
-        context,
-        'Unable to open ${file.title}.',
-      );
-
-      debugPrint(
-        'Lecture file open error: $e',
-      );
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Unable to open ${file.title}.')),
+        );
     }
   }
 
@@ -566,114 +383,158 @@ class _LecturesScreenState extends State<LecturesScreen> {
 
   Future<void> _downloadFile(
     BuildContext context,
+    _Lecture lecture,
     _LectureFile file,
   ) async {
+    final downloadsService = DownloadsService.instance;
+
     try {
-      _showLoadingSnackBar(
-        context,
-        'Preparing ${file.title}...',
-      );
+      final existing = await downloadsService.findById(file.id);
 
-      final signedUrl =
-          await _createSignedUrl(file);
-
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context)
-          .hideCurrentSnackBar();
-
-      final launched =
-          await launchUrl(
-        Uri.parse(signedUrl),
-        mode:
-            LaunchMode.externalApplication,
-      );
-
-      if (!launched && mounted) {
-        _showErrorSnackBar(
-          context,
-          'Unable to download ${file.title}.',
-        );
-      }
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context)
-          .hideCurrentSnackBar();
-
-      _showErrorSnackBar(
-        context,
-        'Unable to download ${file.title}.',
-      );
-
-      debugPrint(
-        'Lecture file download error: $e',
-      );
-    }
-  }
-
-  // ==========================================================================
-  // SNACKBAR
-  // ==========================================================================
-
-  void _showLoadingSnackBar(
-    BuildContext context,
-    String message,
-  ) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          duration:
-              const Duration(seconds: 30),
-          content: Row(
-            children: [
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child:
-                    CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
+      if (existing != null) {
+        final shouldOpen = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Already downloaded'),
+              content: Text('"${file.title}" is already available offline.'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                  child: const Text('Cancel'),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(message),
-              ),
-            ],
-          ),
-        ),
-      );
-  }
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(true);
+                  },
+                  child: const Text('Open'),
+                ),
+              ],
+            );
+          },
+        );
 
-  void _showErrorSnackBar(
-    BuildContext context,
-    String message,
-  ) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-        ),
+        if (shouldOpen == true) {
+          await downloadsService.open(existing);
+        }
+
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 30),
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Downloading ${file.title}...')),
+              ],
+            ),
+          ),
+        );
+
+      final downloaded = await downloadsService.download(
+        id: file.id,
+        lectureId: file.lectureId,
+        lectureTitle: lecture.title,
+        title: file.title,
+        fileType: file.fileType,
+        fileUrl: file.fileUrl,
+        onProgress: (progress) {
+          if (!mounted) {
+            return;
+          }
+
+          final percent = (progress.progress * 100).round();
+
+          // optional snackbar progress
+          // DownloadsScreen itself now receives
+          // the same live progress automatically.
+          debugPrint('Downloading ${file.title}: $percent%');
+        },
       );
+      (progress) {
+        if (!mounted) {
+          return;
+        }
+
+        final percent = (progress.progress * 100).round();
+
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 30),
+              content: Row(
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Downloading ${file.title} • $percent%'),
+                  ),
+                ],
+              ),
+            ),
+          );
+      };
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('${downloaded.title} downloaded successfully.'),
+            action: SnackBarAction(
+              label: 'Open',
+              onPressed: () {
+                downloadsService.open(downloaded);
+              },
+            ),
+          ),
+        );
+    } catch (e) {
+      debugPrint('Lecture file download error: $e');
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Unable to download ${file.title}.')),
+        );
+    }
   }
 
   // ==========================================================================
   // HEADER
   // ==========================================================================
 
-  Widget _buildHeader(
-    BuildContext context,
-    bool isTablet,
-  ) {
-    final theme =
-        Theme.of(context);
+  Widget _buildHeader(BuildContext context, bool isTablet) {
+    final theme = Theme.of(context);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -685,52 +546,33 @@ class _LecturesScreenState extends State<LecturesScreen> {
       child: Row(
         children: [
           Material(
-            color: theme
-                .colorScheme
-                .onSurface
-                .withValues(alpha: 0.06),
-            shape:
-                const CircleBorder(),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+            shape: const CircleBorder(),
             child: InkWell(
-              customBorder:
-                  const CircleBorder(),
+              customBorder: const CircleBorder(),
               onTap: widget.onBack,
               child: Padding(
-                padding: EdgeInsets.all(
-                  isTablet ? 11 : 9,
-                ),
+                padding: EdgeInsets.all(isTablet ? 11 : 9),
                 child: Icon(
-                  Icons
-                      .arrow_back_rounded,
-                  size:
-                      isTablet ? 27 : 23,
-                  color: theme
-                      .colorScheme
-                      .onSurface,
+                  Icons.arrow_back_rounded,
+                  size: isTablet ? 27 : 23,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
             ),
           ),
 
-          SizedBox(
-            width:
-                isTablet ? 16 : 12,
-          ),
+          SizedBox(width: isTablet ? 16 : 12),
 
           Expanded(
             child: Text(
               widget.moduleName,
               maxLines: 1,
-              overflow:
-                  TextOverflow.ellipsis,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize:
-                    isTablet ? 22 : 19,
-                fontWeight:
-                    FontWeight.w700,
-                color: theme
-                    .colorScheme
-                    .onSurface,
+                fontSize: isTablet ? 22 : 19,
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurface,
               ),
             ),
           ),
@@ -744,50 +586,30 @@ class _LecturesScreenState extends State<LecturesScreen> {
   // ==========================================================================
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final size =
-        MediaQuery.sizeOf(context);
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
 
-    final isTablet =
-        size.shortestSide >= 600;
+    final isTablet = size.shortestSide >= 600;
 
     return Column(
       children: [
-        _buildHeader(
-          context,
-          isTablet,
-        ),
+        _buildHeader(context, isTablet),
 
         Expanded(
-          child:
-              FutureBuilder<List<_Lecture>>(
-            future:
-                _lecturesFuture,
-            builder:
-                (context, snapshot) {
-              if (snapshot
-                      .connectionState ==
-                  ConnectionState.waiting) {
-                return const Center(
-                  child:
-                      CircularProgressIndicator(),
-                );
+          child: FutureBuilder<List<_Lecture>>(
+            future: _lecturesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
               }
 
               if (snapshot.hasError) {
-                debugPrint(
-                  'Lectures error: ${snapshot.error}',
-                );
+                debugPrint('Lectures error: ${snapshot.error}');
 
-                return _LectureErrorState(
-                  onRetry: _refresh,
-                );
+                return _LectureErrorState(onRetry: _refresh);
               }
 
-              final lectures =
-                  snapshot.data ?? [];
+              final lectures = snapshot.data ?? [];
 
               if (lectures.isEmpty) {
                 return const _LectureEmptyState();
@@ -795,97 +617,85 @@ class _LecturesScreenState extends State<LecturesScreen> {
 
               return RefreshIndicator(
                 onRefresh: _refresh,
-                child:
-                    ListView.separated(
-                  physics:
-                      const AlwaysScrollableScrollPhysics(
-                    parent:
-                        BouncingScrollPhysics(),
+                child: ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
                   ),
-                  padding:
-                      EdgeInsets.fromLTRB(
+                  padding: EdgeInsets.fromLTRB(
                     isTablet ? 32 : 18,
                     isTablet ? 20 : 14,
                     isTablet ? 32 : 18,
                     isTablet ? 120 : 110,
                   ),
-                  itemCount:
-                      lectures.length,
-                  separatorBuilder:
-                      (_, _) {
-                    return SizedBox(
-                      height:
-                          isTablet
-                              ? 14
-                              : 10,
-                    );
+                  itemCount: lectures.length,
+                  separatorBuilder: (_, _) {
+                    return SizedBox(height: isTablet ? 14 : 10);
                   },
-                  itemBuilder:
-                      (context, index) {
-                    final lecture =
-                        lectures[index];
+                  itemBuilder: (context, index) {
+                    final lecture = lectures[index];
 
-                    final isExpanded =
-                        _expandedLectureId ==
-                            lecture.id;
+                    final isExpanded = _expandedLectureId == lecture.id;
 
                     return LectureCard(
-                      title:
-                          lecture.title,
-                      description:
-                          lecture.description,
-                      files:
-                          lecture
-                              .files
-                              .map(
-                                _toLectureFile,
-                              )
-                              .toList(),
-                      exam:
-                          lecture.exam,
-                      isTablet:
-                          isTablet,
-                      expanded:
-                          isExpanded,
+                      title: lecture.title,
+                      description: lecture.description,
+                      files: lecture.files.map(_toLectureFile).toList(),
+                      exam: lecture.exam,
+                      isTablet: isTablet,
+                      expanded: isExpanded,
                       onTap: () {
-                        _toggleLecture(
-                          lecture.id,
-                        );
+                        _toggleLecture(lecture.id);
                       },
-                      onFileOpen:
-                          (file) {
-                        final original =
-                            lecture.files
-                                .firstWhere(
-                          (item) =>
-                              item.id ==
-                              file.path,
+                      onFileOpen: (file) {
+                        final original = lecture.files.firstWhere(
+                          (item) => item.id == file.path,
                         );
 
-                        _openFile(
-                          context,
-                          original,
-                        );
+                        final type = original.fileType.toLowerCase().trim();
+
+                        if (type == 'audio') {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => LectureAudioPlayerScreen(
+                                lectureId: lecture.id,
+                                lectureTitle: lecture.title,
+                                fileId: original.id,
+                                fileTitle: original.title,
+                                fileUrl: original.fileUrl,
+                              ),
+                            ),
+                          );
+
+                          return;
+                        }
+
+                        if (type == 'video') {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => LectureVideoPlayerScreen(
+                                lectureId: lecture.id,
+                                lectureTitle: lecture.title,
+                                fileId: original.id,
+                                fileTitle: original.title,
+                                fileUrl: original.fileUrl,
+                              ),
+                            ),
+                          );
+
+                          return;
+                        }
+
+                        _openFile(context, original);
                       },
-                      onFileDownload:
-                          (file) {
-                        final original =
-                            lecture.files
-                                .firstWhere(
-                          (item) =>
-                              item.id ==
-                              file.path,
+                      onFileDownload: (file) {
+                        final original = lecture.files.firstWhere(
+                          (item) => item.id == file.path,
                         );
 
-                        _downloadFile(
-                          context,
-                          original,
-                        );
+                        _downloadFile(context, lecture, original);
                       },
                       onStartExam: () {
-                        _confirmStartExam(
-                          lecture,
-                        );
+                        _confirmStartExam(lecture);
                       },
                     );
                   },
@@ -902,37 +712,23 @@ class _LecturesScreenState extends State<LecturesScreen> {
   // FILE ADAPTER
   // ==========================================================================
 
-  LectureFile _toLectureFile(
-    _LectureFile file,
-  ) {
-    final type =
-        switch (file.fileType
-            .toLowerCase()
-            .trim()) {
-      'pdf' =>
-        LectureFileType.pdf,
-      'audio' =>
-        LectureFileType.audio,
-      'video' =>
-        LectureFileType.video,
-      _ =>
-        LectureFileType.pdf,
+  LectureFile _toLectureFile(_LectureFile file) {
+    final type = switch (file.fileType.toLowerCase().trim()) {
+      'pdf' => LectureFileType.pdf,
+      'audio' => LectureFileType.audio,
+      'video' => LectureFileType.video,
+      _ => LectureFileType.pdf,
     };
 
     return LectureFile(
       type: type,
       title: file.title,
-      subtitle:
-          _fileTypeLabel(
-        file.fileType,
-      ),
+      subtitle: _fileTypeLabel(file.fileType),
       path: file.id,
     );
   }
 
-  String _fileTypeLabel(
-    String type,
-  ) {
+  String _fileTypeLabel(String type) {
     switch (type.toLowerCase()) {
       case 'pdf':
         return 'Lecture PDF';
@@ -975,38 +771,19 @@ class _Lecture {
     this.exam,
   });
 
-  factory _Lecture.fromMap(
-    Map<String, dynamic> map,
-  ) {
+  factory _Lecture.fromMap(Map<String, dynamic> map) {
     return _Lecture(
-      id:
-          map['id']?.toString() ?? '',
-      moduleId:
-          map['module_id']?.toString() ?? '',
-      title:
-          map['title']?.toString() ?? '',
-      description:
-          map['description']?.toString(),
-      displayOrder:
-          (map['display_order']
-                      as num?)
-                  ?.toInt() ??
-              0,
-      isPublished:
-          map['is_published']
-                  as bool? ??
-              false,
-      isActive:
-          map['is_active']
-                  as bool? ??
-              true,
+      id: map['id']?.toString() ?? '',
+      moduleId: map['module_id']?.toString() ?? '',
+      title: map['title']?.toString() ?? '',
+      description: map['description']?.toString(),
+      displayOrder: (map['display_order'] as num?)?.toInt() ?? 0,
+      isPublished: map['is_published'] as bool? ?? false,
+      isActive: map['is_active'] as bool? ?? true,
     );
   }
 
-  _Lecture copyWith({
-    List<_LectureFile>? files,
-    LectureExam? exam,
-  }) {
+  _Lecture copyWith({List<_LectureFile>? files, LectureExam? exam}) {
     return _Lecture(
       id: id,
       moduleId: moduleId,
@@ -1048,43 +825,21 @@ class _LectureFile {
     this.updatedAt,
   });
 
-  factory _LectureFile.fromMap(
-    Map<String, dynamic> map,
-  ) {
+  factory _LectureFile.fromMap(Map<String, dynamic> map) {
     return _LectureFile(
-      id:
-          map['id']?.toString() ?? '',
-      lectureId:
-          map['lecture_id']?.toString() ?? '',
-      title:
-          map['title']?.toString() ?? '',
-      fileType:
-          map['file_type']?.toString() ?? '',
-      fileUrl:
-          map['file_url']?.toString() ?? '',
-      displayOrder:
-          (map['display_order']
-                      as num?)
-                  ?.toInt() ??
-              0,
-      isActive:
-          map['is_active']
-                  as bool? ??
-              true,
-      createdAt:
-          map['created_at'] != null
-              ? DateTime.tryParse(
-                  map['created_at']
-                      .toString(),
-                )
-              : null,
-      updatedAt:
-          map['updated_at'] != null
-              ? DateTime.tryParse(
-                  map['updated_at']
-                      .toString(),
-                )
-              : null,
+      id: map['id']?.toString() ?? '',
+      lectureId: map['lecture_id']?.toString() ?? '',
+      title: map['title']?.toString() ?? '',
+      fileType: map['file_type']?.toString() ?? '',
+      fileUrl: map['file_url']?.toString() ?? '',
+      displayOrder: (map['display_order'] as num?)?.toInt() ?? 0,
+      isActive: map['is_active'] as bool? ?? true,
+      createdAt: map['created_at'] != null
+          ? DateTime.tryParse(map['created_at'].toString())
+          : null,
+      updatedAt: map['updated_at'] != null
+          ? DateTime.tryParse(map['updated_at'].toString())
+          : null,
     );
   }
 }
@@ -1093,80 +848,51 @@ class _LectureFile {
 // EMPTY STATE
 // ============================================================================
 
-class _LectureEmptyState
-    extends StatelessWidget {
+class _LectureEmptyState extends StatelessWidget {
   const _LectureEmptyState();
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
     return ListView(
-      physics:
-          const AlwaysScrollableScrollPhysics(
-        parent:
-            BouncingScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
       ),
       children: [
         SizedBox(
-          height:
-              MediaQuery.sizeOf(context)
-                  .height *
-              0.60,
+          height: MediaQuery.sizeOf(context).height * 0.60,
           child: Center(
             child: Padding(
-              padding:
-                  const EdgeInsets.all(30),
+              padding: const EdgeInsets.all(30),
               child: Column(
-                mainAxisSize:
-                    MainAxisSize.min,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons
-                        .menu_book_outlined,
+                    Icons.menu_book_outlined,
                     size: 65,
-                    color: theme
-                        .colorScheme
-                        .onSurface
-                        .withValues(
-                          alpha: 0.30,
-                        ),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.30),
                   ),
-                  const SizedBox(
-                    height: 16,
-                  ),
+                  const SizedBox(height: 16),
                   Text(
                     'No Lectures Available',
-                    textAlign:
-                        TextAlign.center,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 21,
-                      fontWeight:
-                          FontWeight.bold,
-                      color: theme
-                          .colorScheme
-                          .onSurface,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
                     ),
                   ),
-                  const SizedBox(
-                    height: 8,
-                  ),
+                  const SizedBox(height: 8),
                   Text(
                     'Lectures will appear here when they are published.',
-                    textAlign:
-                        TextAlign.center,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
                       height: 1.4,
-                      color: theme
-                          .colorScheme
-                          .onSurface
-                          .withValues(
-                            alpha: 0.60,
-                          ),
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.60,
+                      ),
                     ),
                   ),
                 ],
@@ -1183,79 +909,50 @@ class _LectureEmptyState
 // ERROR STATE
 // ============================================================================
 
-class _LectureErrorState
-    extends StatelessWidget {
-  final Future<void>
-      Function() onRetry;
+class _LectureErrorState extends StatelessWidget {
+  final Future<void> Function() onRetry;
 
-  const _LectureErrorState({
-    required this.onRetry,
-  });
+  const _LectureErrorState({required this.onRetry});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
     return Center(
       child: Padding(
-        padding:
-            const EdgeInsets.all(30),
+        padding: const EdgeInsets.all(30),
         child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.cloud_off_rounded,
               size: 60,
-              color:
-                  theme.colorScheme.error,
+              color: theme.colorScheme.error,
             ),
-            const SizedBox(
-              height: 16,
-            ),
+            const SizedBox(height: 16),
             Text(
               'Unable to load lectures',
-              textAlign:
-                  TextAlign.center,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 20,
-                fontWeight:
-                    FontWeight.bold,
-                color: theme
-                    .colorScheme
-                    .onSurface,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
               ),
             ),
-            const SizedBox(
-              height: 8,
-            ),
+            const SizedBox(height: 8),
             Text(
               'Please check your internet connection and try again.',
-              textAlign:
-                  TextAlign.center,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
-                color: theme
-                    .colorScheme
-                    .onSurface
-                    .withValues(
-                      alpha: 0.60,
-                    ),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.60),
               ),
             ),
-            const SizedBox(
-              height: 18,
-            ),
+            const SizedBox(height: 18),
             ElevatedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(
-                Icons.refresh_rounded,
-              ),
-              label:
-                  const Text('Try Again'),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try Again'),
             ),
           ],
         ),

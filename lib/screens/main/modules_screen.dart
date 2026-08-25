@@ -9,11 +9,12 @@ class ModulesScreen extends StatefulWidget {
   const ModulesScreen({super.key});
 
   @override
-  State<ModulesScreen> createState() => _ModulesScreenState();
+  State<ModulesScreen> createState() => ModulesScreenState();
 }
 
-class _ModulesScreenState extends State<ModulesScreen> {
+class ModulesScreenState extends State<ModulesScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
+  String? _pendingLectureId;
 
   // ==========================================================================
   // CURRENT LEVEL
@@ -52,6 +53,65 @@ class _ModulesScreenState extends State<ModulesScreen> {
       _selectedModuleId = null;
       _selectedModuleName = null;
     });
+  }
+
+  // ==========================================================================
+  // OPEN LECTURE
+  // =========================================================================
+
+  Future<void> openLecture({
+    required String moduleId,
+    required String lectureId,
+  }) async {
+    try {
+      final response = await _supabase
+          .from('modules')
+          .select('''
+          id,
+          name,
+          academic_level_id,
+          academic_levels (
+            id,
+            name
+          )
+        ''')
+          .eq('id', moduleId)
+          .maybeSingle();
+
+      if (response == null) {
+        return;
+      }
+
+      final module = Map<String, dynamic>.from(response);
+
+      final levelRaw = module['academic_levels'];
+
+      if (levelRaw is! Map) {
+        return;
+      }
+
+      final level = Map<String, dynamic>.from(levelRaw);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _selectedLevelId = level['id']?.toString();
+
+        _selectedLevelName = level['name']?.toString();
+
+        _selectedModuleId = module['id']?.toString();
+
+        _selectedModuleName = module['name']?.toString();
+      });
+
+      // Send lecture target to LecturesScreen
+      // after the widget rebuilds.
+      _pendingLectureId = lectureId;
+    } catch (e) {
+      debugPrint('Open lecture from home error: $e');
+    }
   }
 
   // ==========================================================================
@@ -102,11 +162,19 @@ class _ModulesScreenState extends State<ModulesScreen> {
     // LECTURES
     // ------------------------------------------------------------------------
 
-    return LecturesScreen(
-      moduleId: _selectedModuleId!,
-      moduleName: _selectedModuleName ?? '',
-      onBack: _goToModules,
-    );
+    final lectureId =
+    _pendingLectureId;
+
+_pendingLectureId = null;
+
+return LecturesScreen(
+  moduleId: _selectedModuleId!,
+  moduleName:
+      _selectedModuleName ?? '',
+  initialLectureId:
+      lectureId,
+  onBack: _goToModules,
+);
   }
 }
 

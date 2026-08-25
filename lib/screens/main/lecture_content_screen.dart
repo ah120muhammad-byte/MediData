@@ -458,32 +458,6 @@ class _LectureContentScreenState
   }
 
   // ==========================================================================
-  // TYPE COLOR
-  // ==========================================================================
-
-  Color _colorForType(
-    BuildContext context,
-    String type,
-  ) {
-    final theme =
-        Theme.of(context);
-
-    switch (type.toLowerCase()) {
-      case 'pdf':
-        return theme.colorScheme.error;
-
-      case 'audio':
-        return Colors.orange;
-
-      case 'video':
-        return theme.colorScheme.primary;
-
-      default:
-        return theme.colorScheme.secondary;
-    }
-  }
-
-  // ==========================================================================
   // ERROR
   // ==========================================================================
 
