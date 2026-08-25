@@ -5,6 +5,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 
 import 'lecture_progress_service.dart';
+import 'study_activity_tracker.dart';
 
 class AudioPlayerService {
   AudioPlayerService._();
@@ -28,21 +29,23 @@ class AudioPlayerService {
     _handler = await AudioService.init(
       builder: () =>
           _LectureAudioHandler(),
-      config: AudioServiceConfig(
+      config: const AudioServiceConfig(
         androidNotificationChannelId:
             'com.medidata.dataapp.audio',
         androidNotificationChannelName:
             'Lecture Audio',
         androidNotificationChannelDescription:
             'Lecture audio playback',
-        androidNotificationOngoing:
-            true,
         androidStopForegroundOnPause:
             false,
         fastForwardInterval:
-            const Duration(seconds: 15),
+            Duration(
+          seconds: 15,
+        ),
         rewindInterval:
-            const Duration(seconds: 15),
+            Duration(
+          seconds: 15,
+        ),
       ),
     );
 
@@ -62,25 +65,30 @@ class AudioPlayerService {
       );
     }
 
-    return handler as _LectureAudioHandler;
+    return handler
+        as _LectureAudioHandler;
   }
 
   // ===========================================================================
   // STREAMS
   // ===========================================================================
 
-  Stream<Duration> get positionStream =>
-      _audioHandler.positionStream;
+  Stream<Duration>
+      get positionStream =>
+          _audioHandler.positionStream;
 
-  Stream<Duration?> get durationStream =>
-      _audioHandler.durationStream;
+  Stream<Duration?>
+      get durationStream =>
+          _audioHandler.durationStream;
 
-  Stream<bool> get playingStream =>
-      _audioHandler.playingStream;
+  Stream<bool>
+      get playingStream =>
+          _audioHandler.playingStream;
 
   Stream<ProcessingState>
       get processingStateStream =>
-          _audioHandler.processingStateStream;
+          _audioHandler
+              .processingStateStream;
 
   // ===========================================================================
   // CURRENT STATE
@@ -99,7 +107,9 @@ class AudioPlayerService {
       _audioHandler.speed;
 
   MediaItem? get currentMediaItem =>
-      _audioHandler.mediaItem.valueOrNull;
+      _audioHandler
+          .mediaItem
+          .valueOrNull;
 
   // ===========================================================================
   // LOAD
@@ -116,12 +126,18 @@ class AudioPlayerService {
     await initialize();
 
     await _audioHandler.loadLecture(
-      source: source,
-      lectureId: lectureId,
-      title: title,
-      lectureTitle: lectureTitle,
-      isLocalFile: isLocalFile,
-      artUri: artUri,
+      source:
+          source,
+      lectureId:
+          lectureId,
+      title:
+          title,
+      lectureTitle:
+          lectureTitle,
+      isLocalFile:
+          isLocalFile,
+      artUri:
+          artUri,
     );
   }
 
@@ -175,12 +191,16 @@ class AudioPlayerService {
 
   Future<void> skipForward({
     Duration amount =
-        const Duration(seconds: 15),
+        const Duration(
+      seconds: 15,
+    ),
   }) async {
     await initialize();
 
     await _audioHandler
-        .skipForward(amount);
+        .skipForward(
+      amount,
+    );
   }
 
   // ===========================================================================
@@ -189,12 +209,16 @@ class AudioPlayerService {
 
   Future<void> skipBackward({
     Duration amount =
-        const Duration(seconds: 15),
+        const Duration(
+      seconds: 15,
+    ),
   }) async {
     await initialize();
 
     await _audioHandler
-        .skipBackward(amount);
+        .skipBackward(
+      amount,
+    );
   }
 
   // ===========================================================================
@@ -221,7 +245,10 @@ class AudioPlayerService {
     await initialize();
 
     await _audioHandler.setVolume(
-      volume.clamp(0.0, 1.0),
+      volume.clamp(
+        0.0,
+        1.0,
+      ),
     );
   }
 }
@@ -240,23 +267,32 @@ class _LectureAudioHandler
       _progressService =
       LectureProgressService.instance;
 
-  StreamSubscription<PlaybackEvent>?
+  final StudyActivityTracker
+      _studyTracker =
+      StudyActivityTracker
+          .instance;
+
+  StreamSubscription<
+          PlaybackEvent>?
       _playbackEventSubscription;
 
   StreamSubscription<
           SequenceState?>?
       _sequenceSubscription;
 
-  StreamSubscription<Duration>?
+  StreamSubscription<
+          Duration>?
       _positionSubscription;
 
-  StreamSubscription<AudioInterruptionEvent>?
+  StreamSubscription<
+          AudioInterruptionEvent>?
       _interruptionSubscription;
 
   StreamSubscription<void>?
       _becomingNoisySubscription;
 
-  StreamSubscription<PlayerState>?
+  StreamSubscription<
+          PlayerState>?
       _playerStateSubscription;
 
   Timer? _saveTimer;
@@ -264,6 +300,9 @@ class _LectureAudioHandler
   String? _lectureId;
 
   bool _savingProgress = false;
+
+  bool _studySessionOpened =
+      false;
 
   // ===========================================================================
   // CONSTRUCTOR
@@ -277,18 +316,22 @@ class _LectureAudioHandler
   // GETTERS
   // ===========================================================================
 
-  Stream<Duration> get positionStream =>
-      _player.positionStream;
+  Stream<Duration>
+      get positionStream =>
+          _player.positionStream;
 
-  Stream<Duration?> get durationStream =>
-      _player.durationStream;
+  Stream<Duration?>
+      get durationStream =>
+          _player.durationStream;
 
-  Stream<bool> get playingStream =>
-      _player.playingStream;
+  Stream<bool>
+      get playingStream =>
+          _player.playingStream;
 
   Stream<ProcessingState>
       get processingStateStream =>
-          _player.processingStateStream;
+          _player
+              .processingStateStream;
 
   Duration get position =>
       _player.position;
@@ -308,46 +351,62 @@ class _LectureAudioHandler
 
   Future<void> _initialize() async {
     _playbackEventSubscription =
-        _player.playbackEventStream.listen(
+        _player
+            .playbackEventStream
+            .listen(
       _broadcastState,
     );
 
     _sequenceSubscription =
-        _player.sequenceStateStream.listen(
+        _player
+            .sequenceStateStream
+            .listen(
       (_) {
         _broadcastMediaItem();
       },
     );
 
     _positionSubscription =
-        _player.positionStream.listen(
+        _player
+            .positionStream
+            .listen(
       (_) {
         _broadcastState(
-          _player.playbackEvent,
+          _player
+              .playbackEvent,
         );
       },
     );
 
     _playerStateSubscription =
-        _player.playerStateStream.listen(
+        _player
+            .playerStateStream
+            .listen(
       _handlePlayerState,
     );
 
     final session =
-        await AudioSession.instance;
+        await AudioSession
+            .instance;
 
     await session.configure(
-      const AudioSessionConfiguration.speech(),
+      const AudioSessionConfiguration
+          .speech(),
     );
 
     _becomingNoisySubscription =
         session
             .becomingNoisyEventStream
-            .listen((_) async {
-      await _saveProgress();
+            .listen(
+      (_) async {
+        await _player.pause();
 
-      await _player.pause();
-    });
+        await _studyTracker
+            .pause();
+
+        await _saveProgress();
+      },
+    );
 
     _interruptionSubscription =
         session
@@ -366,9 +425,14 @@ class _LectureAudioHandler
   ) async {
     if (state.processingState ==
         ProcessingState.completed) {
+      await _studyTracker.stop();
+
       await _saveProgress();
 
       await _markCompleted();
+
+      _studyTracker
+          .markAudioCompleted();
     }
   }
 
@@ -392,11 +456,15 @@ class _LectureAudioHandler
             .pause:
         case AudioInterruptionType
             .unknown:
+          await _studyTracker
+              .pause();
+
           await _saveProgress();
 
           if (_player.playing) {
             await _player.pause();
           }
+
           break;
       }
 
@@ -404,7 +472,8 @@ class _LectureAudioHandler
     }
 
     if (event.type ==
-        AudioInterruptionType.duck) {
+        AudioInterruptionType
+            .duck) {
       await _player.setVolume(
         1.0,
       );
@@ -423,19 +492,34 @@ class _LectureAudioHandler
     required bool isLocalFile,
     String? artUri,
   }) async {
-    // Save the previous lecture before
-    // replacing it.
+    // -------------------------------------------------------------------------
+    // Save previous lecture before replacing it.
+    // -------------------------------------------------------------------------
+
+    await _studyTracker.stop();
+
     await _saveProgress();
 
     _saveTimer?.cancel();
 
-    _lectureId = lectureId;
+    _lectureId =
+        lectureId;
+
+    _studySessionOpened =
+        false;
+
+    // -------------------------------------------------------------------------
+    // MEDIA ITEM
+    // -------------------------------------------------------------------------
 
     final mediaItem =
         MediaItem(
-      id: lectureId,
-      title: title,
-      album: lectureTitle,
+      id:
+          lectureId,
+      title:
+          title,
+      album:
+          lectureTitle,
       artUri:
           artUri == null
               ? null
@@ -448,19 +532,27 @@ class _LectureAudioHandler
       mediaItem,
     );
 
+    // -------------------------------------------------------------------------
+    // AUDIO SOURCE
+    // -------------------------------------------------------------------------
+
     final AudioSource audioSource;
 
     if (isLocalFile) {
       audioSource =
           AudioSource.file(
         source,
-        tag: mediaItem,
+        tag:
+            mediaItem,
       );
     } else {
       audioSource =
           AudioSource.uri(
-        Uri.parse(source),
-        tag: mediaItem,
+        Uri.parse(
+          source,
+        ),
+        tag:
+            mediaItem,
       );
     }
 
@@ -483,7 +575,8 @@ class _LectureAudioHandler
       final savedPosition =
           Duration(
         seconds:
-            progress.audioPosition,
+            progress
+                .audioPosition,
       );
 
       final duration =
@@ -518,8 +611,11 @@ class _LectureAudioHandler
   void _startAutoSave() {
     _saveTimer?.cancel();
 
-    _saveTimer = Timer.periodic(
-      const Duration(seconds: 5),
+    _saveTimer =
+        Timer.periodic(
+      const Duration(
+        seconds: 5,
+      ),
       (_) {
         unawaited(
           _saveProgress(),
@@ -527,6 +623,10 @@ class _LectureAudioHandler
       },
     );
   }
+
+  // ===========================================================================
+  // SAVE PROGRESS
+  // ===========================================================================
 
   Future<void> _saveProgress() async {
     final lectureId =
@@ -542,20 +642,24 @@ class _LectureAudioHandler
       return;
     }
 
-    _savingProgress = true;
+    _savingProgress =
+        true;
 
     try {
       await _progressService
           .saveAudioPosition(
-        lectureId: lectureId,
+        lectureId:
+            lectureId,
         positionSeconds:
-            _player.position.inSeconds,
+            _player.position
+                .inSeconds,
       );
-    } catch (e) {
-      // Never interrupt playback because
-      // saving progress failed.
+    } catch (_) {
+      // Never interrupt playback
+      // because saving progress failed.
     } finally {
-      _savingProgress = false;
+      _savingProgress =
+          false;
     }
   }
 
@@ -589,6 +693,18 @@ class _LectureAudioHandler
   @override
   Future<void> play() async {
     await _player.play();
+
+    if (!_studySessionOpened) {
+      _studySessionOpened =
+          true;
+
+      _studyTracker.start(
+        lectureOpened:
+            true,
+      );
+    } else {
+      _studyTracker.start();
+    }
   }
 
   // ===========================================================================
@@ -597,9 +713,11 @@ class _LectureAudioHandler
 
   @override
   Future<void> pause() async {
-    await _saveProgress();
-
     await _player.pause();
+
+    await _studyTracker.pause();
+
+    await _saveProgress();
   }
 
   // ===========================================================================
@@ -608,6 +726,8 @@ class _LectureAudioHandler
 
   @override
   Future<void> stop() async {
+    await _studyTracker.stop();
+
     await _saveProgress();
 
     await _player.stop();
@@ -617,6 +737,9 @@ class _LectureAudioHandler
     );
 
     _saveTimer?.cancel();
+
+    _studySessionOpened =
+        false;
 
     await super.stop();
   }
@@ -715,7 +838,10 @@ class _LectureAudioHandler
     double volume,
   ) async {
     await _player.setVolume(
-      volume.clamp(0.0, 1.0),
+      volume.clamp(
+        0.0,
+        1.0,
+      ),
     );
   }
 
@@ -735,7 +861,8 @@ class _LectureAudioHandler
     final currentIndex =
         _player.currentIndex;
 
-    if (currentIndex == null ||
+    if (currentIndex ==
+            null ||
         currentIndex < 0 ||
         currentIndex >=
             sequence.length) {
@@ -762,17 +889,22 @@ class _LectureAudioHandler
   ) {
     final processingState =
         switch (
-            _player.processingState) {
+            _player
+                .processingState) {
       ProcessingState.idle =>
         AudioProcessingState.idle,
       ProcessingState.loading =>
-        AudioProcessingState.loading,
+        AudioProcessingState
+            .loading,
       ProcessingState.buffering =>
-        AudioProcessingState.buffering,
+        AudioProcessingState
+            .buffering,
       ProcessingState.ready =>
-        AudioProcessingState.ready,
+        AudioProcessingState
+            .ready,
       ProcessingState.completed =>
-        AudioProcessingState.completed,
+        AudioProcessingState
+            .completed,
     };
 
     playbackState.add(
@@ -783,7 +915,8 @@ class _LectureAudioHandler
           MediaControl.fastForward,
           MediaControl.stop,
         ],
-        systemActions: const {
+        systemActions:
+            const {
           MediaAction.seek,
           MediaAction.seekForward,
           MediaAction.seekBackward,
@@ -802,7 +935,8 @@ class _LectureAudioHandler
         updatePosition:
             _player.position,
         bufferedPosition:
-            _player.bufferedPosition,
+            _player
+                .bufferedPosition,
         speed:
             _player.speed,
         queueIndex:
@@ -818,24 +952,41 @@ class _LectureAudioHandler
   @override
   Future<void> fastForward() async {
     await skipForward(
-      const Duration(seconds: 15),
+      const Duration(
+        seconds: 15,
+      ),
     );
   }
 
   @override
   Future<void> rewind() async {
     await skipBackward(
-      const Duration(seconds: 15),
+      const Duration(
+        seconds: 15,
+      ),
     );
   }
 
+  // ===========================================================================
+  // TASK REMOVED
+  // ===========================================================================
+
   @override
   Future<void> onTaskRemoved() async {
+    await _studyTracker.stop();
+
     await _saveProgress();
   }
 
+  // ===========================================================================
+  // NOTIFICATION DELETED
+  // ===========================================================================
+
   @override
-  Future<void> onNotificationDeleted() async {
+  Future<void>
+      onNotificationDeleted() async {
+    await _studyTracker.stop();
+
     await _saveProgress();
   }
 
@@ -844,6 +995,8 @@ class _LectureAudioHandler
   // ===========================================================================
 
   Future<void> disposeHandler() async {
+    await _studyTracker.stop();
+
     _saveTimer?.cancel();
 
     await _playbackEventSubscription

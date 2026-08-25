@@ -259,21 +259,33 @@ class StudentLectureActivity {
 }
 
 // =============================================================================
-// DAILY ACTIVITY
+// DAILY STUDY ACTIVITY
 // =============================================================================
 
 class DailyStudyActivity {
   final DateTime day;
+
+  final int studySeconds;
+
   final int lecturesOpened;
+
   final int completedMedia;
+
   final int examAttempts;
 
   const DailyStudyActivity({
     required this.day,
+    required this.studySeconds,
     required this.lecturesOpened,
     required this.completedMedia,
     required this.examAttempts,
   });
+
+  double get studyMinutes =>
+      studySeconds / 60.0;
+
+  double get studyHours =>
+      studySeconds / 3600.0;
 }
 
 // =============================================================================
@@ -291,6 +303,8 @@ class StudentProfileAnalytics {
 
   final double averageScore;
   final double bestScore;
+
+  final int totalStudySeconds;
 
   final List<StudentExamAttempt>
       attempts;
@@ -310,6 +324,7 @@ class StudentProfileAnalytics {
     required this.passedExams,
     required this.averageScore,
     required this.bestScore,
+    required this.totalStudySeconds,
     required this.attempts,
     required this.lectureActivities,
     required this.dailyActivity,
@@ -330,7 +345,8 @@ class StudentProfileAnalytics {
         audioCompleted +
             videoCompleted;
 
-    if (total == 0) {
+    if (total == 0 ||
+        lecturesOpened == 0) {
       return 0;
     }
 
@@ -341,10 +357,34 @@ class StudentProfileAnalytics {
           double.infinity,
         );
   }
+
+  Duration get totalStudyDuration =>
+      Duration(
+        seconds:
+            totalStudySeconds,
+      );
+
+  String get formattedStudyTime {
+    final duration =
+        totalStudyDuration;
+
+    final hours =
+        duration.inHours;
+
+    final minutes =
+        duration.inMinutes
+            .remainder(60);
+
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+
+    return '${minutes}m';
+  }
 }
 
 // =============================================================================
-// SERVICE
+// PROFILE SERVICE
 // =============================================================================
 
 class StudentProfileService {
@@ -417,7 +457,7 @@ class StudentProfileService {
     }
 
     // -------------------------------------------------------------------------
-    // LECTURE ACTIVITY
+    // LECTURE PROGRESS
     // -------------------------------------------------------------------------
 
     final lectureResponse =
@@ -551,7 +591,80 @@ class StudentProfileService {
                     .toDouble();
 
     // -------------------------------------------------------------------------
-    // DAILY ACTIVITY - LAST 7 DAYS
+    // REAL STUDY ACTIVITY
+    // -------------------------------------------------------------------------
+
+    final studyResponse =
+        await _supabase
+            .from(
+              'student_study_activity',
+            )
+            .select('''
+              activity_date,
+              study_seconds,
+              lectures_opened,
+              audio_completed,
+              video_completed
+            ''')
+            .eq(
+              'user_id',
+              user.id,
+            )
+            .order(
+              'activity_date',
+              ascending: true,
+            );
+
+    final studyRows =
+        (studyResponse as List)
+            .map(
+              (item) =>
+                  Map<String, dynamic>.from(
+                item,
+              ),
+            )
+            .toList();
+
+    final studyByDate =
+        <DateTime,
+            Map<String, dynamic>>{};
+
+    int totalStudySeconds = 0;
+
+    for (final row in studyRows) {
+      final rawDate =
+          row['activity_date']
+              ?.toString();
+
+      final date =
+          DateTime.tryParse(
+        rawDate ?? '',
+      );
+
+      if (date == null) {
+        continue;
+      }
+
+      final normalized =
+          DateTime(
+        date.year,
+        date.month,
+        date.day,
+      );
+
+      studyByDate[
+              normalized] =
+          row;
+
+      totalStudySeconds +=
+          (row['study_seconds']
+                      as num?)
+                  ?.toInt() ??
+              0;
+    }
+
+    // -------------------------------------------------------------------------
+    // LAST 7 DAYS
     // -------------------------------------------------------------------------
 
     final now =
@@ -559,99 +672,135 @@ class StudentProfileService {
 
     final daily =
         List.generate(
-          7,
-          (index) {
-            final day =
-                DateTime(
-              now.year,
-              now.month,
-              now.day -
-                  (6 - index),
-            );
-
-            final lecturesCount =
-                lectureActivities
-                    .where(
-                      (item) {
-                        final date =
-                            item.lastOpenedAt;
-
-                        if (date ==
-                            null) {
-                          return false;
-                        }
-
-                        return date.year ==
-                                day.year &&
-                            date.month ==
-                                day.month &&
-                            date.day ==
-                                day.day;
-                      },
-                    )
-                    .length;
-
-            final mediaCompleted =
-                lectureActivities
-                    .where(
-                      (item) {
-                        final date =
-                            item.lastOpenedAt;
-
-                        if (date ==
-                            null) {
-                          return false;
-                        }
-
-                        final sameDay =
-                            date.year ==
-                                    day.year &&
-                                date.month ==
-                                    day.month &&
-                                date.day ==
-                                    day.day;
-
-                        return sameDay &&
-                            (item.audioCompleted ||
-                                item
-                                    .videoCompleted);
-                      },
-                    )
-                    .length;
-
-            final examCount =
-                attempts
-                    .where(
-                      (item) {
-                        final date =
-                            item.startedAt;
-
-                        if (date ==
-                            null) {
-                          return false;
-                        }
-
-                        return date.year ==
-                                day.year &&
-                            date.month ==
-                                day.month &&
-                            date.day ==
-                                day.day;
-                      },
-                    )
-                    .length;
-
-            return DailyStudyActivity(
-              day: day,
-              lecturesOpened:
-                  lecturesCount,
-              completedMedia:
-                  mediaCompleted,
-              examAttempts:
-                  examCount,
-            );
-          },
+      7,
+      (index) {
+        final day =
+            DateTime(
+          now.year,
+          now.month,
+          now.day -
+              (6 - index),
         );
+
+        final row =
+            studyByDate[day];
+
+        final lecturesOpened =
+            (row?['lectures_opened']
+                        as num?)
+                    ?.toInt() ??
+                0;
+
+        final studySeconds =
+            (row?['study_seconds']
+                        as num?)
+                    ?.toInt() ??
+                0;
+
+        final audioCompleted =
+            (row?['audio_completed']
+                        as num?)
+                    ?.toInt() ??
+                0;
+
+        final videoCompleted =
+            (row?['video_completed']
+                        as num?)
+                    ?.toInt() ??
+                0;
+
+        // Existing lecture history is still
+        // used as a fallback for days that
+        // happened before the new tracking
+        // table existed.
+        final fallbackLectures =
+            lectureActivities
+                .where(
+                  (item) {
+                    final date =
+                        item.lastOpenedAt;
+
+                    if (date == null) {
+                      return false;
+                    }
+
+                    return date.year ==
+                            day.year &&
+                        date.month ==
+                            day.month &&
+                        date.day ==
+                            day.day;
+                  },
+                )
+                .length;
+
+        final fallbackCompleted =
+            lectureActivities
+                .where(
+                  (item) {
+                    final date =
+                        item.lastOpenedAt;
+
+                    if (date == null) {
+                      return false;
+                    }
+
+                    final sameDay =
+                        date.year ==
+                                day.year &&
+                            date.month ==
+                                day.month &&
+                            date.day ==
+                                day.day;
+
+                    return sameDay &&
+                        (item.audioCompleted ||
+                            item
+                                .videoCompleted);
+                  },
+                )
+                .length;
+
+        return DailyStudyActivity(
+          day:
+              day,
+          studySeconds:
+              studySeconds,
+          lecturesOpened:
+              lecturesOpened >
+                      0
+                  ? lecturesOpened
+                  : fallbackLectures,
+          completedMedia:
+              audioCompleted +
+                  videoCompleted >
+                      0
+                  ? audioCompleted +
+                      videoCompleted
+                  : fallbackCompleted,
+          examAttempts:
+              attempts
+                  .where(
+                    (item) {
+                      final date =
+                          item.startedAt;
+
+                      if (date == null) {
+                        return false;
+                      }
+
+                      return date.year ==
+                              day.year &&
+                          date.month ==
+                              day.month &&
+                          date.day ==
+                              day.day;
+                    },
+                  )
+                  .length,
+        );
+      },
+    );
 
     return StudentProfileAnalytics(
       lecturesOpened:
@@ -680,12 +829,46 @@ class StudentProfileService {
           averageScore,
       bestScore:
           bestScore,
+      totalStudySeconds:
+          totalStudySeconds,
       attempts:
           attempts,
       lectureActivities:
           lectureActivities,
       dailyActivity:
           daily,
+    );
+  }
+
+  // ===========================================================================
+  // RECORD STUDY TIME
+  // ===========================================================================
+
+  Future<void> recordStudyActivity({
+    required int seconds,
+    int lecturesOpened = 0,
+    int audioCompleted = 0,
+    int videoCompleted = 0,
+  }) async {
+    if (seconds <= 0 &&
+        lecturesOpened <= 0 &&
+        audioCompleted <= 0 &&
+        videoCompleted <= 0) {
+      return;
+    }
+
+    await _supabase.rpc(
+      'record_student_study_activity',
+      params: {
+        'p_seconds':
+            seconds,
+        'p_lectures_opened':
+            lecturesOpened,
+        'p_audio_completed':
+            audioCompleted,
+        'p_video_completed':
+            videoCompleted,
+      },
     );
   }
 
@@ -733,7 +916,8 @@ class StudentProfileService {
   ) async {
     await _supabase.auth.updateUser(
       UserAttributes(
-        password: password,
+        password:
+            password,
       ),
     );
   }

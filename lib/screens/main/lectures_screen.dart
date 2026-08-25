@@ -3,8 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../widgets/lecture_card.dart';
 import 'exam_screen.dart';
 import '../../services/download_service.dart';
-import 'lecture_audio_player_screen.dart';
 import 'lecture_video_player_screen.dart';
+import 'lecture_audio_player_screen.dart';
+
 
 class LecturesScreen extends StatefulWidget {
   final String moduleId;

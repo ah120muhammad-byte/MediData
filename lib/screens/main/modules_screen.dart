@@ -162,19 +162,16 @@ class ModulesScreenState extends State<ModulesScreen> {
     // LECTURES
     // ------------------------------------------------------------------------
 
-    final lectureId =
-    _pendingLectureId;
+    final lectureId = _pendingLectureId;
 
-_pendingLectureId = null;
+    _pendingLectureId = null;
 
-return LecturesScreen(
-  moduleId: _selectedModuleId!,
-  moduleName:
-      _selectedModuleName ?? '',
-  initialLectureId:
-      lectureId,
-  onBack: _goToModules,
-);
+    return LecturesScreen(
+      moduleId: _selectedModuleId!,
+      moduleName: _selectedModuleName ?? '',
+      initialLectureId: lectureId,
+      onBack: _goToModules,
+    );
   }
 }
 

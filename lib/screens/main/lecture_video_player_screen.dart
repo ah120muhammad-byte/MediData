@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+
 import '../../services/download_service.dart';
 import '../../services/lecture_progress_service.dart';
+import '../../services/study_activity_tracker.dart';
 
 class LectureVideoPlayerScreen extends StatefulWidget {
   final String lectureId;
@@ -34,6 +37,9 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
 
   final LectureProgressService _progressService =
       LectureProgressService.instance;
+
+  final StudyActivityTracker _studyTracker =
+      StudyActivityTracker.instance;
 
   Timer? _saveTimer;
 
@@ -69,7 +75,28 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
-      unawaited(_saveProgress());
+      unawaited(_handleAppBackground());
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      _resumeStudyTrackingIfPlaying();
+    }
+  }
+
+  Future<void> _handleAppBackground() async {
+    await _saveProgress();
+    await _studyTracker.pause();
+  }
+
+  void _resumeStudyTrackingIfPlaying() {
+    final controller = _controller;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+
+    if (controller.value.isPlaying) {
+      _studyTracker.start();
     }
   }
 
@@ -84,7 +111,9 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
     _saveTimer?.cancel();
 
     unawaited(_saveProgress());
+    unawaited(_studyTracker.stop());
 
+    _controller?.removeListener(_videoListener);
     _controller?.dispose();
 
     SystemChrome.setPreferredOrientations(const [
@@ -92,7 +121,9 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
       DeviceOrientation.portraitDown,
     ]);
 
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.edgeToEdge,
+    );
 
     super.dispose();
   }
@@ -125,35 +156,42 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
         if (await localFile.exists()) {
           controller = VideoPlayerController.file(
             localFile,
-            videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+            videoPlayerOptions: VideoPlayerOptions(
+              mixWithOthers: false,
+            ),
           );
-
         } else {
           final signedUrl = await DownloadsService.instance
               .createSignedUrlForLectureFile(
-                fileUrl: widget.fileUrl,
-                fileType: 'video',
-              );
+            fileUrl: widget.fileUrl,
+            fileType: 'video',
+          );
 
           controller = VideoPlayerController.networkUrl(
             Uri.parse(signedUrl),
-            videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+            videoPlayerOptions: VideoPlayerOptions(
+              mixWithOthers: false,
+            ),
           );
         }
       }
+
       // -----------------------------------------------------------------------
       // ONLINE
       // -----------------------------------------------------------------------
+
       else {
         final signedUrl = await DownloadsService.instance
             .createSignedUrlForLectureFile(
-              fileUrl: widget.fileUrl,
-              fileType: 'video',
-            );
+          fileUrl: widget.fileUrl,
+          fileType: 'video',
+        );
 
         controller = VideoPlayerController.networkUrl(
           Uri.parse(signedUrl),
-          videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: false,
+          ),
         );
       }
 
@@ -161,18 +199,21 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
 
       await controller.initialize();
 
-      // Keep screen awake while video
-      // is being viewed.
       await controller.setVolume(1.0);
 
       // -----------------------------------------------------------------------
-      // RESUME
+      // RESUME VIDEO PROGRESS
       // -----------------------------------------------------------------------
 
-      final progress = await _progressService.getProgress(widget.lectureId);
+      final progress = await _progressService.getProgress(
+        widget.lectureId,
+      );
 
-      if (!progress.videoCompleted && progress.videoPosition > 0) {
-        final savedPosition = Duration(seconds: progress.videoPosition);
+      if (!progress.videoCompleted &&
+          progress.videoPosition > 0) {
+        final savedPosition = Duration(
+          seconds: progress.videoPosition,
+        );
 
         final duration = controller.value.duration;
 
@@ -196,7 +237,14 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
         _error = null;
       });
 
+      // -----------------------------------------------------------------------
+      // START VIDEO
+      // -----------------------------------------------------------------------
+
       await controller.play();
+
+      // Start real study-time tracking.
+      _studyTracker.start();
     } catch (e) {
       debugPrint('Video player error: $e');
 
@@ -220,7 +268,8 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   void _videoListener() {
     final controller = _controller;
 
-    if (controller == null || !controller.value.isInitialized) {
+    if (controller == null ||
+        !controller.value.isInitialized) {
       return;
     }
 
@@ -231,11 +280,33 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
         !_completed) {
       _completed = true;
 
-      unawaited(_markCompleted());
+      unawaited(_handleVideoCompleted());
     }
 
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  // ===========================================================================
+  // VIDEO COMPLETED
+  // ===========================================================================
+
+  Future<void> _handleVideoCompleted() async {
+    try {
+      await _saveProgress();
+
+      await _progressService.markVideoCompleted(
+        widget.lectureId,
+      );
+
+      _studyTracker.markVideoCompleted();
+
+      await _studyTracker.flush();
+    } catch (e) {
+      debugPrint(
+        'Video completion error: $e',
+      );
     }
   }
 
@@ -246,33 +317,32 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   void _startAutoSave() {
     _saveTimer?.cancel();
 
-    _saveTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      unawaited(_saveProgress());
-    });
+    _saveTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) {
+        unawaited(_saveProgress());
+      },
+    );
   }
 
   Future<void> _saveProgress() async {
     final controller = _controller;
 
-    if (controller == null || !controller.value.isInitialized) {
+    if (controller == null ||
+        !controller.value.isInitialized) {
       return;
     }
 
     try {
       await _progressService.saveVideoPosition(
         lectureId: widget.lectureId,
-        positionSeconds: controller.value.position.inSeconds,
+        positionSeconds:
+            controller.value.position.inSeconds,
       );
     } catch (e) {
-      debugPrint('Video progress save error: $e');
-    }
-  }
-
-  Future<void> _markCompleted() async {
-    try {
-      await _progressService.markVideoCompleted(widget.lectureId);
-    } catch (e) {
-      debugPrint('Video completion error: $e');
+      debugPrint(
+        'Video progress save error: $e',
+      );
     }
   }
 
@@ -283,14 +353,19 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   Future<void> _togglePlayback() async {
     final controller = _controller;
 
-    if (controller == null || !controller.value.isInitialized) {
+    if (controller == null ||
+        !controller.value.isInitialized) {
       return;
     }
 
     if (controller.value.isPlaying) {
       await controller.pause();
+
+      await _studyTracker.pause();
     } else {
       await controller.play();
+
+      _studyTracker.start();
     }
 
     if (mounted) {
@@ -304,10 +379,13 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   // SEEK
   // ===========================================================================
 
-  Future<void> _seekRelative(Duration offset) async {
+  Future<void> _seekRelative(
+    Duration offset,
+  ) async {
     final controller = _controller;
 
-    if (controller == null || !controller.value.isInitialized) {
+    if (controller == null ||
+        !controller.value.isInitialized) {
       return;
     }
 
@@ -334,10 +412,13 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   // SPEED
   // ===========================================================================
 
-  Future<void> _setSpeed(double speed) async {
+  Future<void> _setSpeed(
+    double speed,
+  ) async {
     final controller = _controller;
 
-    if (controller == null || !controller.value.isInitialized) {
+    if (controller == null ||
+        !controller.value.isInitialized) {
       return;
     }
 
@@ -358,12 +439,16 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
 
   Future<void> _toggleFullscreen() async {
     if (_fullscreen) {
-      await SystemChrome.setPreferredOrientations(const [
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-      ]);
+      await SystemChrome.setPreferredOrientations(
+        const [
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+        ],
+      );
 
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      await SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.edgeToEdge,
+      );
 
       if (mounted) {
         setState(() {
@@ -374,12 +459,16 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
       return;
     }
 
-    await SystemChrome.setPreferredOrientations(const [
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    await SystemChrome.setPreferredOrientations(
+      const [
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ],
+    );
 
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.immersiveSticky,
+    );
 
     if (mounted) {
       setState(() {
@@ -392,12 +481,16 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   // FORMAT
   // ===========================================================================
 
-  String _formatDuration(Duration duration) {
+  String _formatDuration(
+    Duration duration,
+  ) {
     final hours = duration.inHours;
 
-    final minutes = duration.inMinutes.remainder(60);
+    final minutes =
+        duration.inMinutes.remainder(60);
 
-    final seconds = duration.inSeconds.remainder(60);
+    final seconds =
+        duration.inSeconds.remainder(60);
 
     if (hours > 0) {
       return '$hours:'
@@ -414,7 +507,9 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   // ===========================================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final controller = _controller;
 
     return Scaffold(
@@ -429,12 +524,14 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
               ),
             ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
           : _error != null
-          ? _buildError()
-          : controller == null
-          ? _buildError()
-          : _buildVideo(controller),
+              ? _buildError()
+              : controller == null
+                  ? _buildError()
+                  : _buildVideo(controller),
     );
   }
 
@@ -456,9 +553,12 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              _error ?? 'Unable to play this video.',
+              _error ??
+                  'Unable to play this video.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 18),
             FilledButton(
@@ -475,11 +575,15 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   // VIDEO
   // ===========================================================================
 
-  Widget _buildVideo(VideoPlayerController controller) {
+  Widget _buildVideo(
+    VideoPlayerController controller,
+  ) {
     final value = controller.value;
 
     if (!value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
     }
 
     return GestureDetector(
@@ -495,9 +599,12 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
           // -------------------------------------------------------------------
           // VIDEO
           // -------------------------------------------------------------------
+
           Center(
             child: AspectRatio(
-              aspectRatio: value.aspectRatio > 0 ? value.aspectRatio : 16 / 9,
+              aspectRatio: value.aspectRatio > 0
+                  ? value.aspectRatio
+                  : 16 / 9,
               child: VideoPlayer(controller),
             ),
           ),
@@ -505,7 +612,9 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
           // -------------------------------------------------------------------
           // CONTROLS
           // -------------------------------------------------------------------
-          if (_showControls) _buildControls(controller),
+
+          if (_showControls)
+            _buildControls(controller),
         ],
       ),
     );
@@ -515,7 +624,9 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   // CONTROLS
   // ===========================================================================
 
-  Widget _buildControls(VideoPlayerController controller) {
+  Widget _buildControls(
+    VideoPlayerController controller,
+  ) {
     final value = controller.value;
 
     return Container(
@@ -523,8 +634,16 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Colors.black54, Colors.transparent, Colors.black87],
-          stops: [0, 0.45, 1],
+          colors: [
+            Colors.black54,
+            Colors.transparent,
+            Colors.black87,
+          ],
+          stops: [
+            0,
+            0.45,
+            1,
+          ],
         ),
       ),
       child: SafeArea(
@@ -533,13 +652,16 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
             // ===============================================================
             // TOP BAR
             // ===============================================================
+
             Row(
               children: [
                 if (_fullscreen)
                   IconButton(
                     onPressed: _toggleFullscreen,
                     color: Colors.white,
-                    icon: const Icon(Icons.arrow_back_rounded),
+                    icon: const Icon(
+                      Icons.arrow_back_rounded,
+                    ),
                   ),
 
                 Expanded(
@@ -556,16 +678,37 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
 
                 PopupMenuButton<double>(
                   tooltip: 'Playback speed',
-                  icon: const Icon(Icons.speed_rounded, color: Colors.white),
+                  icon: const Icon(
+                    Icons.speed_rounded,
+                    color: Colors.white,
+                  ),
                   initialValue: _playbackSpeed,
                   onSelected: _setSpeed,
                   itemBuilder: (_) => const [
-                    PopupMenuItem(value: 0.75, child: Text('0.75x')),
-                    PopupMenuItem(value: 1.0, child: Text('1.0x')),
-                    PopupMenuItem(value: 1.25, child: Text('1.25x')),
-                    PopupMenuItem(value: 1.5, child: Text('1.5x')),
-                    PopupMenuItem(value: 1.75, child: Text('1.75x')),
-                    PopupMenuItem(value: 2.0, child: Text('2.0x')),
+                    PopupMenuItem(
+                      value: 0.75,
+                      child: Text('0.75x'),
+                    ),
+                    PopupMenuItem(
+                      value: 1.0,
+                      child: Text('1.0x'),
+                    ),
+                    PopupMenuItem(
+                      value: 1.25,
+                      child: Text('1.25x'),
+                    ),
+                    PopupMenuItem(
+                      value: 1.5,
+                      child: Text('1.5x'),
+                    ),
+                    PopupMenuItem(
+                      value: 1.75,
+                      child: Text('1.75x'),
+                    ),
+                    PopupMenuItem(
+                      value: 2.0,
+                      child: Text('2.0x'),
+                    ),
                   ],
                 ),
 
@@ -586,15 +729,24 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
             // ===============================================================
             // CENTER CONTROLS
             // ===============================================================
+
             Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment:
+                  MainAxisAlignment.center,
               children: [
                 IconButton(
                   onPressed: () {
-                    _seekRelative(const Duration(seconds: -15));
+                    _seekRelative(
+                      const Duration(
+                        seconds: -15,
+                      ),
+                    );
                   },
                   color: Colors.white,
-                  icon: const Icon(Icons.replay_10_rounded, size: 34),
+                  icon: const Icon(
+                    Icons.replay_10_rounded,
+                    size: 34,
+                  ),
                 ),
 
                 const SizedBox(width: 20),
@@ -620,10 +772,17 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
 
                 IconButton(
                   onPressed: () {
-                    _seekRelative(const Duration(seconds: 15));
+                    _seekRelative(
+                      const Duration(
+                        seconds: 15,
+                      ),
+                    );
                   },
                   color: Colors.white,
-                  icon: const Icon(Icons.forward_10_rounded, size: 34),
+                  icon: const Icon(
+                    Icons.forward_10_rounded,
+                    size: 34,
+                  ),
                 ),
               ],
             ),
@@ -633,46 +792,74 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
             // ===============================================================
             // BOTTOM PROGRESS
             // ===============================================================
+
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+              ),
               child: Row(
                 children: [
                   Text(
-                    _formatDuration(value.position),
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    _formatDuration(
+                      value.position,
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                    ),
                   ),
 
                   const SizedBox(width: 6),
 
                   Expanded(
                     child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
+                      data: SliderTheme.of(context)
+                          .copyWith(
                         thumbColor: Colors.white,
-                        activeTrackColor: Colors.white,
-                        inactiveTrackColor: Colors.white30,
-                        overlayColor: Colors.white12,
+                        activeTrackColor:
+                            Colors.white,
+                        inactiveTrackColor:
+                            Colors.white30,
+                        overlayColor:
+                            Colors.white12,
                         trackHeight: 3,
                       ),
                       child: Slider(
                         min: 0,
-                        max: value.duration.inMilliseconds.toDouble() > 0
-                            ? value.duration.inMilliseconds.toDouble()
+                        max: value.duration
+                                    .inMilliseconds
+                                    .toDouble() >
+                                0
+                            ? value.duration
+                                .inMilliseconds
+                                .toDouble()
                             : 1,
-                        value: value.position.inMilliseconds
+                        value: value.position
+                            .inMilliseconds
                             .clamp(
                               0,
-                              value.duration.inMilliseconds > 0
-                                  ? value.duration.inMilliseconds
+                              value.duration
+                                          .inMilliseconds >
+                                      0
+                                  ? value.duration
+                                      .inMilliseconds
                                   : 0,
                             )
                             .toDouble(),
-                        onChanged: value.duration > Duration.zero
-                            ? (position) {
-                                controller.seekTo(
-                                  Duration(milliseconds: position.round()),
-                                );
-                              }
-                            : null,
+                        onChanged:
+                            value.duration >
+                                    Duration.zero
+                                ? (position) {
+                                    controller
+                                        .seekTo(
+                                      Duration(
+                                        milliseconds:
+                                            position
+                                                .round(),
+                                      ),
+                                    );
+                                  }
+                                : null,
                       ),
                     ),
                   ),
@@ -680,8 +867,13 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
                   const SizedBox(width: 6),
 
                   Text(
-                    _formatDuration(value.duration),
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    _formatDuration(
+                      value.duration,
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),

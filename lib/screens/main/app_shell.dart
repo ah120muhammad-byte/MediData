@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../services/student_profile_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_brand.dart';
+import '../../services/student_profile_service.dart';
 import '../main/ai_assistant_screen.dart';
 import '../main/downloads_screen.dart';
+import '../main/exam_result_screen.dart';
+import '../main/exam_review_screen.dart';
+import '../main/exam_screen.dart';
 import '../main/home_screen.dart';
 import '../main/modules_screen.dart';
 import '../main/profile_screen.dart';
@@ -17,6 +21,13 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState
     extends State<AppShell> {
+  // ==========================================================================
+  // SERVICES
+  // ==========================================================================
+
+  final SupabaseClient _supabase =
+      Supabase.instance.client;
+
   // ==========================================================================
   // CURRENT PAGE
   // ==========================================================================
@@ -64,15 +75,10 @@ class _AppShellState
     return Scaffold(
       extendBody: true,
 
-      // ========================================================================
-      // BODY
-      // ========================================================================
-
       body: SafeArea(
         top: true,
         bottom: false,
-        child:
-            Column(
+        child: Column(
           children: [
             // ==================================================================
             // APP HEADER
@@ -89,26 +95,22 @@ class _AppShellState
             // ==================================================================
 
             Expanded(
-              child:
-                  IndexedStack(
-                index:
-                    _currentIndex,
-                children:
-                    _pages,
+              child: IndexedStack(
+                index: _currentIndex,
+                children: _pages,
               ),
             ),
           ],
         ),
       ),
 
-      // ========================================================================
+      // =========================================================================
       // BOTTOM NAVIGATION
-      // ========================================================================
+      // =========================================================================
 
       bottomNavigationBar:
           _CustomBottomNavigation(
-        currentIndex:
-            _currentIndex,
+        currentIndex: _currentIndex,
         onItemSelected:
             _onNavigationChanged,
       ),
@@ -122,24 +124,17 @@ class _AppShellState
   void _onNavigationChanged(
     int index,
   ) {
-    if (_currentIndex ==
-        index) {
+    if (_currentIndex == index) {
       return;
     }
 
     setState(() {
-      _currentIndex =
-          index;
+      _currentIndex = index;
     });
   }
 
   // ==========================================================================
   // OPEN LECTURE
-  //
-  // Used by HomeScreen and ProfileScreen.
-  //
-  // We keep the navigation entry point here so both screens use
-  // exactly the same behavior.
   // ==========================================================================
 
   void _openLectureFromHome({
@@ -148,32 +143,16 @@ class _AppShellState
     required String lectureId,
   }) {
     // ------------------------------------------------------------------------
-    // For now we return to the Modules tab.
+    // نفس نقطة الدخول المستخدمة من Home و Profile.
     //
-    // The direct lecture navigation will be connected here to the current
-    // LecturesScreen constructor once that constructor is unified with the
-    // latest lecture-opening flow.
+    // نحول حاليا إلى Modules tab.
+    // لو عندك بالفعل route مباشر للمحاضرة يمكنك استبدال محتوى الدالة
+    // فقط، بدون تعديل Home/Profile.
     // ------------------------------------------------------------------------
 
     setState(() {
       _currentIndex = 0;
     });
-
-    ScaffoldMessenger.of(
-      context,
-    )
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            'Opening $moduleName...',
-          ),
-          duration:
-              const Duration(
-            milliseconds: 900,
-          ),
-        ),
-      );
 
     debugPrint(
       'OPEN LECTURE => '
@@ -184,50 +163,299 @@ class _AppShellState
   }
 
   // ==========================================================================
-  // EXAM HISTORY
-  //
-  // We only select the exact saved attempt here.
-  // The Resume / Review route will be connected to the current ExamScreen
-  // after its attemptId constructor is unified.
+  // OPEN EXAM ATTEMPT
   // ==========================================================================
 
-  void _openExamAttempt(
+  Future<void> _openExamAttempt(
     StudentExamAttempt attempt,
-  ) {
-    debugPrint(
-      'OPEN EXAM ATTEMPT => '
-      'attemptId=${attempt.id}, '
-      'examId=${attempt.examId}, '
-      'status=${attempt.status}',
-    );
-
-    String message;
-
-    if (attempt.isInProgress) {
-      message =
-          'Resume exam: ${attempt.examTitle}';
-    } else if (attempt.isCompleted) {
-      message =
-          'View result: ${attempt.examTitle}';
-    } else {
-      message =
-          'View attempt: ${attempt.examTitle}';
+  ) async {
+    if (!mounted) {
+      return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    )
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content:
-              Text(message),
-          duration:
-              const Duration(
-            milliseconds: 1200,
+    // ------------------------------------------------------------------------
+    // Get the latest exam configuration.
+    // ------------------------------------------------------------------------
+
+    final response = await _supabase
+        .from('exams')
+        .select('''
+          id,
+          title,
+          duration_minutes,
+          passing_score
+        ''')
+        .eq(
+          'id',
+          attempt.examId,
+        )
+        .maybeSingle();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (response == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Exam information is no longer available.',
           ),
         ),
       );
+
+      return;
+    }
+
+    final exam =
+        Map<String, dynamic>.from(
+      response,
+    );
+
+    final examId =
+        exam['id'].toString();
+
+    final examTitle =
+        exam['title']?.toString() ??
+            attempt.examTitle;
+
+    final durationMinutes =
+        (exam['duration_minutes']
+                    as num?)
+                ?.toInt() ??
+            0;
+
+    final passingScore =
+        (exam['passing_score']
+                    as num?)
+                ?.toInt() ??
+            0;
+
+    // =========================================================================
+    // IN PROGRESS
+    // =========================================================================
+
+    if (attempt.isInProgress) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) =>
+              ExamScreen(
+            examId:
+                examId,
+            attemptId:
+                attempt.id,
+            examTitle:
+                examTitle,
+            durationMinutes:
+                durationMinutes,
+            passingScore:
+                passingScore,
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    // =========================================================================
+    // COMPLETED
+    // =========================================================================
+
+    if (attempt.isCompleted) {
+      _showCompletedAttemptActions(
+        attempt: attempt,
+        examId: examId,
+        examTitle: examTitle,
+        durationMinutes:
+            durationMinutes,
+        passingScore:
+            passingScore,
+      );
+
+      return;
+    }
+
+    // =========================================================================
+    // ABANDONED
+    // =========================================================================
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            ExamReviewScreen(
+          attemptId:
+              attempt.id,
+          examId:
+              examId,
+          examTitle:
+              examTitle,
+        ),
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // COMPLETED ATTEMPT ACTIONS
+  // ==========================================================================
+
+  void _showCompletedAttemptActions({
+    required StudentExamAttempt attempt,
+    required String examId,
+    required String examTitle,
+    required int durationMinutes,
+    required int passingScore,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding:
+                const EdgeInsets.fromLTRB(
+              16,
+              4,
+              16,
+              20,
+            ),
+            child: Column(
+              mainAxisSize:
+                  MainAxisSize.min,
+              children: [
+                // =============================================================
+                // VIEW RESULT
+                // =============================================================
+
+                ListTile(
+                  leading:
+                      const CircleAvatar(
+                    child: Icon(
+                      Icons
+                          .assessment_rounded,
+                    ),
+                  ),
+                  title:
+                      const Text(
+                    'View Result',
+                    style:
+                        TextStyle(
+                      fontWeight:
+                          FontWeight.w700,
+                    ),
+                  ),
+                  subtitle:
+                      Text(
+                    '${attempt.score}% • '
+                    '${attempt.correctAnswers}/'
+                    '${attempt.totalQuestions} correct',
+                  ),
+                  trailing:
+                      const Icon(
+                    Icons
+                        .chevron_right_rounded,
+                  ),
+                  onTap: () {
+                    Navigator.of(
+                      sheetContext,
+                    ).pop();
+
+                    Navigator.of(
+                      context,
+                    ).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ExamResultScreen(
+                          examId:
+                              examId,
+                          attemptId:
+                              attempt.id,
+                          examTitle:
+                              examTitle,
+                          durationMinutes:
+                              durationMinutes,
+                          score:
+                              attempt.score,
+                          correctAnswers:
+                              attempt
+                                  .correctAnswers,
+                          totalQuestions:
+                              attempt
+                                  .totalQuestions,
+                          passingScore:
+                              passingScore,
+                          passed:
+                              attempt.passed,
+                          autoSubmitted:
+                              false,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+                const Divider(
+                  height: 1,
+                ),
+
+                // =============================================================
+                // REVIEW ANSWERS
+                // =============================================================
+
+                ListTile(
+                  leading:
+                      const CircleAvatar(
+                    child: Icon(
+                      Icons
+                          .rate_review_rounded,
+                    ),
+                  ),
+                  title:
+                      const Text(
+                    'Review Answers',
+                    style:
+                        TextStyle(
+                      fontWeight:
+                          FontWeight.w700,
+                    ),
+                  ),
+                  subtitle:
+                      const Text(
+                    'Review your answers, correct answers and explanations.',
+                  ),
+                  trailing:
+                      const Icon(
+                    Icons
+                        .chevron_right_rounded,
+                  ),
+                  onTap: () {
+                    Navigator.of(
+                      sheetContext,
+                    ).pop();
+
+                    Navigator.of(
+                      context,
+                    ).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ExamReviewScreen(
+                          attemptId:
+                              attempt.id,
+                          examId:
+                              examId,
+                          examTitle:
+                              examTitle,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   // ==========================================================================
@@ -235,9 +463,7 @@ class _AppShellState
   // ==========================================================================
 
   void _openSearch() {
-    ScaffoldMessenger.of(
-      context,
-    )
+    ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         const SnackBar(
@@ -295,70 +521,52 @@ class _AppHeader
         horizontalPadding,
         verticalPadding,
         horizontalPadding,
-        isTablet
-            ? 10.0
-            : 8.0,
+        isTablet ? 10.0 : 8.0,
       ),
-      child:
-          SizedBox(
-        height:
-            headerHeight,
-        width:
-            double.infinity,
-        child:
-            Stack(
+      child: SizedBox(
+        height: headerHeight,
+        width: double.infinity,
+        child: Stack(
           clipBehavior:
               Clip.none,
           alignment:
               Alignment.center,
           children: [
             // =================================================================
-            // APP BAR BACKGROUND
+            // HEADER BACKGROUND
             // =================================================================
 
             Positioned.fill(
-              child:
-                  Container(
+              child: Container(
                 decoration:
                     BoxDecoration(
                   color: theme
                       .colorScheme
                       .surface,
                   borderRadius:
-                      BorderRadius
-                          .circular(
-                    isTablet
-                        ? 24
-                        : 20,
+                      BorderRadius.circular(
+                    isTablet ? 24 : 20,
                   ),
-                  border:
-                      Border.all(
-                    color:
-                        isDark
-                            ? Colors.white
-                                .withValues(
-                              alpha:
-                                  0.06,
-                            )
-                            : Colors.black
-                                .withValues(
-                              alpha:
-                                  0.04,
-                            ),
-                    width: 1,
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white
+                            .withValues(
+                          alpha: 0.06,
+                        )
+                        : Colors.black
+                            .withValues(
+                          alpha: 0.04,
+                        ),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors
-                          .black
+                      color: Colors.black
                           .withValues(
-                        alpha:
-                            isDark
-                                ? 0.30
-                                : 0.08,
+                        alpha: isDark
+                            ? 0.30
+                            : 0.08,
                       ),
-                      blurRadius:
-                          18,
+                      blurRadius: 18,
                       offset:
                           const Offset(
                         0,
@@ -375,13 +583,10 @@ class _AppHeader
             // =================================================================
 
             Container(
-              width:
-                  logoSize,
-              height:
-                  logoSize,
+              width: logoSize,
+              height: logoSize,
               padding:
-                  const EdgeInsets
-                      .all(
+                  const EdgeInsets.all(
                 5,
               ),
               decoration:
@@ -393,32 +598,25 @@ class _AppHeader
                     BoxShape.circle,
                 border:
                     Border.all(
-                  color:
-                      isDark
-                          ? Colors.white
-                              .withValues(
-                            alpha:
-                                0.08,
-                          )
-                          : Colors.black
-                              .withValues(
-                            alpha:
-                                0.04,
-                          ),
-                  width: 1,
+                  color: isDark
+                      ? Colors.white
+                          .withValues(
+                        alpha: 0.08,
+                      )
+                      : Colors.black
+                          .withValues(
+                        alpha: 0.04,
+                      ),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors
-                        .black
+                    color: Colors.black
                         .withValues(
-                      alpha:
-                          isDark
-                              ? 0.22
-                              : 0.08,
+                      alpha: isDark
+                          ? 0.22
+                          : 0.08,
                     ),
-                    blurRadius:
-                        10,
+                    blurRadius: 10,
                     offset:
                         const Offset(
                       0,
@@ -427,15 +625,11 @@ class _AppHeader
                   ),
                 ],
               ),
-              child:
-                  ClipOval(
-                child:
-                    Image.asset(
-                  AppBrand
-                      .logoPath,
+              child: ClipOval(
+                child: Image.asset(
+                  AppBrand.logoPath,
                   fit:
-                      BoxFit
-                          .contain,
+                      BoxFit.contain,
                   errorBuilder:
                       (
                     context,
@@ -445,14 +639,12 @@ class _AppHeader
                     return Icon(
                       Icons
                           .medical_services_rounded,
-                      color:
-                          theme
-                              .colorScheme
-                              .primary,
-                      size:
-                          isTablet
-                              ? 34
-                              : 29,
+                      color: theme
+                          .colorScheme
+                          .primary,
+                      size: isTablet
+                          ? 34
+                          : 29,
                     );
                   },
                 ),
@@ -465,42 +657,33 @@ class _AppHeader
 
             Positioned(
               right:
-                  isTablet
-                      ? 10
-                      : 6,
-              child:
-                  Material(
+                  isTablet ? 10 : 6,
+              child: Material(
                 color:
-                    Colors
-                        .transparent,
+                    Colors.transparent,
                 shape:
                     const CircleBorder(),
-                child:
-                    InkWell(
+                child: InkWell(
                   onTap:
                       onSearchPressed,
                   customBorder:
                       const CircleBorder(),
-                  child:
-                      Padding(
+                  child: Padding(
                     padding:
                         EdgeInsets.all(
                       isTablet
                           ? 10
                           : 8,
                     ),
-                    child:
-                        Icon(
+                    child: Icon(
                       Icons
                           .search_rounded,
-                      size:
-                          isTablet
-                              ? 29
-                              : 25,
-                      color:
-                          theme
-                              .colorScheme
-                              .onSurface,
+                      size: isTablet
+                          ? 29
+                          : 25,
+                      color: theme
+                          .colorScheme
+                          .onSurface,
                     ),
                   ),
                 ),
@@ -528,57 +711,40 @@ class _CustomBottomNavigation
     required this.onItemSelected,
   });
 
-  static const List<
-      _NavItem> _items = [
+  static const List<_NavItem> _items = [
     _NavItem(
-      label:
-          'Modules',
+      label: 'Modules',
       icon:
-          Icons
-              .menu_book_outlined,
+          Icons.menu_book_outlined,
       selectedIcon:
-          Icons
-              .menu_book_rounded,
+          Icons.menu_book_rounded,
     ),
     _NavItem(
-      label:
-          'AI',
+      label: 'AI',
       icon:
-          Icons
-              .auto_awesome_outlined,
+          Icons.auto_awesome_outlined,
       selectedIcon:
-          Icons
-              .auto_awesome_rounded,
+          Icons.auto_awesome_rounded,
     ),
     _NavItem(
-      label:
-          'Home',
-      icon:
-          Icons
-              .home_outlined,
+      label: 'Home',
+      icon: Icons.home_outlined,
       selectedIcon:
-          Icons
-              .home_rounded,
+          Icons.home_rounded,
     ),
     _NavItem(
-      label:
-          'Downloads',
+      label: 'Downloads',
       icon:
-          Icons
-              .download_outlined,
+          Icons.download_outlined,
       selectedIcon:
-          Icons
-              .download_rounded,
+          Icons.download_rounded,
     ),
     _NavItem(
-      label:
-          'Profile',
+      label: 'Profile',
       icon:
-          Icons
-              .person_outline,
+          Icons.person_outline,
       selectedIcon:
-          Icons
-              .person_rounded,
+          Icons.person_rounded,
     ),
   ];
 
@@ -592,41 +758,29 @@ class _CustomBottomNavigation
     );
 
     final isTablet =
-        size.shortestSide >=
-            600;
+        size.shortestSide >= 600;
 
     final horizontalMargin =
-        isTablet
-            ? 40.0
-            : 12.0;
+        isTablet ? 40.0 : 12.0;
 
     final bottomMargin =
-        isTablet
-            ? 20.0
-            : 10.0;
+        isTablet ? 20.0 : 10.0;
 
     final maxWidth =
-        isTablet
-            ? 700.0
-            : double.infinity;
+        isTablet ? 700.0 : double.infinity;
 
     final theme =
         Theme.of(context);
 
     return SafeArea(
-      top:
-          false,
-      child:
-          Align(
+      top: false,
+      child: Align(
         alignment:
-            Alignment
-                .bottomCenter,
-        child:
-            Container(
+            Alignment.bottomCenter,
+        child: Container(
           constraints:
               BoxConstraints(
-            maxWidth:
-                maxWidth,
+            maxWidth: maxWidth,
           ),
           margin:
               EdgeInsets.only(
@@ -638,53 +792,40 @@ class _CustomBottomNavigation
                 bottomMargin,
           ),
           height:
-              isTablet
-                  ? 82
-                  : 74,
+              isTablet ? 82 : 74,
           decoration:
               BoxDecoration(
             color: theme
                 .colorScheme
                 .surface,
             borderRadius:
-                BorderRadius
-                    .circular(
-              isTablet
-                  ? 30
-                  : 26,
+                BorderRadius.circular(
+              isTablet ? 30 : 26,
             ),
-            border:
-                Border.all(
-              color:
-                  theme
-                          .brightness ==
-                      Brightness.dark
+            border: Border.all(
+              color: theme
+                      .brightness ==
+                  Brightness.dark
                   ? Colors.white
                       .withValues(
-                    alpha:
-                        0.05,
+                    alpha: 0.05,
                   )
                   : Colors.black
                       .withValues(
-                    alpha:
-                        0.04,
+                    alpha: 0.04,
                   ),
-              width: 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors
-                    .black
+                color: Colors.black
                     .withValues(
                   alpha:
-                      theme
-                              .brightness ==
-                          Brightness.dark
-                      ? 0.30
-                      : 0.14,
+                      theme.brightness ==
+                              Brightness.dark
+                          ? 0.30
+                          : 0.14,
                 ),
-                blurRadius:
-                    25,
+                blurRadius: 25,
                 offset:
                     const Offset(
                   0,
@@ -693,30 +834,27 @@ class _CustomBottomNavigation
               ),
             ],
           ),
-          child:
-              Row(
+          child: Row(
             children:
                 List.generate(
               _items.length,
-              (index) {
-                return Expanded(
-                  child:
-                      _AnimatedNavItem(
-                    item:
-                        _items[index],
-                    selected:
-                        currentIndex ==
-                            index,
-                    onTap:
-                        () =>
-                            onItemSelected(
-                      index,
-                    ),
-                    isTablet:
-                        isTablet,
+              (index) =>
+                  Expanded(
+                child:
+                    _AnimatedNavItem(
+                  item:
+                      _items[index],
+                  selected:
+                      currentIndex ==
+                          index,
+                  onTap: () =>
+                      onItemSelected(
+                    index,
                   ),
-                );
-              },
+                  isTablet:
+                      isTablet,
+                ),
+              ),
             ),
           ),
         ),
@@ -761,80 +899,61 @@ class _AnimatedNavItem
 
     return GestureDetector(
       behavior:
-          HitTestBehavior
-              .opaque,
-      onTap:
-          onTap,
-      child:
-          SizedBox(
+          HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
         height:
             double.infinity,
-        child:
-            Stack(
+        child: Stack(
           alignment:
               Alignment.center,
           clipBehavior:
               Clip.none,
           children: [
-            // ================================================================
+            // =================================================================
             // SELECTED CIRCLE
-            // ================================================================
+            // =================================================================
 
             AnimatedPositioned(
               duration:
                   const Duration(
-                milliseconds:
-                    350,
+                milliseconds: 350,
               ),
               curve:
-                  Curves
-                      .easeOutBack,
-              top:
-                  selected
-                      ? (isTablet
-                          ? -22
-                          : -20)
-                      : (isTablet
-                          ? 18
-                          : 15),
-              child:
-                  AnimatedScale(
+                  Curves.easeOutBack,
+              top: selected
+                  ? (isTablet
+                      ? -22
+                      : -20)
+                  : (isTablet
+                      ? 18
+                      : 15),
+              child: AnimatedScale(
                 duration:
                     const Duration(
-                  milliseconds:
-                      300,
+                  milliseconds: 300,
                 ),
                 curve:
-                    Curves
-                        .easeOutBack,
+                    Curves.easeOutBack,
                 scale:
-                    selected
-                        ? 1.0
-                        : 0.0,
-                child:
-                    Container(
+                    selected ? 1.0 : 0.0,
+                child: Container(
                   width:
-                      isTablet
-                          ? 62
-                          : 58,
+                      isTablet ? 62 : 58,
                   height:
-                      isTablet
-                          ? 62
-                          : 58,
+                      isTablet ? 62 : 58,
                   decoration:
                       BoxDecoration(
                     color:
                         primaryColor,
                     shape:
-                        BoxShape
-                            .circle,
+                        BoxShape.circle,
                     border:
                         isDark
                             ? Border.all(
                                 color:
                                     Colors.white,
-                                width:
-                                    2,
+                                width: 2,
                               )
                             : null,
                     boxShadow: [
@@ -842,13 +961,11 @@ class _AnimatedNavItem
                         color: Colors
                             .black
                             .withValues(
-                          alpha:
-                              isDark
-                                  ? 0.35
-                                  : 0.10,
+                          alpha: isDark
+                              ? 0.35
+                              : 0.10,
                         ),
-                        blurRadius:
-                            12,
+                        blurRadius: 12,
                         offset:
                             const Offset(
                           0,
@@ -875,49 +992,44 @@ class _AnimatedNavItem
               ),
             ),
 
-            // ================================================================
+            // =================================================================
             // NORMAL ITEM
-            // ================================================================
+            // =================================================================
 
             AnimatedPadding(
               duration:
                   const Duration(
-                milliseconds:
-                    300,
+                milliseconds: 300,
               ),
               curve:
                   Curves.easeOut,
               padding:
                   EdgeInsets.only(
-                top:
-                    selected
-                        ? (isTablet
-                            ? 18
-                            : 17)
-                        : (isTablet
-                            ? 3
-                            : 2),
+                top: selected
+                    ? (isTablet
+                        ? 18
+                        : 17)
+                    : (isTablet
+                        ? 3
+                        : 2),
               ),
               child:
                   AnimatedOpacity(
                 duration:
                     const Duration(
-                  milliseconds:
-                      220,
+                  milliseconds: 220,
                 ),
                 opacity:
                     selected
                         ? 0.0
                         : 1.0,
-                child:
-                    Column(
+                child: Column(
                   mainAxisAlignment:
                       MainAxisAlignment
                           .center,
                   children: [
                     Icon(
-                      item
-                          .icon,
+                      item.icon,
                       size:
                           isTablet
                               ? 25
@@ -926,13 +1038,11 @@ class _AnimatedNavItem
                           .colorScheme
                           .onSurface
                           .withValues(
-                        alpha:
-                            0.50,
+                        alpha: 0.50,
                       ),
                     ),
                     const SizedBox(
-                      height:
-                          4,
+                      height: 4,
                     ),
                     Text(
                       item.label,
@@ -948,14 +1058,12 @@ class _AnimatedNavItem
                                 ? 13
                                 : 11,
                         fontWeight:
-                            FontWeight
-                                .w500,
+                            FontWeight.w500,
                         color: theme
                             .colorScheme
                             .onSurface
                             .withValues(
-                          alpha:
-                              0.50,
+                          alpha: 0.50,
                         ),
                       ),
                     ),
@@ -964,30 +1072,27 @@ class _AnimatedNavItem
               ),
             ),
 
-            // ================================================================
+            // =================================================================
             // SELECTED LABEL
-            // ================================================================
+            // =================================================================
 
             AnimatedPositioned(
               duration:
                   const Duration(
-                milliseconds:
-                    300,
+                milliseconds: 300,
               ),
               curve:
                   Curves.easeOut,
-              bottom:
-                  selected
-                      ? (isTablet
-                          ? 10
-                          : 8)
-                      : -10,
+              bottom: selected
+                  ? (isTablet
+                      ? 10
+                      : 8)
+                  : -10,
               child:
                   AnimatedOpacity(
                 duration:
                     const Duration(
-                  milliseconds:
-                      220,
+                  milliseconds: 220,
                 ),
                 opacity:
                     selected
@@ -1008,8 +1113,7 @@ class _AnimatedNavItem
                             ? 13
                             : 11,
                     fontWeight:
-                        FontWeight
-                            .w600,
+                        FontWeight.w600,
                     color:
                         primaryColor,
                   ),
@@ -1024,7 +1128,7 @@ class _AnimatedNavItem
 }
 
 // ============================================================================
-// NAV ITEM MODEL
+// NAV ITEM
 // ============================================================================
 
 class _NavItem {

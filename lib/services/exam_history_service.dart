@@ -45,9 +45,10 @@ class ExamHistoryItem {
   factory ExamHistoryItem.fromMap(
     Map<String, dynamic> map,
   ) {
-    final examRaw = map['exams'];
+    final examRaw =
+        map['exams'];
 
-    final Map<String, dynamic> exam =
+    final exam =
         examRaw is Map
             ? Map<String, dynamic>.from(
                 examRaw,
@@ -111,7 +112,8 @@ class ExamHistoryItem {
 class ExamHistoryService {
   ExamHistoryService._();
 
-  static final ExamHistoryService instance =
+  static final ExamHistoryService
+      instance =
       ExamHistoryService._();
 
   final SupabaseClient _supabase =
@@ -245,7 +247,7 @@ class ExamHistoryService {
   }
 
   // ===========================================================================
-  // SINGLE ATTEMPT
+  // ONE ATTEMPT
   // ===========================================================================
 
   Future<ExamHistoryItem?>

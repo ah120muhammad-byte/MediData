@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+
 import '../../services/audio_player_service.dart';
 import '../../services/download_service.dart';
 
-class LectureAudioPlayerScreen
-    extends StatefulWidget {
+class LectureAudioPlayerScreen extends StatefulWidget {
   final String lectureId;
   final String lectureTitle;
 
@@ -24,15 +25,12 @@ class LectureAudioPlayerScreen
   });
 
   @override
-  State<
-      LectureAudioPlayerScreen>
-  createState() =>
+  State<LectureAudioPlayerScreen> createState() =>
       _LectureAudioPlayerScreenState();
 }
 
 class _LectureAudioPlayerScreenState
-    extends State<
-        LectureAudioPlayerScreen> {
+    extends State<LectureAudioPlayerScreen> {
   final AudioPlayerService _audio =
       AudioPlayerService.instance;
 
@@ -42,9 +40,7 @@ class _LectureAudioPlayerScreenState
 
   double _playbackSpeed = 1.0;
 
-  StreamSubscription<
-          ProcessingState>?
-      _processingSubscription;
+  StreamSubscription<ProcessingState>? _processingSubscription;
 
   // ===========================================================================
   // INIT
@@ -63,8 +59,7 @@ class _LectureAudioPlayerScreenState
 
   @override
   void dispose() {
-    _processingSubscription
-        ?.cancel();
+    _processingSubscription?.cancel();
 
     // Save current position and pause.
     unawaited(
@@ -81,54 +76,38 @@ class _LectureAudioPlayerScreenState
   Future<void> _initializePlayer() async {
     try {
       final downloaded =
-          await DownloadsService
-              .instance
-              .findById(
+          await DownloadsService.instance.findById(
         widget.fileId,
       );
 
-      bool isLocal =
-          false;
+      bool isLocal = false;
 
-      String source =
-          widget.fileUrl;
+      String source = widget.fileUrl;
 
       // -----------------------------------------------------------------------
       // LOCAL DOWNLOAD
       // -----------------------------------------------------------------------
 
       if (downloaded != null) {
-        final file =
-            File(
+        final file = File(
           downloaded.localPath,
         );
 
         if (await file.exists()) {
-          source =
-              file.path;
-
-          isLocal =
-              true;
+          source = file.path;
+          isLocal = true;
         }
       }
 
       // -----------------------------------------------------------------------
       // ONLINE SOURCE
-      //
-      // fileUrl must be converted to
-      // a signed URL by DownloadsService
-      // when the file is not local.
       // -----------------------------------------------------------------------
 
       if (!isLocal) {
-        source =
-            await DownloadsService
-                .instance
-                .createSignedUrlForLectureFile(
-          fileUrl:
-              widget.fileUrl,
-          fileType:
-              'audio',
+        source = await DownloadsService.instance
+            .createSignedUrlForLectureFile(
+          fileUrl: widget.fileUrl,
+          fileType: 'audio',
         );
       }
 
@@ -138,27 +117,20 @@ class _LectureAudioPlayerScreenState
 
       await _audio.load(
         source: source,
-        lectureId:
-            widget.lectureId,
-        title:
-            widget.fileTitle,
-        lectureTitle:
-            widget.lectureTitle,
-        isLocalFile:
-            isLocal,
+        lectureId: widget.lectureId,
+        title: widget.fileTitle,
+        lectureTitle: widget.lectureTitle,
+        isLocalFile: isLocal,
       );
 
       _processingSubscription =
-          _audio
-              .processingStateStream
-              .listen(
+          _audio.processingStateStream.listen(
         (state) {
           if (!mounted) {
             return;
           }
 
-          if (state ==
-              ProcessingState.completed) {
+          if (state == ProcessingState.completed) {
             setState(() {});
           }
         },
@@ -185,8 +157,7 @@ class _LectureAudioPlayerScreenState
 
       setState(() {
         _loading = false;
-        _error =
-            'Unable to play this audio.';
+        _error = 'Unable to play this audio.';
       });
     }
   }
@@ -198,16 +169,13 @@ class _LectureAudioPlayerScreenState
   String _formatDuration(
     Duration duration,
   ) {
-    final hours =
-        duration.inHours;
+    final hours = duration.inHours;
 
     final minutes =
-        duration.inMinutes
-            .remainder(60);
+        duration.inMinutes.remainder(60);
 
     final seconds =
-        duration.inSeconds
-            .remainder(60);
+        duration.inSeconds.remainder(60);
 
     if (hours > 0) {
       return '$hours:'
@@ -232,19 +200,16 @@ class _LectureAudioPlayerScreenState
         title: Text(
           widget.lectureTitle,
           maxLines: 1,
-          overflow:
-              TextOverflow.ellipsis,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
-      body:
-          _loading
-              ? const Center(
-                  child:
-                      CircularProgressIndicator(),
-                )
-              : _error != null
-                  ? _buildError()
-                  : _buildPlayer(),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : _error != null
+              ? _buildError()
+              : _buildPlayer(),
     );
   }
 
@@ -253,43 +218,28 @@ class _LectureAudioPlayerScreenState
   // ===========================================================================
 
   Widget _buildError() {
-    final theme =
-        Theme.of(context);
+    final theme = Theme.of(context);
 
     return Center(
       child: Padding(
-        padding:
-            const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons
-                  .error_outline_rounded,
+              Icons.error_outline_rounded,
               size: 64,
-              color: theme
-                  .colorScheme
-                  .error,
+              color: theme.colorScheme.error,
             ),
-            const SizedBox(
-              height: 16,
-            ),
+            const SizedBox(height: 16),
             Text(
               _error!,
-              textAlign:
-                  TextAlign.center,
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(
-              height: 16,
-            ),
+            const SizedBox(height: 16),
             FilledButton(
-              onPressed:
-                  _initializePlayer,
-              child:
-                  const Text(
-                'Retry',
-              ),
+              onPressed: _initializePlayer,
+              child: const Text('Retry'),
             ),
           ],
         ),
@@ -302,8 +252,7 @@ class _LectureAudioPlayerScreenState
   // ===========================================================================
 
   Widget _buildPlayer() {
-    final theme =
-        Theme.of(context);
+    final theme = Theme.of(context);
 
     return LayoutBuilder(
       builder: (
@@ -311,173 +260,113 @@ class _LectureAudioPlayerScreenState
         constraints,
       ) {
         final isTablet =
-            MediaQuery.sizeOf(
-                  context,
-                ).shortestSide >=
+            MediaQuery.sizeOf(context).shortestSide >=
                 600;
 
         final horizontalPadding =
             isTablet ? 48.0 : 24.0;
 
         return SingleChildScrollView(
-          physics:
-              const BouncingScrollPhysics(),
-          padding:
-              EdgeInsets.fromLTRB(
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
             horizontalPadding,
             24,
             horizontalPadding,
             32,
           ),
           child: ConstrainedBox(
-            constraints:
-                BoxConstraints(
-              minHeight:
-                  constraints.maxHeight -
-                      56,
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight - 56,
             ),
-            child:
-                Column(
+            child: Column(
               children: [
-                const SizedBox(
-                  height: 24,
-                ),
+                const SizedBox(height: 24),
 
-                // =============================================================
+                // =================================================================
                 // ART
-                // =============================================================
+                // =================================================================
 
                 Container(
-                  width:
-                      isTablet
-                          ? 220
-                          : 170,
-                  height:
-                      isTablet
-                          ? 220
-                          : 170,
-                  decoration:
-                      BoxDecoration(
-                    shape:
-                        BoxShape.circle,
-                    color: theme
-                        .colorScheme
-                        .primary
-                        .withValues(
+                  width: isTablet ? 220 : 170,
+                  height: isTablet ? 220 : 170,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color:
+                        theme.colorScheme.primary.withValues(
                       alpha: 0.10,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: theme
-                            .colorScheme
-                            .primary
-                            .withValues(
+                        color:
+                            theme.colorScheme.primary.withValues(
                           alpha: 0.12,
                         ),
-                        blurRadius:
-                            30,
-                        spreadRadius:
-                            4,
+                        blurRadius: 30,
+                        spreadRadius: 4,
                       ),
                     ],
                   ),
                   child: Icon(
-                    Icons
-                        .headphones_rounded,
-                    size:
-                        isTablet
-                            ? 100
-                            : 82,
-                    color: theme
-                        .colorScheme
-                        .primary,
+                    Icons.headphones_rounded,
+                    size: isTablet ? 100 : 82,
+                    color: theme.colorScheme.primary,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 30,
-                ),
+                const SizedBox(height: 30),
 
-                // =============================================================
+                // =================================================================
                 // TITLE
-                // =============================================================
+                // =================================================================
 
                 Text(
                   widget.fileTitle,
-                  textAlign:
-                      TextAlign.center,
+                  textAlign: TextAlign.center,
                   maxLines: 2,
-                  overflow:
-                      TextOverflow
-                          .ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize:
-                        isTablet
-                            ? 25
-                            : 21,
-                    fontWeight:
-                        FontWeight.w800,
+                    fontSize: isTablet ? 25 : 21,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 8,
-                ),
+                const SizedBox(height: 8),
 
                 Text(
                   widget.lectureTitle,
-                  textAlign:
-                      TextAlign.center,
+                  textAlign: TextAlign.center,
                   maxLines: 2,
-                  overflow:
-                      TextOverflow
-                          .ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize:
-                        isTablet
-                            ? 15
-                            : 13,
-                    color: theme
-                        .colorScheme
-                        .onSurface
-                        .withValues(
-                      alpha:
-                          0.60,
+                    fontSize: isTablet ? 15 : 13,
+                    color:
+                        theme.colorScheme.onSurface.withValues(
+                      alpha: 0.60,
                     ),
                   ),
                 ),
 
-                const SizedBox(
-                  height: 34,
-                ),
+                const SizedBox(height: 34),
 
-                // =============================================================
+                // =================================================================
                 // PROGRESS
-                // =============================================================
+                // =================================================================
 
-                _buildProgress(
-                  isTablet,
-                ),
+                _buildProgress(isTablet),
 
-                const SizedBox(
-                  height: 22,
-                ),
+                const SizedBox(height: 22),
 
-                // =============================================================
+                // =================================================================
                 // CONTROLS
-                // =============================================================
+                // =================================================================
 
-                _buildControls(
-                  isTablet,
-                ),
+                _buildControls(isTablet),
 
-                const SizedBox(
-                  height: 22,
-                ),
+                const SizedBox(height: 22),
 
-                // =============================================================
+                // =================================================================
                 // SPEED
-                // =============================================================
+                // =================================================================
 
                 OutlinedButton.icon(
                   onPressed: () {
@@ -486,30 +375,23 @@ class _LectureAudioPlayerScreenState
                       _playbackSpeed,
                     );
                   },
-                  icon:
-                      const Icon(
+                  icon: const Icon(
                     Icons.speed_rounded,
                   ),
-                  label:
-                      Text(
+                  label: Text(
                     '${_playbackSpeed}x',
                   ),
                 ),
 
-                const SizedBox(
-                  height: 26,
-                ),
+                const SizedBox(height: 26),
 
                 Text(
                   'Background playback is enabled',
                   style: TextStyle(
                     fontSize: 12,
-                    color: theme
-                        .colorScheme
-                        .onSurface
-                        .withValues(
-                      alpha:
-                          0.45,
+                    color:
+                        theme.colorScheme.onSurface.withValues(
+                      alpha: 0.45,
                     ),
                   ),
                 ),
@@ -528,31 +410,23 @@ class _LectureAudioPlayerScreenState
   Widget _buildProgress(
     bool isTablet,
   ) {
-    return StreamBuilder<
-        Duration>(
-      stream:
-          _audio.positionStream,
-      builder:
-          (
+    return StreamBuilder<Duration>(
+      stream: _audio.positionStream,
+      builder: (
         context,
         positionSnapshot,
       ) {
         final position =
-            positionSnapshot.data ??
-                Duration.zero;
+            positionSnapshot.data ?? Duration.zero;
 
-        return StreamBuilder<
-            Duration?>(
-          stream:
-              _audio.durationStream,
-          builder:
-              (
+        return StreamBuilder<Duration?>(
+          stream: _audio.durationStream,
+          builder: (
             context,
             durationSnapshot,
           ) {
             final duration =
-                durationSnapshot.data ??
-                    Duration.zero;
+                durationSnapshot.data ?? Duration.zero;
 
             final durationMs =
                 duration.inMilliseconds;
@@ -562,83 +436,63 @@ class _LectureAudioPlayerScreenState
 
             final maxValue =
                 durationMs > 0
-                    ? durationMs
-                        .toDouble()
+                    ? durationMs.toDouble()
                     : 1.0;
 
-            final currentValue =
-                positionMs
-                    .clamp(
-                      0,
-                      durationMs > 0
-                          ? durationMs
-                          : 0,
-                    )
-                    .toDouble();
+            final currentValue = positionMs
+                .clamp(
+                  0,
+                  durationMs > 0
+                      ? durationMs
+                      : 0,
+                )
+                .toDouble();
 
             return Column(
               children: [
                 Slider(
                   min: 0,
                   max: maxValue,
-                  value:
-                      currentValue,
-                  onChanged:
-                      duration >
-                              Duration.zero
-                          ? (value) {
-                              unawaited(
-                                _audio.seek(
-                                  Duration(
-                                    milliseconds:
-                                        value.round(),
-                                  ),
-                                ),
-                              );
-                            }
-                          : null,
+                  value: currentValue,
+                  onChanged: duration > Duration.zero
+                      ? (value) {
+                          unawaited(
+                            _audio.seek(
+                              Duration(
+                                milliseconds:
+                                    value.round(),
+                              ),
+                            ),
+                          );
+                        }
+                      : null,
                 ),
 
                 Padding(
                   padding:
-                      const EdgeInsets
-                          .symmetric(
+                      const EdgeInsets.symmetric(
                     horizontal: 4,
                   ),
-                  child:
-                      Row(
+                  child: Row(
                     mainAxisAlignment:
-                        MainAxisAlignment
-                            .spaceBetween,
+                        MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _formatDuration(
-                          position,
-                        ),
-                        style:
-                            TextStyle(
+                        _formatDuration(position),
+                        style: TextStyle(
                           fontSize:
-                              isTablet
-                                  ? 13
-                                  : 12,
+                              isTablet ? 13 : 12,
                           fontWeight:
-                              FontWeight
-                                  .w600,
+                              FontWeight.w600,
                         ),
                       ),
                       Text(
-                        _formatDuration(
-                          duration,
-                        ),
-                        style:
-                            TextStyle(
+                        _formatDuration(duration),
+                        style: TextStyle(
                           fontSize:
-                              isTablet
-                                  ? 13
-                                  : 12,
+                              isTablet ? 13 : 12,
                           fontWeight:
-                              FontWeight
-                                  .w600,
+                              FontWeight.w600,
                         ),
                       ),
                     ],
@@ -660,8 +514,7 @@ class _LectureAudioPlayerScreenState
     bool isTablet,
   ) {
     return Row(
-      mainAxisAlignment:
-          MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         IconButton(
           onPressed: () {
@@ -669,68 +522,49 @@ class _LectureAudioPlayerScreenState
               _audio.skipBackward(),
             );
           },
-          tooltip:
-              'Rewind 15 seconds',
-          icon:
-              Icon(
-            Icons
-                .replay_10_rounded,
-            size:
-                isTablet ? 34 : 30,
+          tooltip: 'Rewind 15 seconds',
+          icon: Icon(
+            Icons.replay_10_rounded,
+            size: isTablet ? 34 : 30,
           ),
         ),
 
         SizedBox(
-          width:
-              isTablet ? 22 : 14,
+          width: isTablet ? 22 : 14,
         ),
 
         StreamBuilder<bool>(
-          stream:
-              _audio.playingStream,
-          builder:
-              (
+          stream: _audio.playingStream,
+          builder: (
             context,
             snapshot,
           ) {
             final playing =
-                snapshot.data ??
-                    false;
+                snapshot.data ?? false;
 
             return FilledButton(
               onPressed:
                   playing
                       ? _audio.pause
                       : _audio.play,
-              style:
-                  FilledButton
-                      .styleFrom(
-                shape:
-                    const CircleBorder(),
-                padding:
-                    EdgeInsets.all(
-                  isTablet
-                      ? 22
-                      : 19,
+              style: FilledButton.styleFrom(
+                shape: const CircleBorder(),
+                padding: EdgeInsets.all(
+                  isTablet ? 22 : 19,
                 ),
               ),
-              child:
-                  Icon(
+              child: Icon(
                 playing
-                    ? Icons
-                        .pause_rounded
-                    : Icons
-                        .play_arrow_rounded,
-                size:
-                    isTablet ? 38 : 34,
+                    ? Icons.pause_rounded
+                    : Icons.play_arrow_rounded,
+                size: isTablet ? 38 : 34,
               ),
             );
           },
         ),
 
         SizedBox(
-          width:
-              isTablet ? 22 : 14,
+          width: isTablet ? 22 : 14,
         ),
 
         IconButton(
@@ -739,14 +573,10 @@ class _LectureAudioPlayerScreenState
               _audio.skipForward(),
             );
           },
-          tooltip:
-              'Forward 15 seconds',
-          icon:
-              Icon(
-            Icons
-                .forward_10_rounded,
-            size:
-                isTablet ? 34 : 30,
+          tooltip: 'Forward 15 seconds',
+          icon: Icon(
+            Icons.forward_10_rounded,
+            size: isTablet ? 34 : 30,
           ),
         ),
       ],
@@ -761,8 +591,7 @@ class _LectureAudioPlayerScreenState
     BuildContext context,
     double currentSpeed,
   ) {
-    const speeds = <
-        double>[
+    const speeds = <double>[
       0.75,
       1.0,
       1.25,
@@ -778,51 +607,41 @@ class _LectureAudioPlayerScreenState
       ) {
         return SafeArea(
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Padding(
-                padding:
-                    EdgeInsets.fromLTRB(
+                padding: EdgeInsets.fromLTRB(
                   20,
                   18,
                   20,
                   8,
                 ),
                 child: Align(
-                  alignment:
-                      Alignment.centerLeft,
+                  alignment: Alignment.centerLeft,
                   child: Text(
                     'Playback Speed',
-                    style:
-                        TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
-                      fontWeight:
-                          FontWeight.w800,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
               ),
 
               ...speeds.map(
-                (
-                  speed,
-                ) {
+                (speed) {
                   final selected =
-                      speed ==
-                          currentSpeed;
+                      speed == currentSpeed;
 
                   return ListTile(
                     title: Text(
                       '${speed}x',
                     ),
-                    trailing:
-                        selected
-                            ? const Icon(
-                                Icons
-                                    .check_rounded,
-                              )
-                            : null,
+                    trailing: selected
+                        ? const Icon(
+                            Icons.check_rounded,
+                          )
+                        : null,
                     onTap: () {
                       setState(() {
                         _playbackSpeed =
@@ -843,9 +662,7 @@ class _LectureAudioPlayerScreenState
                 },
               ),
 
-              const SizedBox(
-                height: 8,
-              ),
+              const SizedBox(height: 8),
             ],
           ),
         );

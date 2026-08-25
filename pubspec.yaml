@@ -51,6 +51,7 @@ dependencies:
   audio_service: ^0.18.19
   audio_session: ^0.2.4
   fl_chart: ^1.2.0
+  firebase_messaging: ^16.6.0
  
 
 dev_dependencies:
