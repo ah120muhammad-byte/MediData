@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/responsive/responsive.dart';
 import '../../services/notification_service.dart';
 import '../main/app_shell.dart';
 import 'login_screen.dart';
+import 'reset_password_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({
@@ -19,20 +21,202 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState
     extends State<AuthGate> {
-  // ===========================================================================
-  // NOTIFICATION STATE
-  // ===========================================================================
+  final SupabaseClient _supabase =
+      Supabase.instance.client;
+
+  StreamSubscription<AuthState>?
+      _authSubscription;
 
   bool _notificationInitialized =
       false;
 
+  bool _notificationInitializing =
+      false;
+
   String? _initializedUserId;
 
-  // ===========================================================================
-  // NOTIFICATION INITIALIZATION
-  // ===========================================================================
+  bool _isPasswordRecovery =
+      false;
 
-  Future<void> _initializeNotifications(
+  bool _handlingUnconfirmedUser =
+      false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _authSubscription =
+        _supabase.auth.onAuthStateChange.listen(
+      _handleAuthStateChange,
+      onError: (
+        Object error,
+        StackTrace stackTrace,
+      ) {
+        debugPrint(
+          'Auth state change error: $error',
+        );
+
+        debugPrintStack(
+          stackTrace: stackTrace,
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    _authSubscription = null;
+
+    super.dispose();
+  }
+
+  // ==========================================================================
+  // AUTH STATE
+  // ==========================================================================
+
+  void _handleAuthStateChange(
+    AuthState state,
+  ) {
+    if (!mounted) {
+      return;
+    }
+
+    final event =
+        state.event;
+
+    debugPrint(
+      'Auth state changed: $event',
+    );
+
+    setState(() {
+      _isPasswordRecovery =
+          event ==
+              AuthChangeEvent
+                  .passwordRecovery;
+    });
+
+    if (event ==
+        AuthChangeEvent.signedOut) {
+      setState(() {
+        _notificationInitialized =
+            false;
+
+        _notificationInitializing =
+            false;
+
+        _initializedUserId =
+            null;
+
+        _handlingUnconfirmedUser =
+            false;
+      });
+
+      return;
+    }
+
+    if (event ==
+            AuthChangeEvent
+                .signedIn ||
+        event ==
+            AuthChangeEvent
+                .tokenRefreshed ||
+        event ==
+            AuthChangeEvent
+                .userUpdated) {
+      final user =
+          state.session?.user;
+
+      if (user == null) {
+        return;
+      }
+
+      if (!_isUserAllowedIntoApp(
+        user,
+      )) {
+        unawaited(
+          _handleUnconfirmedUser(
+            user,
+          ),
+        );
+      }
+    }
+  }
+
+  // ==========================================================================
+  // EMAIL CONFIRMATION
+  // ==========================================================================
+
+  bool _isUserAllowedIntoApp(
+    User user,
+  ) {
+    return user.emailConfirmedAt !=
+        null;
+  }
+
+  // ==========================================================================
+  // BLOCK UNCONFIRMED
+  // ==========================================================================
+
+  Future<void>
+      _handleUnconfirmedUser(
+    User user,
+  ) async {
+    if (_handlingUnconfirmedUser) {
+      return;
+    }
+
+    _handlingUnconfirmedUser =
+        true;
+
+    try {
+      try {
+        await NotificationService
+            .instance
+            .unregisterCurrentToken();
+      } catch (e) {
+        debugPrint(
+          'Unconfirmed token cleanup error: $e',
+        );
+      }
+
+      try {
+        await _supabase.auth.signOut();
+      } catch (e) {
+        debugPrint(
+          'Unconfirmed sign out error: $e',
+        );
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _notificationInitialized =
+            false;
+
+        _notificationInitializing =
+            false;
+
+        _initializedUserId =
+            null;
+
+        _isPasswordRecovery =
+            false;
+      });
+    } finally {
+      _handlingUnconfirmedUser =
+          false;
+    }
+  }
+
+  // ==========================================================================
+  // NOTIFICATIONS
+  // ==========================================================================
+
+  Future<void>
+      _initializeNotifications(
     String userId,
   ) async {
     if (_notificationInitialized &&
@@ -40,6 +224,13 @@ class _AuthGateState
             userId) {
       return;
     }
+
+    if (_notificationInitializing) {
+      return;
+    }
+
+    _notificationInitializing =
+        true;
 
     try {
       await NotificationService
@@ -62,12 +253,6 @@ class _AuthGateState
         'Notification initialization error: $e',
       );
 
-      // -----------------------------------------------------------------------
-      // Notification failure must never
-      // prevent the student from opening
-      // the application.
-      // -----------------------------------------------------------------------
-
       if (!mounted) {
         return;
       }
@@ -79,159 +264,85 @@ class _AuthGateState
         _initializedUserId =
             userId;
       });
-    }
-  }
-
-  // ===========================================================================
-  // EMAIL CONFIRMATION
-  // ===========================================================================
-
-  bool _isUserAllowedIntoApp(
-    User user,
-  ) {
-    // -------------------------------------------------------------------------
-    // OAuth providers such as Google are already
-    // authenticated by the provider.
-    // -------------------------------------------------------------------------
-
-    final provider =
-        user.appMetadata['provider']
-            ?.toString()
-            .toLowerCase();
-
-    if (provider != null &&
-        provider != 'email') {
-      return true;
-    }
-
-    // -------------------------------------------------------------------------
-    // Email/password users must have a confirmed
-    // email address.
-    // -------------------------------------------------------------------------
-
-    return user.emailConfirmedAt !=
-        null;
-  }
-
-  // ===========================================================================
-  // FORCE SIGN OUT FOR UNCONFIRMED SESSION
-  // ===========================================================================
-
-  Future<void>
-      _handleUnconfirmedUser(
-    User user,
-  ) async {
-    debugPrint(
-      'Blocking unconfirmed account: ${user.id}',
-    );
-
-    try {
-      await NotificationService
-          .instance
-          .unregisterCurrentToken();
-    } catch (e) {
-      debugPrint(
-        'Unconfirmed token cleanup error: $e',
-      );
-    }
-
-    try {
-      await Supabase.instance.client
-          .auth
-          .signOut();
-    } catch (e) {
-      debugPrint(
-        'Unconfirmed user sign out error: $e',
-      );
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _notificationInitialized =
+    } finally {
+      _notificationInitializing =
           false;
-
-      _initializedUserId =
-          null;
-    });
+    }
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // BUILD
-  // ===========================================================================
+  // ==========================================================================
 
   @override
   Widget build(
     BuildContext context,
   ) {
-    final supabase =
-        Supabase.instance.client;
+    // ------------------------------------------------------------------------
+    // PASSWORD RECOVERY
+    // ------------------------------------------------------------------------
 
-    return StreamBuilder<AuthState>(
-      stream:
-          supabase.auth.onAuthStateChange,
-      builder:
-          (
-        context,
-        snapshot,
-      ) {
-        final session =
-            supabase.auth.currentSession;
+    if (_isPasswordRecovery) {
+      return const ResetPasswordScreen();
+    }
 
-        // =====================================================================
-        // NOT LOGGED IN
-        // =====================================================================
+    // ------------------------------------------------------------------------
+    // SESSION
+    // ------------------------------------------------------------------------
 
-        if (session == null) {
-          return const LoginScreen();
-        }
+    final session =
+        _supabase.auth.currentSession;
 
-        final user =
-            session.user;
+    // ------------------------------------------------------------------------
+    // LOGGED OUT
+    // ------------------------------------------------------------------------
 
-        // =====================================================================
-        // EMAIL CONFIRMATION
-        // =====================================================================
+    if (session == null) {
+      return const LoginScreen();
+    }
 
-        if (!_isUserAllowedIntoApp(
+    final user =
+        session.user;
+
+    // ------------------------------------------------------------------------
+    // EMAIL NOT CONFIRMED
+    // ------------------------------------------------------------------------
+
+    if (!_isUserAllowedIntoApp(
+      user,
+    )) {
+      unawaited(
+        _handleUnconfirmedUser(
           user,
-        )) {
-          unawaited(
-            _handleUnconfirmedUser(
-              user,
-            ),
-          );
+        ),
+      );
 
-          return const _AuthCheckingView(
-            message:
-                'Please confirm your email address before continuing.',
-          );
-        }
+      return const _AuthCheckingView(
+        message:
+            'Please confirm your email address before continuing.',
+      );
+    }
 
-        // =====================================================================
-        // NOTIFICATIONS
-        // =====================================================================
+    // ------------------------------------------------------------------------
+    // NOTIFICATIONS
+    // ------------------------------------------------------------------------
 
-        unawaited(
-          _initializeNotifications(
-            user.id,
-          ),
-        );
-
-        // =====================================================================
-        // APP
-        // =====================================================================
-
-        return const AppShell();
-      },
+    unawaited(
+      _initializeNotifications(
+        user.id,
+      ),
     );
+
+    // ------------------------------------------------------------------------
+    // APPLICATION
+    // ------------------------------------------------------------------------
+
+    return const AppShell();
   }
 }
 
 // ============================================================================
-// AUTH CHECKING VIEW
+// CHECKING VIEW
 // ============================================================================
 
 class _AuthCheckingView
@@ -250,69 +361,128 @@ class _AuthCheckingView
         Theme.of(context);
 
     return Scaffold(
-      body: SafeArea(
+      body:
+          SafeArea(
         child:
             Center(
           child:
-              Padding(
+              SingleChildScrollView(
             padding:
-                const EdgeInsets.all(
-              24,
+                EdgeInsets.all(
+              Responsive.cardPadding(
+                context,
+              ),
             ),
             child:
-                Column(
-              mainAxisSize:
-                  MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width:
-                      36,
-                  height:
-                      36,
-                  child:
-                      CircularProgressIndicator(),
-                ),
-
-                const SizedBox(
-                  height:
-                      24,
-                ),
-
-                Text(
-                  'Checking account',
-                  textAlign:
-                      TextAlign.center,
-                  style:
-                      const TextStyle(
-                    fontSize:
-                        20,
-                    fontWeight:
-                        FontWeight.w700,
+                ConstrainedBox(
+              constraints:
+                  const BoxConstraints(
+                maxWidth:
+                    560,
+              ),
+              child:
+                  Column(
+                mainAxisSize:
+                    MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width:
+                        Responsive.clamped(
+                      context,
+                      base:
+                          38,
+                      min:
+                          32,
+                      max:
+                          48,
+                    ),
+                    height:
+                        Responsive.clamped(
+                      context,
+                      base:
+                          38,
+                      min:
+                          32,
+                      max:
+                          48,
+                    ),
+                    child:
+                        const CircularProgressIndicator(),
                   ),
-                ),
-
-                const SizedBox(
-                  height:
-                      8,
-                ),
-
-                Text(
-                  message,
-                  textAlign:
-                      TextAlign.center,
-                  style:
-                      TextStyle(
-                    color:
-                        theme
-                            .colorScheme
-                            .onSurface
-                            .withValues(
-                      alpha:
-                          0.65,
+                  SizedBox(
+                    height:
+                        Responsive.spacing(
+                      context,
+                      base:
+                          24,
+                      min:
+                          16,
+                      max:
+                          32,
                     ),
                   ),
-                ),
-              ],
+                  Text(
+                    'Checking account',
+                    textAlign:
+                        TextAlign.center,
+                    style:
+                        TextStyle(
+                      fontSize:
+                          Responsive.titleSize(
+                        context,
+                        base:
+                            20,
+                        min:
+                            18,
+                        max:
+                            26,
+                      ),
+                      fontWeight:
+                          FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(
+                    height:
+                        Responsive.spacing(
+                      context,
+                      base:
+                          10,
+                      min:
+                          7,
+                      max:
+                          14,
+                    ),
+                  ),
+                  Text(
+                    message,
+                    textAlign:
+                        TextAlign.center,
+                    style:
+                        TextStyle(
+                      fontSize:
+                          Responsive.bodyTextSize(
+                        context,
+                        base:
+                            14,
+                        min:
+                            12,
+                        max:
+                            17,
+                      ),
+                      height:
+                          1.4,
+                      color:
+                          theme
+                              .colorScheme
+                              .onSurface
+                              .withValues(
+                        alpha:
+                            0.65,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

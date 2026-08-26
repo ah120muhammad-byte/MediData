@@ -25,8 +25,7 @@ class StudentProfile {
           map['full_name']?.toString() ??
               'Student',
       email:
-          map['email']?.toString() ??
-              '',
+          map['email']?.toString() ?? '',
       phone:
           map['phone']?.toString(),
       profileImageUrl:
@@ -43,7 +42,16 @@ class StudentProfile {
 class StudentExamAttempt {
   final String id;
   final String examId;
+
   final String examTitle;
+
+  final String lectureId;
+  final String lectureTitle;
+
+  final String moduleId;
+  final String moduleName;
+
+  final int passingScore;
 
   final int score;
   final int totalQuestions;
@@ -60,6 +68,11 @@ class StudentExamAttempt {
     required this.id,
     required this.examId,
     required this.examTitle,
+    required this.lectureId,
+    required this.lectureTitle,
+    required this.moduleId,
+    required this.moduleName,
+    required this.passingScore,
     required this.score,
     required this.totalQuestions,
     required this.correctAnswers,
@@ -83,7 +96,7 @@ class StudentExamAttempt {
       return false;
     }
 
-    return score >= 50;
+    return score >= passingScore;
   }
 
   factory StudentExamAttempt.fromMap(
@@ -99,6 +112,31 @@ class StudentExamAttempt {
               )
             : <String, dynamic>{};
 
+    final lectureRaw =
+        exam['lectures'];
+
+    final lecture =
+        lectureRaw is Map
+            ? Map<String, dynamic>.from(
+                lectureRaw,
+              )
+            : <String, dynamic>{};
+
+    final moduleRaw =
+        lecture['modules'];
+
+    final module =
+        moduleRaw is Map
+            ? Map<String, dynamic>.from(
+                moduleRaw,
+              )
+            : <String, dynamic>{};
+
+    final passingScore =
+        (exam['passing_score'] as num?)
+                ?.toInt() ??
+            50;
+
     return StudentExamAttempt(
       id:
           map['id']?.toString() ?? '',
@@ -108,35 +146,66 @@ class StudentExamAttempt {
       examTitle:
           exam['title']?.toString() ??
               'Exam',
+
+      lectureId:
+          exam['lecture_id']?.toString() ??
+              lecture['id']?.toString() ??
+              '',
+
+      lectureTitle:
+          lecture['title']?.toString() ??
+              'Lecture',
+
+      moduleId:
+          lecture['module_id']?.toString() ??
+              module['id']?.toString() ??
+              '',
+
+      moduleName:
+          module['name']?.toString() ??
+              'Module',
+
+      passingScore:
+          passingScore.clamp(
+        0,
+        100,
+      ),
+
       score:
           (map['score'] as num?)
                   ?.toInt() ??
               0,
+
       totalQuestions:
           (map['total_questions']
                       as num?)
                   ?.toInt() ??
               0,
+
       correctAnswers:
           (map['correct_answers']
                       as num?)
                   ?.toInt() ??
               0,
+
       startedAt:
           DateTime.tryParse(
         map['started_at']
                 ?.toString() ??
             '',
       ),
+
       completedAt:
           DateTime.tryParse(
         map['completed_at']
                 ?.toString() ??
             '',
       ),
+
       status:
           map['status']?.toString() ??
               'abandoned',
+
       remainingSeconds:
           (map['remaining_seconds']
                       as num?)
@@ -264,13 +333,9 @@ class StudentLectureActivity {
 
 class DailyStudyActivity {
   final DateTime day;
-
   final int studySeconds;
-
   final int lecturesOpened;
-
   final int completedMedia;
-
   final int examAttempts;
 
   const DailyStudyActivity({
@@ -351,8 +416,7 @@ class StudentProfileAnalytics {
     }
 
     return total /
-        (lecturesOpened * 2)
-        .clamp(
+        (lecturesOpened * 2).clamp(
           1,
           double.infinity,
         );
@@ -384,7 +448,7 @@ class StudentProfileAnalytics {
 }
 
 // =============================================================================
-// PROFILE SERVICE
+// SERVICE
 // =============================================================================
 
 class StudentProfileService {
@@ -503,7 +567,9 @@ class StudentProfileService {
             .toList();
 
     // -------------------------------------------------------------------------
-    // EXAM ATTEMPTS
+    // ALL EXAM ATTEMPTS
+    //
+    // No limit is applied here.
     // -------------------------------------------------------------------------
 
     final attemptsResponse =
@@ -519,9 +585,21 @@ class StudentProfileService {
               completed_at,
               status,
               remaining_seconds,
+              created_at,
               exams (
                 id,
-                title
+                lecture_id,
+                title,
+                passing_score,
+                lectures (
+                  id,
+                  title,
+                  module_id,
+                  modules (
+                    id,
+                    name
+                  )
+                )
               )
             ''')
             .eq(
@@ -709,10 +787,6 @@ class StudentProfileService {
                     ?.toInt() ??
                 0;
 
-        // Existing lecture history is still
-        // used as a fallback for days that
-        // happened before the new tracking
-        // table existed.
         final fallbackLectures =
             lectureActivities
                 .where(
@@ -755,8 +829,7 @@ class StudentProfileService {
 
                     return sameDay &&
                         (item.audioCompleted ||
-                            item
-                                .videoCompleted);
+                            item.videoCompleted);
                   },
                 )
                 .length;
@@ -767,13 +840,12 @@ class StudentProfileService {
           studySeconds:
               studySeconds,
           lecturesOpened:
-              lecturesOpened >
-                      0
+              lecturesOpened > 0
                   ? lecturesOpened
                   : fallbackLectures,
           completedMedia:
               audioCompleted +
-                  videoCompleted >
+                          videoCompleted >
                       0
                   ? audioCompleted +
                       videoCompleted
@@ -841,7 +913,7 @@ class StudentProfileService {
   }
 
   // ===========================================================================
-  // RECORD STUDY TIME
+  // STUDY TIME
   // ===========================================================================
 
   Future<void> recordStudyActivity({

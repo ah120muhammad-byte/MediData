@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../core/responsive/responsive.dart';
 import '../../core/theme/app_brand.dart';
 import '../../services/notification_service.dart';
 import '../../services/student_profile_service.dart';
 import '../../widgets/notification_bell.dart';
-
 import 'ai_assistant_screen.dart';
 import 'downloads_screen.dart';
+import 'exam_history_screen.dart';
 import 'exam_result_screen.dart';
 import 'exam_review_screen.dart';
 import 'exam_screen.dart';
@@ -59,23 +59,22 @@ class _AppShellState
 
   late final List<Widget> _pages = [
     ModulesScreen(
-      key: _modulesScreenKey,
+      key:
+          _modulesScreenKey,
     ),
-
     const AiAssistantScreen(),
-
     HomeScreen(
       onOpenLecture:
           _openLectureFromHome,
     ),
-
     const DownloadsScreen(),
-
     ProfileScreen(
       onOpenLecture:
           _openLectureFromHome,
       onExamAttemptTap:
           _openExamAttempt,
+      onOpenExamHistory:
+          _openExamHistory,
     ),
   ];
 
@@ -95,8 +94,18 @@ class _AppShellState
     WidgetsBinding.instance
         .addPostFrameCallback(
       (_) async {
-        await _notificationService
-            .initialize();
+        try {
+          await _notificationService
+              .initialize();
+        } catch (e) {
+          debugPrint(
+            'AppShell notification initialization error: $e',
+          );
+        }
+
+        if (!mounted) {
+          return;
+        }
 
         _openPendingNotificationLecture();
       },
@@ -123,50 +132,32 @@ class _AppShellState
   Widget build(
     BuildContext context,
   ) {
-    final size =
-        MediaQuery.sizeOf(context);
-
-    final isTablet =
-        size.shortestSide >= 600;
-
     return Scaffold(
-      extendBody: true,
-
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: Column(
+      extendBody:
+          true,
+      body:
+          SafeArea(
+        top:
+            true,
+        bottom:
+            false,
+        child:
+            Column(
           children: [
-            // =================================================================
-            // APP HEADER
-            // =================================================================
-
-            _AppHeader(
-              isTablet: isTablet,
-              onSearchPressed:
-                  _openSearch,
-              onLectureTap:
-                  _openLectureFromNotification,
-            ),
-
-            // =================================================================
-            // PAGE CONTENT
-            // =================================================================
+            const _AppHeader(),
 
             Expanded(
-              child: IndexedStack(
-                index: _currentIndex,
-                children: _pages,
+              child:
+                  IndexedStack(
+                index:
+                    _currentIndex,
+                children:
+                    _pages,
               ),
             ),
           ],
         ),
       ),
-
-      // =======================================================================
-      // BOTTOM NAVIGATION
-      // =======================================================================
-
       bottomNavigationBar:
           _CustomBottomNavigation(
         currentIndex:
@@ -187,7 +178,7 @@ class _AppShellState
             .takePendingLectureId();
 
     if (lectureId == null ||
-        lectureId.isEmpty) {
+        lectureId.trim().isEmpty) {
       return;
     }
 
@@ -231,8 +222,10 @@ class _AppShellState
         _modulesScreenKey
             .currentState
             ?.openLecture(
-          moduleId: moduleId,
-          lectureId: lectureId,
+          moduleId:
+              moduleId,
+          lectureId:
+              lectureId,
         );
       },
     );
@@ -253,28 +246,25 @@ class _AppShellState
       _openLectureFromNotification(
     String lectureId,
   ) async {
-    if (lectureId.trim().isEmpty) {
+    final normalizedLectureId =
+        lectureId.trim();
+
+    if (normalizedLectureId.isEmpty) {
       return;
     }
 
     try {
-      // ----------------------------------------------------------------------
-      // FIND MODULE
-      // ----------------------------------------------------------------------
-
       final response =
           await _supabase
               .from('lectures')
-              .select(
-                '''
+              .select('''
                 id,
                 module_id,
                 title
-                ''',
-              )
+              ''')
               .eq(
                 'id',
-                lectureId,
+                normalizedLectureId,
               )
               .maybeSingle();
 
@@ -283,9 +273,8 @@ class _AppShellState
       }
 
       if (response == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
           const SnackBar(
             content: Text(
               'This lecture is no longer available.',
@@ -307,9 +296,8 @@ class _AppShellState
 
       if (moduleId == null ||
           moduleId.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
           const SnackBar(
             content: Text(
               'Unable to find this lecture module.',
@@ -320,17 +308,9 @@ class _AppShellState
         return;
       }
 
-      // ----------------------------------------------------------------------
-      // OPEN MODULES TAB
-      // ----------------------------------------------------------------------
-
       setState(() {
         _currentIndex = 0;
       });
-
-      // ----------------------------------------------------------------------
-      // OPEN LECTURE AFTER FRAME
-      // ----------------------------------------------------------------------
 
       WidgetsBinding.instance
           .addPostFrameCallback(
@@ -338,8 +318,10 @@ class _AppShellState
           _modulesScreenKey
               .currentState
               ?.openLecture(
-            moduleId: moduleId,
-            lectureId: lectureId,
+            moduleId:
+                moduleId,
+            lectureId:
+                normalizedLectureId,
           );
         },
       );
@@ -352,9 +334,8 @@ class _AppShellState
         return;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
           content: Text(
             'Unable to open this lecture.',
@@ -362,6 +343,22 @@ class _AppShellState
         ),
       );
     }
+  }
+
+  // ==========================================================================
+  // OPEN EXAM HISTORY
+  // ==========================================================================
+
+  void _openExamHistory() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (_) => ExamHistoryScreen(
+          onAttemptTap:
+              _openExamAttempt,
+        ),
+      ),
+    );
   }
 
   // ==========================================================================
@@ -375,291 +372,166 @@ class _AppShellState
       return;
     }
 
-    final response =
-        await _supabase
-            .from('exams')
-            .select(
-              '''
-              id,
-              title,
-              duration_minutes,
-              passing_score
-              ''',
-            )
-            .eq(
-              'id',
-              attempt.examId,
-            )
-            .maybeSingle();
+    try {
+      final response =
+          await _supabase
+              .from('exams')
+              .select('''
+                id,
+                title,
+                duration_minutes,
+                passing_score
+              ''')
+              .eq(
+                'id',
+                attempt.examId,
+              )
+              .maybeSingle();
 
-    if (!mounted) {
-      return;
-    }
+      if (!mounted) {
+        return;
+      }
 
-    if (response == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Exam information is no longer available.',
-          ),
-        ),
-      );
-
-      return;
-    }
-
-    final exam =
-        Map<String, dynamic>.from(
-      response,
-    );
-
-    final examId =
-        exam['id'].toString();
-
-    final examTitle =
-        exam['title']?.toString() ??
-            attempt.examTitle;
-
-    final durationMinutes =
-        (exam['duration_minutes']
-                    as num?)
-                ?.toInt() ??
-            0;
-
-    final passingScore =
-        (exam['passing_score']
-                    as num?)
-                ?.toInt() ??
-            0;
-
-    // =========================================================================
-    // IN PROGRESS
-    // =========================================================================
-
-    if (attempt.isInProgress) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              ExamScreen(
-            examId:
-                examId,
-            attemptId:
-                attempt.id,
-            examTitle:
-                examTitle,
-            durationMinutes:
-                durationMinutes,
-            passingScore:
-                passingScore,
-          ),
-        ),
-      );
-
-      return;
-    }
-
-    // =========================================================================
-    // COMPLETED
-    // =========================================================================
-
-    if (attempt.isCompleted) {
-      _showCompletedAttemptActions(
-        attempt: attempt,
-        examId: examId,
-        examTitle: examTitle,
-        durationMinutes:
-            durationMinutes,
-        passingScore:
-            passingScore,
-      );
-
-      return;
-    }
-
-    // =========================================================================
-    // ABANDONED
-    // =========================================================================
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            ExamReviewScreen(
-          attemptId:
-              attempt.id,
-          examId:
-              examId,
-          examTitle:
-              examTitle,
-        ),
-      ),
-    );
-  }
-
-  // ==========================================================================
-  // COMPLETED EXAM ACTIONS
-  // ==========================================================================
-
-  void _showCompletedAttemptActions({
-    required StudentExamAttempt attempt,
-    required String examId,
-    required String examTitle,
-    required int durationMinutes,
-    required int passingScore,
-  }) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (
-        sheetContext,
-      ) {
-        return SafeArea(
-          child: Padding(
-            padding:
-                const EdgeInsets.fromLTRB(
-              16,
-              4,
-              16,
-              20,
-            ),
-            child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
-              children: [
-                // =============================================================
-                // VIEW RESULT
-                // =============================================================
-
-                ListTile(
-                  leading:
-                      const CircleAvatar(
-                    child: Icon(
-                      Icons
-                          .assessment_rounded,
-                    ),
-                  ),
-                  title:
-                      const Text(
-                    'View Result',
-                    style:
-                        TextStyle(
-                      fontWeight:
-                          FontWeight.w700,
-                    ),
-                  ),
-                  subtitle:
-                      Text(
-                    '${attempt.score}% • '
-                    '${attempt.correctAnswers}/'
-                    '${attempt.totalQuestions} correct',
-                  ),
-                  trailing:
-                      const Icon(
-                    Icons
-                        .chevron_right_rounded,
-                  ),
-                  onTap: () {
-                    Navigator.of(
-                      sheetContext,
-                    ).pop();
-
-                    Navigator.of(
-                      context,
-                    ).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            ExamResultScreen(
-                          examId:
-                              examId,
-                          attemptId:
-                              attempt.id,
-                          examTitle:
-                              examTitle,
-                          durationMinutes:
-                              durationMinutes,
-                          score:
-                              attempt.score,
-                          correctAnswers:
-                              attempt
-                                  .correctAnswers,
-                          totalQuestions:
-                              attempt
-                                  .totalQuestions,
-                          passingScore:
-                              passingScore,
-                          passed:
-                              attempt.passed,
-                          autoSubmitted:
-                              false,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
-                const Divider(
-                  height: 1,
-                ),
-
-                // =============================================================
-                // REVIEW ANSWERS
-                // =============================================================
-
-                ListTile(
-                  leading:
-                      const CircleAvatar(
-                    child: Icon(
-                      Icons
-                          .rate_review_rounded,
-                    ),
-                  ),
-                  title:
-                      const Text(
-                    'Review Answers',
-                    style:
-                        TextStyle(
-                      fontWeight:
-                          FontWeight.w700,
-                    ),
-                  ),
-                  subtitle:
-                      const Text(
-                    'Review your answers, correct answers and explanations.',
-                  ),
-                  trailing:
-                      const Icon(
-                    Icons
-                        .chevron_right_rounded,
-                  ),
-                  onTap: () {
-                    Navigator.of(
-                      sheetContext,
-                    ).pop();
-
-                    Navigator.of(
-                      context,
-                    ).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            ExamReviewScreen(
-                          attemptId:
-                              attempt.id,
-                          examId:
-                              examId,
-                          examTitle:
-                              examTitle,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
+      if (response == null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Exam information is no longer available.',
             ),
           ),
         );
-      },
-    );
+
+        return;
+      }
+
+      final exam =
+          Map<String, dynamic>.from(
+        response,
+      );
+
+      final examId =
+          exam['id']?.toString() ??
+              attempt.examId;
+
+      final examTitle =
+          exam['title']?.toString() ??
+              attempt.examTitle;
+
+      final durationMinutes =
+          (exam['duration_minutes']
+                      as num?)
+                  ?.toInt() ??
+              0;
+
+      final passingScore =
+          (exam['passing_score']
+                      as num?)
+                  ?.toInt() ??
+              attempt.passingScore;
+
+      // ======================================================================
+      // IN PROGRESS
+      // ======================================================================
+
+      if (attempt.isInProgress) {
+        await Navigator.of(context)
+            .push(
+          MaterialPageRoute(
+            builder:
+                (_) => ExamScreen(
+              examId:
+                  examId,
+              attemptId:
+                  attempt.id,
+              examTitle:
+                  examTitle,
+              durationMinutes:
+                  durationMinutes,
+              passingScore:
+                  passingScore,
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      // ======================================================================
+      // COMPLETED
+      //
+      // Open the result directly.
+      // ======================================================================
+
+      if (attempt.isCompleted) {
+        await Navigator.of(context)
+            .push(
+          MaterialPageRoute(
+            builder:
+                (_) => ExamResultScreen(
+              examId:
+                  examId,
+              attemptId:
+                  attempt.id,
+              examTitle:
+                  examTitle,
+              durationMinutes:
+                  durationMinutes,
+              score:
+                  attempt.score,
+              correctAnswers:
+                  attempt.correctAnswers,
+              totalQuestions:
+                  attempt.totalQuestions,
+              passingScore:
+                  passingScore,
+              passed:
+                  attempt.passed,
+              autoSubmitted:
+                  false,
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      // ======================================================================
+      // ABANDONED
+      // ======================================================================
+
+      await Navigator.of(context)
+          .push(
+        MaterialPageRoute(
+          builder:
+              (_) => ExamReviewScreen(
+            attemptId:
+                attempt.id,
+            examId:
+                examId,
+            examTitle:
+                examTitle,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint(
+        'Open exam attempt error: $e',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to open this exam.',
+          ),
+        ),
+      );
+    }
   }
 
   // ==========================================================================
@@ -669,8 +541,8 @@ class _AppShellState
   void _openSearch() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) =>
-            SearchScreen(
+        builder:
+            (_) => SearchScreen(
           onOpenLecture:
               _openLectureFromNotification,
         ),
@@ -685,20 +557,7 @@ class _AppShellState
 
 class _AppHeader
     extends StatelessWidget {
-  final bool isTablet;
-
-  final VoidCallback
-      onSearchPressed;
-
-  final Future<void> Function(
-    String lectureId,
-  )? onLectureTap;
-
-  const _AppHeader({
-    required this.isTablet,
-    required this.onSearchPressed,
-    this.onLectureTap,
-  });
+  const _AppHeader();
 
   @override
   Widget build(
@@ -712,73 +571,164 @@ class _AppHeader
             Brightness.dark;
 
     final horizontalPadding =
-        isTablet ? 32.0 : 18.0;
+        Responsive.horizontalPadding(
+      context,
+    );
 
-    final verticalPadding =
-        isTablet ? 12.0 : 8.0;
+    final width =
+        Responsive.width(context);
 
     final headerHeight =
-        isTablet ? 72.0 : 60.0;
+        Responsive.clamped(
+      context,
+      base:
+          60,
+      min:
+          56,
+      max:
+          76,
+    );
+
+    final headerRadius =
+        Responsive.clamped(
+      context,
+      base:
+          20,
+      min:
+          16,
+      max:
+          28,
+    );
 
     final logoSize =
-        isTablet ? 68.0 : 58.0;
+        Responsive.clamped(
+      context,
+      base:
+          58,
+      min:
+          50,
+      max:
+          70,
+    );
+
+    final iconSize =
+        Responsive.iconSize(
+      context,
+      base:
+          25,
+      min:
+          22,
+      max:
+          30,
+    );
+
+    final outerVerticalPadding =
+        Responsive.spacing(
+      context,
+      base:
+          8,
+      min:
+          6,
+      max:
+          14,
+    );
+
+    final bottomSpacing =
+        Responsive.spacing(
+      context,
+      base:
+          8,
+      min:
+          6,
+      max:
+          12,
+    );
 
     return Padding(
       padding:
           EdgeInsets.fromLTRB(
         horizontalPadding,
-        verticalPadding,
+        outerVerticalPadding,
         horizontalPadding,
-        isTablet ? 10.0 : 8.0,
+        bottomSpacing,
       ),
-      child: SizedBox(
-        height: headerHeight,
-        width: double.infinity,
-        child: Stack(
+      child:
+          SizedBox(
+        height:
+            headerHeight,
+        width:
+            double.infinity,
+        child:
+            Stack(
           clipBehavior:
               Clip.none,
           alignment:
               Alignment.center,
           children: [
             // =================================================================
-            // HEADER BACKGROUND
+            // BACKGROUND
             // =================================================================
 
             Positioned.fill(
-              child: Container(
+              child:
+                  Container(
                 decoration:
                     BoxDecoration(
-                  color: theme
-                      .colorScheme
-                      .surface,
+                  color:
+                      theme
+                          .colorScheme
+                          .surface,
                   borderRadius:
                       BorderRadius.circular(
-                    isTablet ? 24 : 20,
+                    headerRadius,
                   ),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white
-                            .withValues(
-                          alpha: 0.06,
-                        )
-                        : Colors.black
-                            .withValues(
-                          alpha: 0.04,
-                        ),
+                  border:
+                      Border.all(
+                    color:
+                        isDark
+                            ? Colors.white
+                                .withValues(
+                                alpha:
+                                    0.06,
+                              )
+                            : Colors.black
+                                .withValues(
+                                alpha:
+                                    0.04,
+                              ),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black
-                          .withValues(
-                        alpha: isDark
-                            ? 0.30
-                            : 0.08,
+                      color:
+                          Colors.black
+                              .withValues(
+                        alpha:
+                            isDark
+                                ? 0.30
+                                : 0.08,
                       ),
-                      blurRadius: 18,
+                      blurRadius:
+                          Responsive.clamped(
+                        context,
+                        base:
+                            18,
+                        min:
+                            14,
+                        max:
+                            24,
+                      ),
                       offset:
-                          const Offset(
-                        0,
-                        6,
+                          Responsive.clampedOffset(
+                        context,
+                        base:
+                            const Offset(
+                          0,
+                          6,
+                        ),
+                        minScale:
+                            0.8,
+                        maxScale:
+                            1.25,
                       ),
                     ),
                   ],
@@ -787,54 +737,89 @@ class _AppHeader
             ),
 
             // =================================================================
-            // CENTER LOGO
+            // LOGO
             // =================================================================
 
             Container(
-              width: logoSize,
-              height: logoSize,
+              width:
+                  logoSize,
+              height:
+                  logoSize,
               padding:
-                  const EdgeInsets.all(
-                5,
+                  EdgeInsets.all(
+                Responsive.clamped(
+                  context,
+                  base:
+                      5,
+                  min:
+                      4,
+                  max:
+                      7,
+                ),
               ),
               decoration:
                   BoxDecoration(
-                color: theme
-                    .colorScheme
-                    .surface,
+                color:
+                    theme
+                        .colorScheme
+                        .surface,
                 shape:
                     BoxShape.circle,
                 border:
                     Border.all(
-                  color: isDark
-                      ? Colors.white
-                          .withValues(
-                        alpha: 0.08,
-                      )
-                      : Colors.black
-                          .withValues(
-                        alpha: 0.04,
-                      ),
+                  color:
+                      isDark
+                          ? Colors.white
+                              .withValues(
+                              alpha:
+                                  0.08,
+                            )
+                          : Colors.black
+                              .withValues(
+                              alpha:
+                                  0.04,
+                            ),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black
-                        .withValues(
-                      alpha: isDark
-                          ? 0.22
-                          : 0.08,
+                    color:
+                        Colors.black
+                            .withValues(
+                      alpha:
+                          isDark
+                              ? 0.22
+                              : 0.08,
                     ),
-                    blurRadius: 10,
+                    blurRadius:
+                        Responsive.clamped(
+                      context,
+                      base:
+                          10,
+                      min:
+                          8,
+                      max:
+                          14,
+                    ),
                     offset:
-                        const Offset(
-                      0,
-                      3,
+                        Responsive.clampedOffset(
+                      context,
+                      base:
+                          const Offset(
+                        0,
+                        3,
+                      ),
+                      minScale:
+                          0.8,
+                      maxScale:
+                          1.25,
                     ),
                   ),
                 ],
               ),
-              child: ClipOval(
-                child: Image.asset(
+              child:
+                  ClipOval(
+                child:
+                    Image.asset(
                   AppBrand.logoPath,
                   fit:
                       BoxFit.contain,
@@ -847,12 +832,13 @@ class _AppHeader
                     return Icon(
                       Icons
                           .medical_services_rounded,
-                      color: theme
-                          .colorScheme
-                          .primary,
-                      size: isTablet
-                          ? 34
-                          : 29,
+                      color:
+                          theme
+                              .colorScheme
+                              .primary,
+                      size:
+                          logoSize *
+                              0.50,
                     );
                   },
                 ),
@@ -860,60 +846,172 @@ class _AppHeader
             ),
 
             // =================================================================
-            // LEFT — SEARCH
+            // SEARCH
             // =================================================================
 
             Positioned(
               left:
-                  isTablet ? 8 : 4,
-              child: Material(
-                color:
-                    Colors.transparent,
-                shape:
-                    const CircleBorder(),
-                child: InkWell(
-                  onTap:
-                      onSearchPressed,
-                  customBorder:
-                      const CircleBorder(),
-                  child:
-                      Padding(
-                    padding:
-                        EdgeInsets.all(
-                      isTablet
-                          ? 10
-                          : 8,
-                    ),
-                    child:
-                        Icon(
-                      Icons
-                          .search_rounded,
-                      size: isTablet
-                          ? 29
-                          : 25,
-                      color: theme
-                          .colorScheme
-                          .onSurface,
-                    ),
-                  ),
-                ),
+                  Responsive.spacing(
+                context,
+                base:
+                    4,
+                min:
+                    2,
+                max:
+                    10,
+              ),
+              child:
+                  _HeaderActionButton(
+                tooltip:
+                    'Search',
+                icon:
+                    Icons.search_rounded,
+                iconSize:
+                    iconSize,
+                onTap:
+                    () {
+                  final state =
+                      context
+                          .findAncestorStateOfType<
+                              _AppShellState>();
+
+                  state?._openSearch();
+                },
               ),
             ),
 
             // =================================================================
-            // RIGHT — NOTIFICATIONS
+            // NOTIFICATIONS
             // =================================================================
 
             Positioned(
               right:
-                  isTablet ? 8 : 4,
+                  Responsive.spacing(
+                context,
+                base:
+                    4,
+                min:
+                    2,
+                max:
+                    10,
+              ),
               child:
                   NotificationBell(
                 onLectureTap:
-                    onLectureTap,
+                    (
+                  lectureId,
+                ) async {
+                  final state =
+                      context
+                          .findAncestorStateOfType<
+                              _AppShellState>();
+
+                  if (state != null) {
+                    await state
+                        ._openLectureFromNotification(
+                      lectureId,
+                    );
+                  }
+                },
               ),
             ),
+
+            // =================================================================
+            // EDGE PROTECTION
+            // =================================================================
+
+            if (width < 340)
+              Positioned(
+                left:
+                    0,
+                right:
+                    0,
+                child:
+                    IgnorePointer(
+                  child:
+                      Container(
+                    height:
+                        1,
+                    color:
+                        Colors.transparent,
+                  ),
+                ),
+              ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// HEADER ACTION BUTTON
+// ============================================================================
+
+class _HeaderActionButton
+    extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final double iconSize;
+  final VoidCallback onTap;
+
+  const _HeaderActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.iconSize,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final padding =
+        Responsive.spacing(
+      context,
+      base:
+          8,
+      min:
+          6,
+      max:
+          12,
+    );
+
+    return Tooltip(
+      message:
+          tooltip,
+      child:
+          Material(
+        color:
+            Colors.transparent,
+        shape:
+            const CircleBorder(),
+        child:
+            InkWell(
+          onTap:
+              onTap,
+          customBorder:
+              const CircleBorder(),
+          child:
+              Padding(
+            padding:
+                EdgeInsets.all(
+              padding,
+            ),
+            child:
+                Icon(
+              icon,
+              size:
+                  iconSize,
+              color:
+                  theme
+                      .colorScheme
+                      .onSurface,
+            ),
+          ),
         ),
       ),
     );
@@ -927,7 +1025,6 @@ class _AppHeader
 class _CustomBottomNavigation
     extends StatelessWidget {
   final int currentIndex;
-
   final ValueChanged<int>
       onItemSelected;
 
@@ -936,37 +1033,43 @@ class _CustomBottomNavigation
     required this.onItemSelected,
   });
 
-  static const List<_NavItem> _items = [
+  static const List<_NavItem>
+      _items = [
     _NavItem(
-      label: 'Modules',
+      label:
+          'Modules',
       icon:
           Icons.menu_book_outlined,
       selectedIcon:
           Icons.menu_book_rounded,
     ),
     _NavItem(
-      label: 'AI',
+      label:
+          'AI',
       icon:
           Icons.auto_awesome_outlined,
       selectedIcon:
           Icons.auto_awesome_rounded,
     ),
     _NavItem(
-      label: 'Home',
+      label:
+          'Home',
       icon:
           Icons.home_outlined,
       selectedIcon:
           Icons.home_rounded,
     ),
     _NavItem(
-      label: 'Downloads',
+      label:
+          'Downloads',
       icon:
           Icons.download_outlined,
       selectedIcon:
           Icons.download_rounded,
     ),
     _NavItem(
-      label: 'Profile',
+      label:
+          'Profile',
       icon:
           Icons.person_outline,
       selectedIcon:
@@ -978,32 +1081,74 @@ class _CustomBottomNavigation
   Widget build(
     BuildContext context,
   ) {
-    final size =
-        MediaQuery.sizeOf(context);
-
-    final isTablet =
-        size.shortestSide >= 600;
-
-    final horizontalMargin =
-        isTablet ? 40.0 : 12.0;
-
-    final bottomMargin =
-        isTablet ? 20.0 : 10.0;
-
-    final maxWidth =
-        isTablet
-            ? 700.0
-            : double.infinity;
-
     final theme =
         Theme.of(context);
 
+    final isDark =
+        theme.brightness ==
+            Brightness.dark;
+
+    final width =
+        Responsive.width(context);
+
+    final horizontalMargin =
+        Responsive.clamped(
+      context,
+      base:
+          12,
+      min:
+          6,
+      max:
+          48,
+    );
+
+    final bottomMargin =
+        Responsive.clamped(
+      context,
+      base:
+          10,
+      min:
+          6,
+      max:
+          22,
+    );
+
+    final navigationHeight =
+        Responsive.clamped(
+      context,
+      base:
+          74,
+      min:
+          68,
+      max:
+          88,
+    );
+
+    final borderRadius =
+        Responsive.clamped(
+      context,
+      base:
+          26,
+      min:
+          22,
+      max:
+          34,
+    );
+
+    final maxWidth =
+        width >= 900
+            ? 720.0
+            : double.infinity;
+
     return SafeArea(
-      top: false,
-      child: Align(
+      top:
+          false,
+      child:
+          Align(
         alignment:
             Alignment.bottomCenter,
-        child: Container(
+        child:
+            Container(
           constraints:
               BoxConstraints(
             maxWidth:
@@ -1019,71 +1164,92 @@ class _CustomBottomNavigation
                 bottomMargin,
           ),
           height:
-              isTablet ? 82 : 74,
+              navigationHeight,
           decoration:
               BoxDecoration(
-            color: theme
-                .colorScheme
-                .surface,
+            color:
+                theme
+                    .colorScheme
+                    .surface,
             borderRadius:
                 BorderRadius.circular(
-              isTablet ? 30 : 26,
+              borderRadius,
             ),
             border:
                 Border.all(
-              color: theme.brightness ==
-                      Brightness.dark
-                  ? Colors.white
-                      .withValues(
-                    alpha: 0.05,
-                  )
-                  : Colors.black
-                      .withValues(
-                    alpha: 0.04,
-                  ),
+              color:
+                  isDark
+                      ? Colors.white
+                          .withValues(
+                          alpha:
+                              0.05,
+                        )
+                      : Colors.black
+                          .withValues(
+                          alpha:
+                              0.04,
+                        ),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black
-                    .withValues(
+                color:
+                    Colors.black
+                        .withValues(
                   alpha:
-                      theme.brightness ==
-                              Brightness.dark
+                      isDark
                           ? 0.30
                           : 0.14,
                 ),
                 blurRadius:
-                    25,
+                    Responsive.clamped(
+                  context,
+                  base:
+                      25,
+                  min:
+                      18,
+                  max:
+                      34,
+                ),
                 offset:
-                    const Offset(
-                  0,
-                  8,
+                    Responsive.clampedOffset(
+                  context,
+                  base:
+                      const Offset(
+                    0,
+                    8,
+                  ),
+                  minScale:
+                      0.8,
+                  maxScale:
+                      1.25,
                 ),
               ),
             ],
           ),
-          child: Row(
+          child:
+              Row(
             children:
                 List.generate(
               _items.length,
-              (index) =>
-                  Expanded(
-                child:
-                    _AnimatedNavItem(
-                  item:
-                      _items[index],
-                  selected:
-                      currentIndex ==
-                          index,
-                  onTap:
-                      () =>
-                          onItemSelected(
-                    index,
+              (
+                index,
+              ) {
+                return Expanded(
+                  child:
+                      _AnimatedNavItem(
+                    item:
+                        _items[index],
+                    selected:
+                        currentIndex ==
+                            index,
+                    onTap:
+                        () =>
+                            onItemSelected(
+                      index,
+                    ),
                   ),
-                  isTablet:
-                      isTablet,
-                ),
-              ),
+                );
+              },
             ),
           ),
         ),
@@ -1101,13 +1267,11 @@ class _AnimatedNavItem
   final _NavItem item;
   final bool selected;
   final VoidCallback onTap;
-  final bool isTablet;
 
   const _AnimatedNavItem({
     required this.item,
     required this.selected,
     required this.onTap,
-    required this.isTablet,
   });
 
   @override
@@ -1122,65 +1286,112 @@ class _AnimatedNavItem
             Brightness.dark;
 
     final primaryColor =
-        theme
-            .colorScheme
-            .primary;
+        theme.colorScheme.primary;
+
+    final isCompact =
+        Responsive.width(context) <
+            340;
+
+    final selectedCircleSize =
+        Responsive.clamped(
+      context,
+      base:
+          58,
+      min:
+          52,
+      max:
+          68,
+    );
+
+    final iconSize =
+        Responsive.clamped(
+      context,
+      base:
+          25,
+      min:
+          22,
+      max:
+          30,
+    );
+
+    final normalIconSize =
+        Responsive.clamped(
+      context,
+      base:
+          23,
+      min:
+          20,
+      max:
+          28,
+    );
 
     return GestureDetector(
       behavior:
           HitTestBehavior.opaque,
       onTap:
           onTap,
-      child: SizedBox(
+      child:
+          SizedBox(
         height:
             double.infinity,
-        child: Stack(
+        child:
+            Stack(
           alignment:
               Alignment.center,
           clipBehavior:
               Clip.none,
           children: [
-            // =================================================================
+            // ================================================================
             // SELECTED CIRCLE
-            // =================================================================
+            // ================================================================
 
             AnimatedPositioned(
               duration:
                   const Duration(
-                milliseconds: 350,
+                milliseconds:
+                    350,
               ),
               curve:
                   Curves.easeOutBack,
               top:
                   selected
-                      ? (isTablet
-                          ? -22
-                          : -20)
-                      : (isTablet
-                          ? 18
-                          : 15),
+                      ? -Responsive.clamped(
+                          context,
+                          base:
+                              20,
+                          min:
+                              16,
+                          max:
+                              24,
+                        )
+                      : Responsive.clamped(
+                          context,
+                          base:
+                              15,
+                          min:
+                              12,
+                          max:
+                              20,
+                        ),
               child:
                   AnimatedScale(
                 duration:
                     const Duration(
-                  milliseconds: 300,
+                  milliseconds:
+                      300,
                 ),
                 curve:
                     Curves.easeOutBack,
                 scale:
                     selected
-                        ? 1.0
-                        : 0.0,
+                        ? 1
+                        : 0,
                 child:
                     Container(
                   width:
-                      isTablet
-                          ? 62
-                          : 58,
+                      selectedCircleSize,
                   height:
-                      isTablet
-                          ? 62
-                          : 58,
+                      selectedCircleSize,
                   decoration:
                       BoxDecoration(
                     color:
@@ -1192,25 +1403,42 @@ class _AnimatedNavItem
                             ? Border.all(
                                 color:
                                     Colors.white,
-                                width: 2,
+                                width:
+                                    2,
                               )
                             : null,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors
-                            .black
-                            .withValues(
+                        color:
+                            Colors.black
+                                .withValues(
                           alpha:
                               isDark
                                   ? 0.35
                                   : 0.10,
                         ),
                         blurRadius:
-                            12,
+                            Responsive.clamped(
+                          context,
+                          base:
+                              12,
+                          min:
+                              8,
+                          max:
+                              16,
+                        ),
                         offset:
-                            const Offset(
-                          0,
-                          4,
+                            Responsive.clampedOffset(
+                          context,
+                          base:
+                              const Offset(
+                            0,
+                            4,
+                          ),
+                          minScale:
+                              0.8,
+                          maxScale:
+                              1.25,
                         ),
                       ),
                     ],
@@ -1224,18 +1452,16 @@ class _AnimatedNavItem
                       color:
                           Colors.white,
                       size:
-                          isTablet
-                              ? 27
-                              : 25,
+                          iconSize,
                     ),
                   ),
                 ),
               ),
             ),
 
-            // =================================================================
+            // ================================================================
             // NORMAL ITEM
-            // =================================================================
+            // ================================================================
 
             AnimatedPadding(
               duration:
@@ -1249,12 +1475,24 @@ class _AnimatedNavItem
                   EdgeInsets.only(
                 top:
                     selected
-                        ? (isTablet
-                            ? 18
-                            : 17)
-                        : (isTablet
-                            ? 3
-                            : 2),
+                        ? Responsive.clamped(
+                            context,
+                            base:
+                                17,
+                            min:
+                                14,
+                            max:
+                                22,
+                          )
+                        : Responsive.clamped(
+                            context,
+                            base:
+                                2,
+                            min:
+                                0,
+                            max:
+                                5,
+                          ),
               ),
               child:
                   AnimatedOpacity(
@@ -1265,8 +1503,8 @@ class _AnimatedNavItem
                 ),
                 opacity:
                     selected
-                        ? 0.0
-                        : 1.0,
+                        ? 0
+                        : 1,
                 child:
                     Column(
                   mainAxisAlignment:
@@ -1276,53 +1514,63 @@ class _AnimatedNavItem
                     Icon(
                       item.icon,
                       size:
-                          isTablet
-                              ? 25
-                              : 23,
-                      color: theme
-                          .colorScheme
-                          .onSurface
-                          .withValues(
+                          normalIconSize,
+                      color:
+                          theme
+                              .colorScheme
+                              .onSurface
+                              .withValues(
                         alpha:
                             0.50,
                       ),
                     ),
-                    const SizedBox(
-                      height: 4,
+                    SizedBox(
+                      height:
+                          isCompact
+                              ? 2
+                              : 4,
                     ),
-                    Text(
-                      item.label,
-                      maxLines:
-                          1,
-                      overflow:
-                          TextOverflow
-                              .ellipsis,
-                      style:
-                          TextStyle(
-                        fontSize:
-                            isTablet
-                                ? 13
-                                : 11,
-                        fontWeight:
-                            FontWeight
-                                .w500,
-                        color: theme
-                            .colorScheme
-                            .onSurface
-                            .withValues(
-                          alpha:
-                              0.50,
+                    if (!isCompact)
+                      Text(
+                        item.label,
+                        maxLines:
+                            1,
+                        overflow:
+                            TextOverflow
+                                .ellipsis,
+                        style:
+                            TextStyle(
+                          fontSize:
+                              Responsive.clamped(
+                            context,
+                            base:
+                                11,
+                            min:
+                                9,
+                            max:
+                                14,
+                          ),
+                          fontWeight:
+                              FontWeight
+                                  .w500,
+                          color:
+                              theme
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(
+                            alpha:
+                                0.50,
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
             ),
 
-            // =================================================================
+            // ================================================================
             // SELECTED LABEL
-            // =================================================================
+            // ================================================================
 
             AnimatedPositioned(
               duration:
@@ -1334,9 +1582,15 @@ class _AnimatedNavItem
                   Curves.easeOut,
               bottom:
                   selected
-                      ? (isTablet
-                          ? 10
-                          : 8)
+                      ? Responsive.clamped(
+                          context,
+                          base:
+                              8,
+                          min:
+                              5,
+                          max:
+                              12,
+                        )
                       : -10,
               child:
                   AnimatedOpacity(
@@ -1347,8 +1601,8 @@ class _AnimatedNavItem
                 ),
                 opacity:
                     selected
-                        ? 1.0
-                        : 0.0,
+                        ? 1
+                        : 0,
                 child:
                     Text(
                   item.label,
@@ -1360,9 +1614,15 @@ class _AnimatedNavItem
                   style:
                       TextStyle(
                     fontSize:
-                        isTablet
-                            ? 13
-                            : 11,
+                        Responsive.clamped(
+                      context,
+                      base:
+                          11,
+                      min:
+                          9,
+                      max:
+                          14,
+                    ),
                     fontWeight:
                         FontWeight.w600,
                     color:

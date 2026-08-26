@@ -1,8 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-
+import '../../core/responsive/responsive.dart';
 import '../../core/theme/app_colors.dart';
-import '../../services/notification_service.dart';
 import '../../services/student_preferences_service.dart';
 import '../../services/student_profile_service.dart';
 
@@ -14,27 +13,23 @@ class ProfileScreen extends StatefulWidget {
   })?
   onOpenLecture;
 
-  final void Function(StudentExamAttempt attempt)?
-      onExamAttemptTap;
-
+  final void Function(StudentExamAttempt attempt)? onExamAttemptTap;
+  final VoidCallback? onOpenExamHistory;
   const ProfileScreen({
     super.key,
     this.onOpenLecture,
     this.onExamAttemptTap,
+    this.onOpenExamHistory,
   });
 
   @override
-  State<ProfileScreen> createState() =>
-      _ProfileScreenState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState
-    extends State<ProfileScreen> {
-  final StudentProfileService _service =
-      StudentProfileService.instance;
+class _ProfileScreenState extends State<ProfileScreen> {
+  final StudentProfileService _service = StudentProfileService.instance;
 
-  late Future<_ProfilePageData>
-      _future;
+  late Future<_ProfilePageData> _future;
 
   @override
   void initState() {
@@ -43,21 +38,26 @@ class _ProfileScreenState
     _future = _loadData();
   }
 
-  Future<_ProfilePageData>
-      _loadData() async {
-    final profile =
-        await _service.getProfile();
+  // ===========================================================================
+  // LOAD
+  // ===========================================================================
 
-    final analytics =
-        await _service.getAnalytics();
+  Future<_ProfilePageData> _loadData() async {
+    final profile = await _service.getProfile();
+    final analytics = await _service.getAnalytics();
 
-    return _ProfilePageData(
-      profile: profile,
-      analytics: analytics,
-    );
+    return _ProfilePageData(profile: profile, analytics: analytics);
   }
 
+  // ===========================================================================
+  // REFRESH
+  // ===========================================================================
+
   Future<void> _refresh() async {
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _future = _loadData();
     });
@@ -65,217 +65,173 @@ class _ProfileScreenState
     await _future;
   }
 
+  // ===========================================================================
+  // BUILD
+  // ===========================================================================
+
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final size =
-        MediaQuery.sizeOf(context);
-
-    final isTablet =
-        size.shortestSide >= 600;
-
-    return FutureBuilder<
-        _ProfilePageData>(
+  Widget build(BuildContext context) {
+    return FutureBuilder<_ProfilePageData>(
       future: _future,
-      builder: (
-        context,
-        snapshot,
-      ) {
-        if (snapshot
-                .connectionState ==
-            ConnectionState.waiting) {
-          return const Center(
-            child:
-                CircularProgressIndicator(),
-          );
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
-          return _ErrorView(
-            onRetry: _refresh,
-          );
+          return _ErrorView(onRetry: _refresh);
         }
 
-        final data =
-            snapshot.data;
+        final data = snapshot.data;
 
         if (data == null) {
-          return _ErrorView(
-            onRetry: _refresh,
-          );
+          return _ErrorView(onRetry: _refresh);
         }
 
+        final horizontalPadding = Responsive.horizontalPadding(context);
+
+        final bottomPadding = Responsive.scrollBottomPadding(
+          context,
+          base: 125,
+        );
+
         return RefreshIndicator(
-          onRefresh:
-              _refresh,
-          child:
-              SingleChildScrollView(
-            physics:
-                const AlwaysScrollableScrollPhysics(
-              parent:
-                  BouncingScrollPhysics(),
+          onRefresh: _refresh,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
             ),
-            padding:
-                EdgeInsets.fromLTRB(
-              isTablet
-                  ? 32
-                  : 18,
-              isTablet
-                  ? 24
-                  : 16,
-              isTablet
-                  ? 32
-                  : 18,
-              125,
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              Responsive.spacing(context, base: 18, min: 12, max: 30),
+              horizontalPadding,
+              bottomPadding,
             ),
-            child:
-                Center(
-              child:
-                  ConstrainedBox(
-                constraints:
-                    const BoxConstraints(
-                  maxWidth:
-                      1000,
-                ),
-                child:
-                    Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .stretch,
-                  children: [
-                    _ProfileHeader(
-                      profile:
-                          data.profile,
-                      onEdit:
-                          () =>
-                              _showEditProfile(
-                        data.profile,
-                      ),
-                    ),
+            child: Responsive.constrained(
+              context,
+              maxWidth: 1100,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ProfileHeader(
+                    profile: data.profile,
+                    onEdit: () => _showEditProfile(data.profile),
+                  ),
 
-                    const SizedBox(
-                      height:
-                          18,
+                  SizedBox(
+                    height: Responsive.spacing(
+                      context,
+                      base: 18,
+                      min: 14,
+                      max: 28,
                     ),
+                  ),
 
-                    _OverviewGrid(
-                      analytics:
-                          data.analytics,
-                      isTablet:
-                          isTablet,
-                    ),
+                  _OverviewGrid(analytics: data.analytics),
 
-                    const SizedBox(
-                      height:
-                          20,
+                  SizedBox(
+                    height: Responsive.spacing(
+                      context,
+                      base: 20,
+                      min: 16,
+                      max: 30,
                     ),
+                  ),
 
-                    _SectionCard(
-                      title:
-                          'Study Activity',
-                      icon:
-                          Icons
-                              .insights_rounded,
-                      child:
-                          _StudyActivityChart(
-                        activity:
-                            data.analytics
-                                .dailyActivity,
-                      ),
+                  _SectionCard(
+                    title: 'Study Activity',
+                    icon: Icons.insights_rounded,
+                    child: _StudyActivityChart(
+                      activity: data.analytics.dailyActivity,
                     ),
+                  ),
 
-                    const SizedBox(
-                      height:
-                          20,
+                  SizedBox(
+                    height: Responsive.spacing(
+                      context,
+                      base: 20,
+                      min: 16,
+                      max: 30,
                     ),
+                  ),
 
-                    _SectionCard(
-                      title:
-                          'Exam Performance',
-                      icon:
-                          Icons
-                              .analytics_rounded,
-                      child:
-                          _ExamChart(
-                        attempts:
-                            data.analytics
-                                .attempts,
-                      ),
-                    ),
+                  _SectionCard(
+                    title: 'Exam Performance',
+                    icon: Icons.analytics_rounded,
+                    child: _ExamChart(attempts: data.analytics.attempts),
+                  ),
 
-                    const SizedBox(
-                      height:
-                          20,
+                  SizedBox(
+                    height: Responsive.spacing(
+                      context,
+                      base: 20,
+                      min: 16,
+                      max: 30,
                     ),
+                  ),
 
-                    _SectionCard(
-                      title:
-                          'Exam Attempts',
-                      icon:
-                          Icons
-                              .history_rounded,
-                      child:
-                          _ExamAttemptsList(
-                        attempts:
-                            data.analytics
-                                .attempts,
-                        onAttemptTap:
-                            widget
-                                .onExamAttemptTap,
-                      ),
+                  _SectionCard(
+                    title: 'Exam Attempts',
+                    icon: Icons.history_rounded,
+                    trailing: widget.onOpenExamHistory == null
+                        ? null
+                        : TextButton(
+                            onPressed: widget.onOpenExamHistory,
+                            child: const Text('View All'),
+                          ),
+                    child: _ExamAttemptsList(
+                      attempts: data.analytics.attempts,
+                      onAttemptTap: widget.onExamAttemptTap,
                     ),
+                  ),
 
-                    const SizedBox(
-                      height:
-                          20,
+                  SizedBox(
+                    height: Responsive.spacing(
+                      context,
+                      base: 20,
+                      min: 16,
+                      max: 30,
                     ),
+                  ),
 
-                    _SectionCard(
-                      title:
-                          'Lecture Activity',
-                      icon:
-                          Icons
-                              .menu_book_rounded,
-                      child:
-                          _LectureActivityList(
-                        activities:
-                            data.analytics
-                                .lectureActivities,
-                        onOpenLecture:
-                            widget
-                                .onOpenLecture,
-                      ),
+                  _SectionCard(
+                    title: 'Lecture Activity',
+                    icon: Icons.menu_book_rounded,
+                    child: _LectureActivityList(
+                      activities: data.analytics.lectureActivities,
+                      onOpenLecture: widget.onOpenLecture,
                     ),
+                  ),
 
-                    const SizedBox(
-                      height:
-                          20,
+                  SizedBox(
+                    height: Responsive.spacing(
+                      context,
+                      base: 20,
+                      min: 16,
+                      max: 30,
                     ),
+                  ),
 
-                    _SectionCard(
-                      title:
-                          'Settings',
-                      icon:
-                          Icons
-                              .settings_rounded,
-                      child:
-                          const _StudentSettings(),
-                    ),
+                  _SectionCard(
+                    title: 'Settings',
+                    icon: Icons.settings_rounded,
+                    child: const _StudentSettings(),
+                  ),
 
-                    const SizedBox(
-                      height:
-                          20,
+                  SizedBox(
+                    height: Responsive.spacing(
+                      context,
+                      base: 20,
+                      min: 16,
+                      max: 30,
                     ),
+                  ),
 
-                    _AccountActions(
-                      onPassword:
-                          _showChangePassword,
-                      onLogout:
-                          _showLogoutDialog,
-                    ),
-                  ],
-                ),
+                  _AccountActions(
+                    onPassword: _showChangePassword,
+                    onLogout: _showLogoutDialog,
+                  ),
+                ],
               ),
             ),
           ),
@@ -288,103 +244,62 @@ class _ProfileScreenState
   // EDIT PROFILE
   // ===========================================================================
 
-  Future<void>
-      _showEditProfile(
-    StudentProfile profile,
-  ) async {
-    final nameController =
-        TextEditingController(
-      text: profile.fullName,
-    );
+  Future<void> _showEditProfile(StudentProfile profile) async {
+    final nameController = TextEditingController(text: profile.fullName);
 
-    final phoneController =
-        TextEditingController(
-      text: profile.phone ?? '',
-    );
+    final phoneController = TextEditingController(text: profile.phone ?? '');
 
     bool saving = false;
 
     await showDialog<void>(
-      context:
-          context,
-      builder:
-          (dialogContext) {
+      context: context,
+      builder: (dialogContext) {
         return StatefulBuilder(
-          builder:
-              (
-            context,
-            setDialogState,
-          ) {
+          builder: (dialogContext, setDialogState) {
             return AlertDialog(
-              title:
-                  const Text(
-                'Edit Profile',
-              ),
-              content:
-                  SingleChildScrollView(
-                child:
-                    Column(
-                  mainAxisSize:
-                      MainAxisSize.min,
+              title: const Text('Edit Profile'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
-                      controller:
-                          nameController,
-                      textCapitalization:
-                          TextCapitalization
-                              .words,
-                      decoration:
-                          const InputDecoration(
-                        labelText:
-                            'Full Name',
-                        prefixIcon:
-                            Icon(
-                          Icons
-                              .person_outline_rounded,
-                        ),
+                      controller: nameController,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Full Name',
+                        prefixIcon: Icon(Icons.person_outline_rounded),
                       ),
                     ),
-                    const SizedBox(
-                      height:
-                          14,
+                    SizedBox(
+                      height: Responsive.spacing(
+                        dialogContext,
+                        base: 14,
+                        min: 10,
+                        max: 18,
+                      ),
                     ),
                     TextField(
-                      controller:
-                          phoneController,
-                      keyboardType:
-                          TextInputType.phone,
-                      decoration:
-                          const InputDecoration(
-                        labelText:
-                            'Phone',
-                        prefixIcon:
-                            Icon(
-                          Icons
-                              .phone_outlined,
-                        ),
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Phone',
+                        prefixIcon: Icon(Icons.phone_outlined),
                       ),
                     ),
-                    const SizedBox(
-                      height:
-                          14,
+                    SizedBox(
+                      height: Responsive.spacing(
+                        dialogContext,
+                        base: 14,
+                        min: 10,
+                        max: 18,
+                      ),
                     ),
                     TextField(
-                      readOnly:
-                          true,
-                      controller:
-                          TextEditingController(
-                        text:
-                            profile.email,
-                      ),
-                      decoration:
-                          const InputDecoration(
-                        labelText:
-                            'Email',
-                        prefixIcon:
-                            Icon(
-                          Icons
-                              .email_outlined,
-                        ),
+                      readOnly: true,
+                      controller: TextEditingController(text: profile.email),
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        prefixIcon: Icon(Icons.email_outlined),
                       ),
                     ),
                   ],
@@ -392,101 +307,68 @@ class _ProfileScreenState
               ),
               actions: [
                 TextButton(
-                  onPressed:
-                      saving
-                          ? null
-                          : () =>
-                              Navigator.of(
-                                dialogContext,
-                              ).pop(),
-                  child:
-                      const Text(
-                    'Cancel',
-                  ),
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
                 ),
                 FilledButton(
-                  onPressed:
-                      saving
-                          ? null
-                          : () async {
-                              final name =
-                                  nameController
-                                      .text
-                                      .trim();
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final name = nameController.text.trim();
 
-                              if (name
-                                  .isEmpty) {
-                                return;
-                              }
+                          if (name.isEmpty) {
+                            return;
+                          }
 
-                              setDialogState(
-                                () {
-                                  saving =
-                                      true;
-                                },
-                              );
+                          setDialogState(() {
+                            saving = true;
+                          });
 
-                              try {
-                                await _service
-                                    .updateProfile(
-                                  fullName:
-                                      name,
-                                  phone:
-                                      phoneController
-                                          .text,
-                                );
+                          try {
+                            await _service.updateProfile(
+                              fullName: name,
+                              phone: phoneController.text,
+                            );
 
-                                if (!mounted) {
-                                  return;
-                                }
+                            if (!mounted) {
+                              return;
+                            }
 
-                                Navigator.of(
-                                  dialogContext,
-                                ).pop();
+                            if (!dialogContext.mounted) {
+                              return;
+                            }
 
-                                await _refresh();
-                              } catch (_) {
-                                if (!context.mounted) {
-                                  return;
-                                }
+                            Navigator.of(dialogContext).pop();
 
-                                setDialogState(
-                                  () {
-                                    saving =
-                                        false;
-                                  },
-                                );
+                            await _refresh();
+                          } catch (_) {
+                            if (!dialogContext.mounted) {
+                              return;
+                            }
 
-                                ScaffoldMessenger
-                                    .of(
-                                  context,
-                                ).showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text(
-                                      'Unable to update profile.',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
+                            setDialogState(() {
+                              saving = false;
+                            });
+
+                            ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              const SnackBar(
+                                content: Text('Unable to update profile.'),
+                              ),
+                            );
+                          }
+                        },
                   child: saving
                       ? const SizedBox(
-                          width:
-                              18,
-                          height:
-                              18,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth:
-                                2,
-                            color:
-                                Colors.white,
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          'Save',
-                        ),
+                      : const Text('Save'),
                 ),
               ],
             );
@@ -503,73 +385,46 @@ class _ProfileScreenState
   // PASSWORD
   // ===========================================================================
 
-  Future<void>
-      _showChangePassword() async {
-    final passwordController =
-        TextEditingController();
+  Future<void> _showChangePassword() async {
+    final passwordController = TextEditingController();
 
-    final confirmController =
-        TextEditingController();
+    final confirmController = TextEditingController();
 
     bool saving = false;
 
     await showDialog<void>(
-      context:
-          context,
-      builder:
-          (dialogContext) {
+      context: context,
+      builder: (dialogContext) {
         return StatefulBuilder(
-          builder:
-              (
-            context,
-            setDialogState,
-          ) {
+          builder: (dialogContext, setDialogState) {
             return AlertDialog(
-              title:
-                  const Text(
-                'Change Password',
-              ),
-              content:
-                  SingleChildScrollView(
-                child:
-                    Column(
-                  mainAxisSize:
-                      MainAxisSize.min,
+              title: const Text('Change Password'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
-                      controller:
-                          passwordController,
-                      obscureText:
-                          true,
-                      decoration:
-                          const InputDecoration(
-                        labelText:
-                            'New Password',
-                        prefixIcon:
-                            Icon(
-                          Icons
-                              .lock_outline_rounded,
-                        ),
+                      controller: passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'New Password',
+                        prefixIcon: Icon(Icons.lock_outline_rounded),
                       ),
                     ),
-                    const SizedBox(
-                      height:
-                          14,
+                    SizedBox(
+                      height: Responsive.spacing(
+                        dialogContext,
+                        base: 14,
+                        min: 10,
+                        max: 18,
+                      ),
                     ),
                     TextField(
-                      controller:
-                          confirmController,
-                      obscureText:
-                          true,
-                      decoration:
-                          const InputDecoration(
-                        labelText:
-                            'Confirm Password',
-                        prefixIcon:
-                            Icon(
-                          Icons
-                              .lock_outline_rounded,
-                        ),
+                      controller: confirmController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Confirm Password',
+                        prefixIcon: Icon(Icons.lock_outline_rounded),
                       ),
                     ),
                   ],
@@ -577,120 +432,80 @@ class _ProfileScreenState
               ),
               actions: [
                 TextButton(
-                  onPressed:
-                      saving
-                          ? null
-                          : () =>
-                              Navigator.of(
-                                dialogContext,
-                              ).pop(),
-                  child:
-                      const Text(
-                    'Cancel',
-                  ),
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
                 ),
                 FilledButton(
-                  onPressed:
-                      saving
-                          ? null
-                          : () async {
-                              if (passwordController
-                                          .text
-                                          .length <
-                                      6 ||
-                                  passwordController
-                                          .text !=
-                                      confirmController
-                                          .text) {
-                                ScaffoldMessenger
-                                    .of(
-                                  context,
-                                ).showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text(
-                                      'Check your passwords.',
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          if (passwordController.text.length < 6 ||
+                              passwordController.text !=
+                                  confirmController.text) {
+                            if (!dialogContext.mounted) {
+                              return;
+                            }
 
-                              setDialogState(
-                                () {
-                                  saving =
-                                      true;
-                                },
-                              );
+                            ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              const SnackBar(
+                                content: Text('Check your passwords.'),
+                              ),
+                            );
+                            return;
+                          }
 
-                              try {
-                                await _service
-                                    .updatePassword(
-                                  passwordController
-                                      .text,
-                                );
+                          setDialogState(() {
+                            saving = true;
+                          });
 
-                                if (!mounted) {
-                                  return;
-                                }
+                          try {
+                            await _service.updatePassword(
+                              passwordController.text,
+                            );
 
-                                Navigator.of(
-                                  dialogContext,
-                                ).pop();
+                            if (!dialogContext.mounted) {
+                              return;
+                            }
 
-                                ScaffoldMessenger
-                                    .of(
-                                  context,
-                                ).showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text(
-                                      'Password updated successfully.',
-                                    ),
-                                  ),
-                                );
-                              } catch (_) {
-                                if (!context.mounted) {
-                                  return;
-                                }
+                            Navigator.of(dialogContext).pop();
 
-                                setDialogState(
-                                  () {
-                                    saving =
-                                        false;
-                                  },
-                                );
+                            if (!mounted) {
+                              return;
+                            }
 
-                                ScaffoldMessenger
-                                    .of(
-                                  context,
-                                ).showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text(
-                                      'Unable to change password.',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Password updated successfully.'),
+                              ),
+                            );
+                          } catch (_) {
+                            if (!dialogContext.mounted) {
+                              return;
+                            }
+
+                            setDialogState(() {
+                              saving = false;
+                            });
+
+                            ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              const SnackBar(
+                                content: Text('Unable to change password.'),
+                              ),
+                            );
+                          }
+                        },
                   child: saving
                       ? const SizedBox(
-                          width:
-                              18,
-                          height:
-                              18,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth:
-                                2,
-                            color:
-                                Colors.white,
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          'Update',
-                        ),
+                      : const Text('Update'),
                 ),
               ],
             );
@@ -707,49 +522,23 @@ class _ProfileScreenState
   // LOGOUT
   // ===========================================================================
 
-  Future<void>
-      _showLogoutDialog() async {
-    final result =
-        await showDialog<bool>(
-      context:
-          context,
-      builder:
-          (dialogContext) {
+  Future<void> _showLogoutDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
         return AlertDialog(
-          title:
-              const Text(
-            'Sign Out?',
-          ),
-          content:
-              const Text(
+          title: const Text('Sign Out?'),
+          content: const Text(
             'You will need to sign in again to access your account.',
           ),
           actions: [
             TextButton(
-              onPressed:
-                  () =>
-                      Navigator.of(
-                        dialogContext,
-                      ).pop(
-                        false,
-                      ),
-              child:
-                  const Text(
-                'Cancel',
-              ),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed:
-                  () =>
-                      Navigator.of(
-                        dialogContext,
-                      ).pop(
-                        true,
-                      ),
-              child:
-                  const Text(
-                'Sign Out',
-              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Sign Out'),
             ),
           ],
         );
@@ -760,37 +549,7 @@ class _ProfileScreenState
       return;
     }
 
-    try {
-      // -----------------------------------------------------------------------
-      // Remove this device from notification delivery first.
-      // -----------------------------------------------------------------------
-
-      await NotificationService
-          .instance
-          .unregisterCurrentToken();
-
-      // -----------------------------------------------------------------------
-      // Then sign out from Supabase.
-      // -----------------------------------------------------------------------
-
-      await _service.signOut();
-    } catch (e) {
-      debugPrint(
-        'Logout notification cleanup error: $e',
-      );
-
-      // -----------------------------------------------------------------------
-      // Logout must still happen even if FCM cleanup fails.
-      // -----------------------------------------------------------------------
-
-      try {
-        await _service.signOut();
-      } catch (signOutError) {
-        debugPrint(
-          'Supabase sign out error: $signOutError',
-        );
-      }
-    }
+    await _service.signOut();
   }
 }
 
@@ -802,112 +561,103 @@ class _ProfilePageData {
   final StudentProfile profile;
   final StudentProfileAnalytics analytics;
 
-  const _ProfilePageData({
-    required this.profile,
-    required this.analytics,
-  });
+  const _ProfilePageData({required this.profile, required this.analytics});
 }
 
 // ============================================================================
 // PROFILE HEADER
 // ============================================================================
 
-class _ProfileHeader
-    extends StatelessWidget {
+class _ProfileHeader extends StatelessWidget {
   final StudentProfile profile;
   final VoidCallback onEdit;
 
-  const _ProfileHeader({
-    required this.profile,
-    required this.onEdit,
-  });
+  const _ProfileHeader({required this.profile, required this.onEdit});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final padding = Responsive.cardPadding(context);
+
+    final avatarRadius = Responsive.clamped(
+      context,
+      base: 34,
+      min: 28,
+      max: 46,
+    );
 
     return Card(
       elevation: 0,
-      child:
-          Padding(
-        padding:
-            const EdgeInsets.all(
-          20,
-        ),
-        child:
-            Row(
+      child: Padding(
+        padding: EdgeInsets.all(padding),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            _Avatar(
-              profile:
-                  profile,
-            ),
-            const SizedBox(
-              width: 16,
+            _Avatar(profile: profile, radius: avatarRadius),
+            SizedBox(
+              width: Responsive.spacing(context, base: 16, min: 12, max: 24),
             ),
             Expanded(
-              child:
-                  Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     profile.fullName,
-                    maxLines:
-                        1,
-                    overflow:
-                        TextOverflow.ellipsis,
-                    style:
-                        const TextStyle(
-                      fontSize:
-                          21,
-                      fontWeight:
-                          FontWeight.w800,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: Responsive.titleSize(
+                        context,
+                        base: 21,
+                        min: 18,
+                        max: 28,
+                      ),
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(
-                    height:
-                        5,
+                  SizedBox(
+                    height: Responsive.spacing(
+                      context,
+                      base: 5,
+                      min: 3,
+                      max: 8,
+                    ),
                   ),
                   Text(
                     profile.email,
-                    maxLines:
-                        1,
-                    overflow:
-                        TextOverflow.ellipsis,
-                    style:
-                        TextStyle(
-                      color: theme
-                          .colorScheme
-                          .onSurface
-                          .withValues(
-                        alpha:
-                            .60,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: Responsive.bodyTextSize(
+                        context,
+                        base: 14,
+                        min: 12,
+                        max: 17,
                       ),
+                      color: theme.colorScheme.onSurface.withValues(alpha: .60),
                     ),
                   ),
-                  if (profile.phone !=
-                          null &&
-                      profile.phone!
-                          .isNotEmpty) ...[
-                    const SizedBox(
-                      height:
-                          4,
+                  if (profile.phone != null && profile.phone!.isNotEmpty) ...[
+                    SizedBox(
+                      height: Responsive.spacing(
+                        context,
+                        base: 4,
+                        min: 3,
+                        max: 7,
+                      ),
                     ),
                     Text(
                       profile.phone!,
-                      style:
-                          TextStyle(
-                        fontSize:
-                            12,
-                        color: theme
-                            .colorScheme
-                            .onSurface
-                            .withValues(
-                          alpha:
-                              .50,
+                      style: TextStyle(
+                        fontSize: Responsive.smallTextSize(
+                          context,
+                          base: 12,
+                          min: 10,
+                          max: 15,
+                        ),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: .50,
                         ),
                       ),
                     ),
@@ -916,15 +666,9 @@ class _ProfileHeader
               ),
             ),
             IconButton(
-              onPressed:
-                  onEdit,
-              tooltip:
-                  'Edit profile',
-              icon:
-                  const Icon(
-                Icons
-                    .edit_outlined,
-              ),
+              onPressed: onEdit,
+              tooltip: 'Edit profile',
+              icon: const Icon(Icons.edit_outlined),
             ),
           ],
         ),
@@ -937,63 +681,33 @@ class _ProfileHeader
 // AVATAR
 // ============================================================================
 
-class _Avatar
-    extends StatelessWidget {
+class _Avatar extends StatelessWidget {
   final StudentProfile profile;
+  final double radius;
 
-  const _Avatar({
-    required this.profile,
-  });
+  const _Avatar({required this.profile, required this.radius});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final url =
-        profile.profileImageUrl
-            ?.trim();
+  Widget build(BuildContext context) {
+    final url = profile.profileImageUrl?.trim();
 
-    if (url != null &&
-        url.isNotEmpty) {
-      return CircleAvatar(
-        radius:
-            34,
-        backgroundImage:
-            NetworkImage(
-          url,
-        ),
-      );
+    if (url != null && url.isNotEmpty) {
+      return CircleAvatar(radius: radius, backgroundImage: NetworkImage(url));
     }
 
-    final name =
-        profile.fullName.trim();
+    final name = profile.fullName.trim();
 
-    final initial =
-        name.isEmpty
-            ? '?'
-            : name[0]
-                .toUpperCase();
+    final initial = name.isEmpty ? '?' : name[0].toUpperCase();
 
     return CircleAvatar(
-      radius:
-          34,
-      backgroundColor:
-          AppColors.primary
-              .withValues(
-        alpha:
-            .12,
-      ),
-      child:
-          Text(
+      radius: radius,
+      backgroundColor: AppColors.primary.withValues(alpha: .12),
+      child: Text(
         initial,
-        style:
-            TextStyle(
-          fontSize:
-              25,
-          fontWeight:
-              FontWeight.w800,
-          color:
-              AppColors.primary,
+        style: TextStyle(
+          fontSize: radius * .72,
+          fontWeight: FontWeight.w800,
+          color: AppColors.primary,
         ),
       ),
     );
@@ -1004,119 +718,76 @@ class _Avatar
 // OVERVIEW
 // ============================================================================
 
-class _OverviewGrid
-    extends StatelessWidget {
+class _OverviewGrid extends StatelessWidget {
   final StudentProfileAnalytics analytics;
-  final bool isTablet;
 
-  const _OverviewGrid({
-    required this.analytics,
-    required this.isTablet,
-  });
+  const _OverviewGrid({required this.analytics});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final columns =
-        isTablet ? 4 : 2;
+  Widget build(BuildContext context) {
+    final columns = Responsive.gridColumns(
+      context,
+      minItemWidth: 220,
+      minColumns: 1,
+      maxColumns: 4,
+    );
 
     return GridView.count(
-      crossAxisCount:
-          columns,
-      crossAxisSpacing:
-          12,
-      mainAxisSpacing:
-          12,
-      shrinkWrap:
-          true,
-      physics:
-          const NeverScrollableScrollPhysics(),
-      childAspectRatio:
-          isTablet
-              ? 1.9
-              : 1.55,
+      crossAxisCount: columns,
+      crossAxisSpacing: Responsive.spacing(context, base: 12, min: 8, max: 18),
+      mainAxisSpacing: Responsive.spacing(context, base: 12, min: 8, max: 18),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: columns == 1
+          ? 3.0
+          : columns == 2
+          ? 1.65
+          : 1.75,
       children: [
         _StatCard(
-          title:
-              'Lectures Opened',
-          value:
-              analytics.lecturesOpened,
-          icon:
-              Icons
-                  .menu_book_rounded,
+          title: 'Lectures Opened',
+          value: analytics.lecturesOpened,
+          icon: Icons.menu_book_rounded,
         ),
         _StatCard(
-          title:
-              'Audio Completed',
-          value:
-              analytics.audioCompleted,
-          icon:
-              Icons
-                  .audio_file_rounded,
+          title: 'Audio Completed',
+          value: analytics.audioCompleted,
+          icon: Icons.audio_file_rounded,
         ),
         _StatCard(
-          title:
-              'Video Completed',
-          value:
-              analytics.videoCompleted,
-          icon:
-              Icons
-                  .video_file_rounded,
+          title: 'Video Completed',
+          value: analytics.videoCompleted,
+          icon: Icons.video_file_rounded,
         ),
         _StatCard(
-          title:
-              'Exam Attempts',
-          value:
-              analytics.examAttempts,
-          icon:
-              Icons
-                  .quiz_rounded,
+          title: 'Exam Attempts',
+          value: analytics.examAttempts,
+          icon: Icons.quiz_rounded,
         ),
         _StatCard(
-          title:
-              'Average Score',
-          value:
-              '${analytics.averageScore.toStringAsFixed(0)}%',
-          icon:
-              Icons
-                  .analytics_rounded,
+          title: 'Average Score',
+          value: '${analytics.averageScore.toStringAsFixed(0)}%',
+          icon: Icons.analytics_rounded,
         ),
         _StatCard(
-          title:
-              'Best Score',
-          value:
-              '${analytics.bestScore.toStringAsFixed(0)}%',
-          icon:
-              Icons
-                  .emoji_events_rounded,
+          title: 'Best Score',
+          value: '${analytics.bestScore.toStringAsFixed(0)}%',
+          icon: Icons.emoji_events_rounded,
         ),
         _StatCard(
-          title:
-              'Passed Exams',
-          value:
-              analytics.passedExams,
-          icon:
-              Icons
-                  .check_circle_rounded,
+          title: 'Passed Exams',
+          value: analytics.passedExams,
+          icon: Icons.check_circle_rounded,
         ),
         _StatCard(
-          title:
-              'Success Rate',
-          value:
-              '${analytics.successRate.toStringAsFixed(0)}%',
-          icon:
-              Icons
-                  .trending_up_rounded,
+          title: 'Success Rate',
+          value: '${analytics.successRate.toStringAsFixed(0)}%',
+          icon: Icons.trending_up_rounded,
         ),
         _StatCard(
-          title:
-              'Study Time',
-          value:
-              analytics.formattedStudyTime,
-          icon:
-              Icons
-                  .timer_outlined,
+          title: 'Study Time',
+          value: analytics.formattedStudyTime,
+          icon: Icons.timer_outlined,
         ),
       ],
     );
@@ -1127,8 +798,7 @@ class _OverviewGrid
 // STAT CARD
 // ============================================================================
 
-class _StatCard
-    extends StatelessWidget {
+class _StatCard extends StatelessWidget {
   final String title;
   final dynamic value;
   final IconData icon;
@@ -1140,99 +810,74 @@ class _StatCard
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
     return Card(
-      elevation:
-          0,
-      child:
-          Padding(
-        padding:
-            const EdgeInsets.all(
-          14,
+      elevation: 0,
+      child: Padding(
+        padding: EdgeInsets.all(
+          Responsive.spacing(context, base: 14, min: 10, max: 20),
         ),
-        child:
-            Row(
+        child: Row(
           children: [
             Container(
-              width:
-                  45,
-              height:
-                  45,
-              decoration:
-                  BoxDecoration(
-                color: theme
-                    .colorScheme
-                    .primary
-                    .withValues(
-                  alpha:
-                      .10,
-                ),
-                borderRadius:
-                    BorderRadius.circular(
-                  13,
+              width: Responsive.clamped(context, base: 45, min: 40, max: 54),
+              height: Responsive.clamped(context, base: 45, min: 40, max: 54),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(
+                  Responsive.smallRadius(context),
                 ),
               ),
-              child:
-                  Icon(
+              child: Icon(
                 icon,
-                color: theme
-                    .colorScheme
-                    .primary,
+                color: theme.colorScheme.primary,
+                size: Responsive.iconSize(context, base: 23, min: 20, max: 30),
               ),
             ),
-            const SizedBox(
-              width:
-                  11,
+            SizedBox(
+              width: Responsive.spacing(context, base: 11, min: 8, max: 16),
             ),
             Expanded(
-              child:
-                  Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                mainAxisAlignment:
-                    MainAxisAlignment
-                        .center,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     title,
-                    maxLines:
-                        2,
-                    overflow:
-                        TextOverflow.ellipsis,
-                    style:
-                        TextStyle(
-                      fontSize:
-                          11,
-                      color: theme
-                          .colorScheme
-                          .onSurface
-                          .withValues(
-                        alpha:
-                            .55,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: Responsive.smallTextSize(
+                        context,
+                        base: 11,
+                        min: 10,
+                        max: 14,
                       ),
+                      color: theme.colorScheme.onSurface.withValues(alpha: .55),
                     ),
                   ),
-                  const SizedBox(
-                    height:
-                        4,
+                  SizedBox(
+                    height: Responsive.spacing(
+                      context,
+                      base: 4,
+                      min: 3,
+                      max: 6,
+                    ),
                   ),
                   Text(
                     value.toString(),
-                    maxLines:
-                        1,
-                    overflow:
-                        TextOverflow.ellipsis,
-                    style:
-                        const TextStyle(
-                      fontSize:
-                          18,
-                      fontWeight:
-                          FontWeight.w800,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: Responsive.clamped(
+                        context,
+                        base: 18,
+                        min: 16,
+                        max: 24,
+                      ),
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
@@ -1249,68 +894,64 @@ class _StatCard
 // SECTION CARD
 // ============================================================================
 
-class _SectionCard
-    extends StatelessWidget {
+class _SectionCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget child;
+  final Widget? trailing;
 
   const _SectionCard({
     required this.title,
     required this.icon,
     required this.child,
+    this.trailing,
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
     return Card(
-      elevation:
-          0,
-      child:
-          Padding(
-        padding:
-            const EdgeInsets.all(
-          18,
-        ),
-        child:
-            Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+      elevation: 0,
+      child: Padding(
+        padding: EdgeInsets.all(Responsive.cardPadding(context)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Icon(
                   icon,
-                  size:
-                      21,
-                  color: theme
-                      .colorScheme
-                      .primary,
+                  size: Responsive.iconSize(
+                    context,
+                    base: 21,
+                    min: 18,
+                    max: 28,
+                  ),
+                  color: theme.colorScheme.primary,
                 ),
-                const SizedBox(
-                  width:
-                      9,
+                SizedBox(
+                  width: Responsive.spacing(context, base: 9, min: 6, max: 14),
                 ),
-                Text(
-                  title,
-                  style:
-                      const TextStyle(
-                    fontSize:
-                        17,
-                    fontWeight:
-                        FontWeight.w800,
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: Responsive.titleSize(
+                        context,
+                        base: 17,
+                        min: 15,
+                        max: 22,
+                      ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
+                if (trailing != null) trailing!,
               ],
             ),
-            const SizedBox(
-              height:
-                  16,
+            SizedBox(
+              height: Responsive.spacing(context, base: 16, min: 12, max: 22),
             ),
             child,
           ],
@@ -1319,182 +960,284 @@ class _SectionCard
     );
   }
 }
-
 // ============================================================================
-// STUDY CHART
+// STUDY ACTIVITY CHART
 // ============================================================================
 
-class _StudyActivityChart
-    extends StatelessWidget {
-  final List<DailyStudyActivity>
-      activity;
+class _StudyActivityChart extends StatefulWidget {
+  final List<DailyStudyActivity> activity;
 
-  const _StudyActivityChart({
-    required this.activity,
-  });
+  const _StudyActivityChart({required this.activity});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  State<_StudyActivityChart> createState() => _StudyActivityChartState();
+}
 
-    final spots =
-        List.generate(
-      activity.length,
-      (index) =>
-          FlSpot(
+class _StudyActivityChartState extends State<_StudyActivityChart> {
+  int? _touchedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (widget.activity.isEmpty) {
+      return _ChartEmptyState(
+        icon: Icons.insights_outlined,
+        text: 'Study activity will appear here once you start studying.',
+      );
+    }
+
+    final spots = List.generate(widget.activity.length, (index) {
+      return FlSpot(
         index.toDouble(),
-        activity[index]
-            .studyMinutes,
-      ),
+        widget.activity[index].studyMinutes.toDouble(),
+      );
+    });
+
+    final maxValue = widget.activity
+        .map((item) => item.studyMinutes.toDouble())
+        .fold<double>(0, (current, value) => current > value ? current : value);
+
+    final chartMaxY = maxValue <= 5
+        ? 10.0
+        : (((maxValue * 1.20) / 5).ceil() * 5).toDouble();
+
+    final chartHeight = Responsive.clamped(
+      context,
+      base: 280,
+      min: 240,
+      max: 340,
     );
 
-    final maxY =
-        activity
-            .map(
-              (item) =>
-                  item.studyMinutes,
-            )
-            .fold<double>(
-              0,
-              (
-                a,
-                b,
-              ) =>
-                  a > b
-                      ? a
-                      : b,
-            );
+    return Column(
+      children: [
+        SizedBox(
+          height: chartHeight,
+          child: LineChart(
+            LineChartData(
+              minY: 0,
+              maxY: chartMaxY,
+              minX: 0,
+              maxX: (widget.activity.length - 1).toDouble(),
+              clipData: const FlClipData.none(),
 
-    return SizedBox(
-      height:
-          230,
-      child:
-          LineChart(
-        LineChartData(
-          minY:
-              0,
-          maxY:
-              (maxY <= 1
-                      ? 2
-                      : maxY + 5)
-                  .toDouble(),
-          gridData:
-              const FlGridData(
-            show:
-                false,
-          ),
-          borderData:
-              FlBorderData(
-            show:
-                false,
-          ),
-          titlesData:
-              FlTitlesData(
-            leftTitles:
-                const AxisTitles(
-              sideTitles:
-                  SideTitles(
-                showTitles:
-                    false,
-              ),
-            ),
-            rightTitles:
-                const AxisTitles(
-              sideTitles:
-                  SideTitles(
-                showTitles:
-                    false,
-              ),
-            ),
-            topTitles:
-                const AxisTitles(
-              sideTitles:
-                  SideTitles(
-                showTitles:
-                    false,
-              ),
-            ),
-            bottomTitles:
-                AxisTitles(
-              sideTitles:
-                  SideTitles(
-                showTitles:
-                    true,
-                interval:
-                    1,
-                getTitlesWidget:
-                    (
-                  value,
-                  meta,
-                ) {
-                  final index =
-                      value.round();
+              lineTouchData: LineTouchData(
+                enabled: true,
+                handleBuiltInTouches: true,
+                touchSpotThreshold: 28,
+                getTouchedSpotIndicator: (barData, spotIndexes) {
+                  return spotIndexes.map((index) {
+                    return TouchedSpotIndicatorData(
+                      FlLine(
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.25,
+                        ),
+                        strokeWidth: 1.5,
+                        dashArray: [5, 5],
+                      ),
+                      FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, bar, index) {
+                          return FlDotCirclePainter(
+                            radius: 6,
+                            color: theme.colorScheme.primary,
+                            strokeWidth: 3,
+                            strokeColor: theme.colorScheme.surface,
+                          );
+                        },
+                      ),
+                    );
+                  }).toList();
+                },
+                touchTooltipData: LineTouchTooltipData(
+                  tooltipPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  getTooltipItems: (touchedSpots) {
+                    return touchedSpots.map((touchedSpot) {
+                      final index = touchedSpot.x.round();
 
-                  if (index < 0 ||
-                      index >=
-                          activity.length) {
-                    return const SizedBox.shrink();
+                      if (index < 0 || index >= widget.activity.length) {
+                        return null;
+                      }
+
+                      final item = widget.activity[index];
+
+                      return LineTooltipItem(
+                        '${item.studyMinutes.toStringAsFixed(0)} min',
+                        TextStyle(
+                          color: theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      );
+                    }).toList();
+                  },
+                ),
+                touchCallback: (event, response) {
+                  if (!mounted) {
+                    return;
                   }
 
-                  final day =
-                      activity[index]
-                          .day;
+                  if (response == null || !event.isInterestedForInteractions) {
+                    setState(() {
+                      _touchedIndex = null;
+                    });
+                    return;
+                  }
 
-                  return Padding(
-                    padding:
-                        const EdgeInsets.only(
-                      top:
-                          8,
-                    ),
-                    child:
-                        Text(
-                      '${day.day}/${day.month}',
-                      style:
-                          const TextStyle(
-                        fontSize:
-                            10,
-                      ),
-                    ),
+                  final firstSpot = response.lineBarSpots?.isNotEmpty == true
+                      ? response.lineBarSpots!.first
+                      : null;
+
+                  setState(() {
+                    _touchedIndex = firstSpot?.x.round();
+                  });
+                },
+              ),
+
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                horizontalInterval: chartMaxY <= 10 ? 2 : chartMaxY / 5,
+                getDrawingHorizontalLine: (value) {
+                  return FlLine(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.07),
+                    strokeWidth: 1,
                   );
                 },
               ),
-            ),
-          ),
-          lineBarsData: [
-            LineChartBarData(
-              spots:
-                  spots,
-              isCurved:
-                  true,
-              barWidth:
-                  3,
-              dotData:
-                  const FlDotData(
-                show:
-                    true,
-              ),
-              belowBarData:
-                  BarAreaData(
-                show:
-                    true,
-                color: theme
-                    .colorScheme
-                    .primary
-                    .withValues(
-                  alpha:
-                      .10,
+
+              borderData: FlBorderData(show: false),
+
+              titlesData: FlTitlesData(
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 36,
+                    interval: chartMaxY / 5,
+                    getTitlesWidget: (value, meta) {
+                      return Text(
+                        value.toInt().toString(),
+                        style: TextStyle(
+                          fontSize: Responsive.smallTextSize(
+                            context,
+                            base: 10,
+                            min: 9,
+                            max: 12,
+                          ),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.50,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                rightTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                topTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    interval: widget.activity.length > 7 ? 2 : 1,
+                    reservedSize: 32,
+                    getTitlesWidget: (value, meta) {
+                      final index = value.round();
+
+                      if (index < 0 || index >= widget.activity.length) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final day = widget.activity[index].day;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          '${day.day}/${day.month}',
+                          style: TextStyle(
+                            fontSize: Responsive.smallTextSize(
+                              context,
+                              base: 9.5,
+                              min: 8,
+                              max: 12,
+                            ),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.55,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-              color: theme
-                  .colorScheme
-                  .primary,
+
+              lineBarsData: [
+                LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  curveSmoothness: 0.28,
+                  barWidth: 3.2,
+                  color: theme.colorScheme.primary,
+                  isStrokeCapRound: true,
+                  isStrokeJoinRound: true,
+                  dotData: FlDotData(
+                    show: true,
+                    checkToShowDot: (spot, barData) {
+                      if (_touchedIndex == spot.x.round()) {
+                        return true;
+                      }
+
+                      return spots.length <= 7 ||
+                          spot.x == 0 ||
+                          spot.x == spots.length - 1;
+                    },
+                    getDotPainter: (spot, percent, barData, index) {
+                      return FlDotCirclePainter(
+                        radius: _touchedIndex == index ? 5.5 : 3.2,
+                        color: theme.colorScheme.primary,
+                        strokeWidth: 2,
+                        strokeColor: theme.colorScheme.surface,
+                      );
+                    },
+                  ),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        theme.colorScheme.primary.withValues(alpha: 0.18),
+                        theme.colorScheme.primary.withValues(alpha: 0.01),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+        SizedBox(height: Responsive.spacing(context, base: 8, min: 6, max: 12)),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Study time per day (minutes)',
+            style: TextStyle(
+              fontSize: Responsive.smallTextSize(
+                context,
+                base: 11,
+                min: 10,
+                max: 14,
+              ),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.50),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1503,144 +1246,399 @@ class _StudyActivityChart
 // EXAM CHART
 // ============================================================================
 
-class _ExamChart
-    extends StatelessWidget {
-  final List<StudentExamAttempt>
-      attempts;
+class _ExamChart extends StatefulWidget {
+  final List<StudentExamAttempt> attempts;
 
-  const _ExamChart({
-    required this.attempts,
-  });
+  const _ExamChart({required this.attempts});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  State<_ExamChart> createState() => _ExamChartState();
+}
 
-    final completed =
-        attempts
-            .where(
-              (item) =>
-                  item.isCompleted,
-            )
-            .take(10)
-            .toList()
-            .reversed
-            .toList();
+class _ExamChartState extends State<_ExamChart> {
+  int? _touchedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final completed = widget.attempts
+        .where((item) => item.isCompleted)
+        .take(12)
+        .toList()
+        .reversed
+        .toList();
 
     if (completed.isEmpty) {
-      return const SizedBox(
-        height:
-            180,
-        child:
-            Center(
-          child:
-              Text(
-            'No completed exams yet.',
-          ),
-        ),
+      return _ChartEmptyState(
+        icon: Icons.analytics_outlined,
+        text: 'Completed exam scores will appear here.',
       );
     }
 
-    final spots =
-        List.generate(
+    final spots = List.generate(
       completed.length,
-      (index) =>
-          FlSpot(
-        index.toDouble(),
-        completed[index]
-            .score
-            .toDouble(),
-      ),
+      (index) => FlSpot(index.toDouble(), completed[index].score.toDouble()),
     );
 
-    return SizedBox(
-      height:
-          230,
-      child:
-          LineChart(
-        LineChartData(
-          minY:
-              0,
-          maxY:
-              100,
-          gridData:
-              const FlGridData(
-            show:
-                false,
-          ),
-          borderData:
-              FlBorderData(
-            show:
-                false,
-          ),
-          titlesData:
-              const FlTitlesData(
-            leftTitles:
-                AxisTitles(
-              sideTitles:
-                  SideTitles(
-                showTitles:
-                    false,
+    final passingScore = _inferPassingScore(completed);
+
+    final chartHeight = Responsive.clamped(
+      context,
+      base: 280,
+      min: 240,
+      max: 340,
+    );
+
+    return Column(
+      children: [
+        SizedBox(
+          height: chartHeight,
+          child: LineChart(
+            LineChartData(
+              minY: 0,
+              maxY: 100,
+              minX: 0,
+              maxX: (completed.length - 1).toDouble(),
+
+              lineTouchData: LineTouchData(
+                enabled: true,
+                touchSpotThreshold: 28,
+                getTouchedSpotIndicator: (barData, spotIndexes) {
+                  return spotIndexes.map((index) {
+                    return TouchedSpotIndicatorData(
+                      FlLine(
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.25,
+                        ),
+                        strokeWidth: 1.5,
+                        dashArray: [5, 5],
+                      ),
+                      FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, bar, index) {
+                          return FlDotCirclePainter(
+                            radius: 6,
+                            color: theme.colorScheme.primary,
+                            strokeWidth: 3,
+                            strokeColor: theme.colorScheme.surface,
+                          );
+                        },
+                      ),
+                    );
+                  }).toList();
+                },
+                touchTooltipData: LineTouchTooltipData(
+                  tooltipPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  getTooltipItems: (touchedSpots) {
+                    return touchedSpots.map((touchedSpot) {
+                      final index = touchedSpot.x.round();
+
+                      if (index < 0 || index >= completed.length) {
+                        return null;
+                      }
+
+                      return LineTooltipItem(
+                        '${completed[index].score}%',
+                        TextStyle(
+                          color: theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      );
+                    }).toList();
+                  },
+                ),
+                touchCallback: (event, response) {
+                  if (!mounted) {
+                    return;
+                  }
+
+                  if (response == null || !event.isInterestedForInteractions) {
+                    setState(() {
+                      _touchedIndex = null;
+                    });
+                    return;
+                  }
+
+                  final firstSpot = response.lineBarSpots?.isNotEmpty == true
+                      ? response.lineBarSpots!.first
+                      : null;
+
+                  setState(() {
+                    _touchedIndex = firstSpot?.x.round();
+                  });
+                },
               ),
-            ),
-            rightTitles:
-                AxisTitles(
-              sideTitles:
-                  SideTitles(
-                showTitles:
-                    false,
+
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                horizontalInterval: 20,
+                getDrawingHorizontalLine: (value) {
+                  return FlLine(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.07),
+                    strokeWidth: 1,
+                  );
+                },
               ),
-            ),
-            topTitles:
-                AxisTitles(
-              sideTitles:
-                  SideTitles(
-                showTitles:
-                    false,
-              ),
-            ),
-            bottomTitles:
-                AxisTitles(
-              sideTitles:
-                  SideTitles(
-                showTitles:
-                    false,
-              ),
-            ),
-          ),
-          lineBarsData: [
-            LineChartBarData(
-              spots:
-                  spots,
-              isCurved:
-                  true,
-              color: theme
-                  .colorScheme
-                  .primary,
-              barWidth:
-                  3,
-              dotData:
-                  const FlDotData(
-                show:
-                    true,
-              ),
-              belowBarData:
-                  BarAreaData(
-                show:
-                    true,
-                color: theme
-                    .colorScheme
-                    .primary
-                    .withValues(
-                  alpha:
-                      .10,
+
+              borderData: FlBorderData(show: false),
+
+              titlesData: FlTitlesData(
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 38,
+                    interval: 20,
+                    getTitlesWidget: (value, meta) {
+                      return Text(
+                        '${value.toInt()}%',
+                        style: TextStyle(
+                          fontSize: Responsive.smallTextSize(
+                            context,
+                            base: 10,
+                            min: 9,
+                            max: 12,
+                          ),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.50,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                rightTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                topTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    interval: completed.length > 7 ? 2 : 1,
+                    reservedSize: 30,
+                    getTitlesWidget: (value, meta) {
+                      final index = value.round();
+
+                      if (index < 0 || index >= completed.length) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 7),
+                        child: Text(
+                          '#${index + 1}',
+                          style: TextStyle(
+                            fontSize: Responsive.smallTextSize(
+                              context,
+                              base: 9.5,
+                              min: 8,
+                              max: 12,
+                            ),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.55,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
+
+              extraLinesData: passingScore > 0
+                  ? ExtraLinesData(
+                      horizontalLines: [
+                        HorizontalLine(
+                          y: passingScore.toDouble(),
+                          color: theme.colorScheme.error.withValues(
+                            alpha: 0.40,
+                          ),
+                          strokeWidth: 1.5,
+                          dashArray: [6, 5],
+                          label: HorizontalLineLabel(
+                            show: true,
+                            alignment: Alignment.topRight,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: theme.colorScheme.error,
+                            ),
+                            labelResolver: (line) {
+                              return 'Pass $passingScore%';
+                            },
+                          ),
+                        ),
+                      ],
+                    )
+                  : const ExtraLinesData(),
+
+              lineBarsData: [
+                LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  curveSmoothness: 0.22,
+                  barWidth: 3.2,
+                  color: theme.colorScheme.primary,
+                  isStrokeCapRound: true,
+                  isStrokeJoinRound: true,
+                  dotData: FlDotData(
+                    show: true,
+                    checkToShowDot: (spot, barData) {
+                      return completed.length <= 7 ||
+                          spot.x == 0 ||
+                          spot.x == completed.length - 1 ||
+                          _touchedIndex == spot.x.round();
+                    },
+                    getDotPainter: (spot, percent, barData, index) {
+                      return FlDotCirclePainter(
+                        radius: _touchedIndex == index ? 5.5 : 3.2,
+                        color: theme.colorScheme.primary,
+                        strokeWidth: 2,
+                        strokeColor: theme.colorScheme.surface,
+                      );
+                    },
+                  ),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        theme.colorScheme.primary.withValues(alpha: 0.18),
+                        theme.colorScheme.primary.withValues(alpha: 0.01),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
+        ),
+        SizedBox(
+          height: Responsive.spacing(context, base: 10, min: 7, max: 14),
+        ),
+        Row(
+          children: [
+            _ChartLegendDot(color: theme.colorScheme.primary, label: 'Score'),
+            const Spacer(),
+            if (passingScore > 0)
+              _ChartLegendDot(
+                color: theme.colorScheme.error,
+                label: 'Passing score',
+              ),
           ],
+        ),
+      ],
+    );
+  }
+
+  int _inferPassingScore(List<StudentExamAttempt> completed) {
+    if (completed.isEmpty) {
+      return 0;
+    }
+
+    final passedScores = completed
+        .where((item) => item.passed)
+        .map((item) => item.score)
+        .toList();
+
+    if (passedScores.isEmpty) {
+      return 0;
+    }
+
+    return passedScores.reduce((a, b) => a < b ? a : b);
+  }
+}
+
+// ============================================================================
+// CHART LEGEND DOT
+// ============================================================================
+
+class _ChartLegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _ChartLegendDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        SizedBox(width: Responsive.spacing(context, base: 6, min: 4, max: 8)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: Responsive.smallTextSize(
+              context,
+              base: 11,
+              min: 10,
+              max: 14,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// CHART EMPTY
+// ============================================================================
+
+class _ChartEmptyState extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _ChartEmptyState({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SizedBox(
+      height: Responsive.clamped(context, base: 220, min: 180, max: 260),
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.all(Responsive.cardPadding(context)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: Responsive.clamped(context, base: 54, min: 46, max: 66),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.25),
+              ),
+              SizedBox(
+                height: Responsive.spacing(context, base: 12, min: 8, max: 18),
+              ),
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: Responsive.bodyTextSize(
+                    context,
+                    base: 13,
+                    min: 12,
+                    max: 16,
+                  ),
+                  height: 1.4,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.60),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1651,58 +1649,32 @@ class _ExamChart
 // EXAM ATTEMPTS
 // ============================================================================
 
-class _ExamAttemptsList
-    extends StatelessWidget {
-  final List<StudentExamAttempt>
-      attempts;
+class _ExamAttemptsList extends StatelessWidget {
+  final List<StudentExamAttempt> attempts;
 
-  final void Function(
-    StudentExamAttempt attempt,
-  )? onAttemptTap;
+  final void Function(StudentExamAttempt attempt)? onAttemptTap;
 
-  const _ExamAttemptsList({
-    required this.attempts,
-    required this.onAttemptTap,
-  });
+  const _ExamAttemptsList({required this.attempts, required this.onAttemptTap});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     if (attempts.isEmpty) {
       return const Padding(
-        padding:
-            EdgeInsets.all(
-          12,
-        ),
-        child:
-            Text(
-          'No exam attempts yet.',
-        ),
+        padding: EdgeInsets.all(12),
+        child: Text('No exam attempts yet.'),
       );
     }
 
     return Column(
-      children:
-          attempts
-              .take(15)
-              .map(
-                (
-                  attempt,
-                ) =>
-                    _ExamAttemptTile(
-                  attempt:
-                      attempt,
-                  onTap: onAttemptTap ==
-                          null
-                      ? null
-                      : () =>
-                          onAttemptTap!(
-                        attempt,
-                      ),
-                ),
-              )
-              .toList(),
+      children: attempts
+          .take(15)
+          .map(
+            (attempt) => _ExamAttemptTile(
+              attempt: attempt,
+              onTap: onAttemptTap == null ? null : () => onAttemptTap!(attempt),
+            ),
+          )
+          .toList(),
     );
   }
 }
@@ -1711,109 +1683,59 @@ class _ExamAttemptsList
 // EXAM ATTEMPT TILE
 // ============================================================================
 
-class _ExamAttemptTile
-    extends StatelessWidget {
-  final StudentExamAttempt
-      attempt;
-
+class _ExamAttemptTile extends StatelessWidget {
+  final StudentExamAttempt attempt;
   final VoidCallback? onTap;
 
-  const _ExamAttemptTile({
-    required this.attempt,
-    required this.onTap,
-  });
+  const _ExamAttemptTile({required this.attempt, required this.onTap});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
-    late final Color
-        statusColor;
-
-    late final String
-        statusLabel;
+    late final Color statusColor;
+    late final String statusLabel;
 
     if (attempt.isCompleted) {
-      statusColor =
-          attempt.passed
-              ? Colors.green
-              : theme.colorScheme.error;
+      statusColor = attempt.passed ? Colors.green : theme.colorScheme.error;
 
-      statusLabel =
-          attempt.passed
-              ? 'Passed'
-              : 'Failed';
-    } else if (attempt
-        .isInProgress) {
-      statusColor =
-          theme.colorScheme.primary;
+      statusLabel = attempt.passed ? 'Passed' : 'Failed';
+    } else if (attempt.isInProgress) {
+      statusColor = theme.colorScheme.primary;
 
-      statusLabel =
-          'In Progress';
+      statusLabel = 'In Progress';
     } else {
-      statusColor =
-          Colors.orange;
+      statusColor = Colors.orange;
 
-      statusLabel =
-          'Abandoned';
+      statusLabel = 'Abandoned';
     }
 
     return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(
-        horizontal:
-            4,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: Responsive.spacing(context, base: 4, min: 2, max: 8),
       ),
-      leading:
-          CircleAvatar(
-        backgroundColor:
-            statusColor.withValues(
-          alpha:
-              .10,
-        ),
-        child:
-            Icon(
+      leading: CircleAvatar(
+        backgroundColor: statusColor.withValues(alpha: .10),
+        child: Icon(
           attempt.isInProgress
-              ? Icons
-                  .play_arrow_rounded
+              ? Icons.play_arrow_rounded
               : attempt.passed
-                  ? Icons
-                      .check_rounded
-                  : Icons
-                      .close_rounded,
-          color:
-              statusColor,
+              ? Icons.check_rounded
+              : Icons.close_rounded,
+          color: statusColor,
         ),
       ),
-      title:
-          Text(
+      title: Text(
         attempt.examTitle,
-        maxLines:
-            2,
-        overflow:
-            TextOverflow.ellipsis,
-        style:
-            const TextStyle(
-          fontWeight:
-              FontWeight.w700,
-        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w700),
       ),
-      subtitle:
-          Text(
-        attempt.isCompleted
-            ? '${attempt.score}% • $statusLabel'
-            : statusLabel,
+      subtitle: Text(
+        attempt.isCompleted ? '${attempt.score}% • $statusLabel' : statusLabel,
       ),
-      trailing:
-          const Icon(
-        Icons
-            .chevron_right_rounded,
-      ),
-      onTap:
-          onTap,
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: onTap,
     );
   }
 }
@@ -1822,16 +1744,15 @@ class _ExamAttemptTile
 // LECTURE ACTIVITY
 // ============================================================================
 
-class _LectureActivityList
-    extends StatelessWidget {
-  final List<StudentLectureActivity>
-      activities;
+class _LectureActivityList extends StatelessWidget {
+  final List<StudentLectureActivity> activities;
 
   final void Function({
     required String moduleId,
     required String moduleName,
     required String lectureId,
-  })? onOpenLecture;
+  })?
+  onOpenLecture;
 
   const _LectureActivityList({
     required this.activities,
@@ -1839,96 +1760,54 @@ class _LectureActivityList
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     if (activities.isEmpty) {
       return const Padding(
-        padding:
-            EdgeInsets.all(
-          12,
-        ),
-        child:
-            Text(
-          'No lecture activity yet.',
-        ),
+        padding: EdgeInsets.all(12),
+        child: Text('No lecture activity yet.'),
       );
     }
 
     return Column(
-      children:
-          activities
-              .take(15)
-              .map(
-                (
-                  activity,
-                ) =>
-                    ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(
-                    horizontal:
-                        4,
-                  ),
-                  leading:
-                      CircleAvatar(
-                    backgroundColor:
-                        AppColors
-                            .primary
-                            .withValues(
-                      alpha:
-                          .10,
-                    ),
-                    child:
-                        const Icon(
-                      Icons
-                          .menu_book_rounded,
-                    ),
-                  ),
-                  title:
-                      Text(
-                    activity
-                        .lectureTitle,
-                    maxLines:
-                        2,
-                    overflow:
-                        TextOverflow
-                            .ellipsis,
-                    style:
-                        const TextStyle(
-                      fontWeight:
-                          FontWeight.w700,
-                    ),
-                  ),
-                  subtitle:
-                      Text(
-                    '${activity.moduleName} • '
-                    '${activity.progressPercent}% progress',
-                  ),
-                  trailing:
-                      const Icon(
-                    Icons
-                        .chevron_right_rounded,
-                  ),
-                  onTap:
-                      onOpenLecture ==
-                              null
-                          ? null
-                          : () {
-                              onOpenLecture!(
-                                moduleId:
-                                    activity
-                                        .moduleId,
-                                moduleName:
-                                    activity
-                                        .moduleName,
-                                lectureId:
-                                    activity
-                                        .lectureId,
-                              );
-                            },
+      children: activities
+          .take(15)
+          .map(
+            (activity) => ListTile(
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: Responsive.spacing(
+                  context,
+                  base: 4,
+                  min: 2,
+                  max: 8,
                 ),
-              )
-              .toList(),
+              ),
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primary.withValues(alpha: .10),
+                child: Icon(Icons.menu_book_rounded, color: AppColors.primary),
+              ),
+              title: Text(
+                activity.lectureTitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                '${activity.moduleName} • '
+                '${activity.progressPercent}% progress',
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: onOpenLecture == null
+                  ? null
+                  : () {
+                      onOpenLecture!(
+                        moduleId: activity.moduleId,
+                        moduleName: activity.moduleName,
+                        lectureId: activity.lectureId,
+                      );
+                    },
+            ),
+          )
+          .toList(),
     );
   }
 }
@@ -1937,28 +1816,21 @@ class _LectureActivityList
 // SETTINGS
 // ============================================================================
 
-class _StudentSettings
-    extends StatefulWidget {
+class _StudentSettings extends StatefulWidget {
   const _StudentSettings();
 
   @override
-  State<_StudentSettings>
-      createState() =>
-          _StudentSettingsState();
+  State<_StudentSettings> createState() => _StudentSettingsState();
 }
 
-class _StudentSettingsState
-    extends State<_StudentSettings> {
-  final StudentPreferencesService
-      _preferences =
+class _StudentSettingsState extends State<_StudentSettings> {
+  final StudentPreferencesService _preferences =
       StudentPreferencesService.instance;
 
   bool _loading = true;
 
   bool _notifications = true;
-
   bool _autoPlay = true;
-
   bool _wifiOnlyDownloads = true;
 
   double _defaultSpeed = 1.0;
@@ -1970,245 +1842,130 @@ class _StudentSettingsState
     _loadSettings();
   }
 
-  Future<void> _loadSettings()
-      async {
+  Future<void> _loadSettings() async {
     try {
-      final notifications =
-          await _preferences
-              .getNotificationsEnabled();
+      final notifications = await _preferences.getNotificationsEnabled();
 
-      final autoPlay =
-          await _preferences
-              .getAutoPlayEnabled();
+      final autoPlay = await _preferences.getAutoPlayEnabled();
 
-      final wifiOnly =
-          await _preferences
-              .getWifiOnlyDownloads();
+      final wifiOnly = await _preferences.getWifiOnlyDownloads();
 
-      final speed =
-          await _preferences
-              .getDefaultPlaybackSpeed();
+      final speed = await _preferences.getDefaultPlaybackSpeed();
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _notifications =
-            notifications;
-        _autoPlay =
-            autoPlay;
-        _wifiOnlyDownloads =
-            wifiOnly;
-        _defaultSpeed =
-            speed;
-        _loading =
-            false;
+        _notifications = notifications;
+        _autoPlay = autoPlay;
+        _wifiOnlyDownloads = wifiOnly;
+        _defaultSpeed = speed;
+        _loading = false;
       });
     } catch (e) {
-      debugPrint(
-        'Load student settings error: $e',
-      );
+      debugPrint('Load student settings error: $e');
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _loading =
-            false;
+        _loading = false;
       });
     }
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     if (_loading) {
       return const Padding(
-        padding:
-            EdgeInsets.all(
-          20,
-        ),
-        child:
-            Center(
-          child:
-              CircularProgressIndicator(),
-        ),
+        padding: EdgeInsets.all(20),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
     return Column(
       children: [
         SwitchListTile(
-          contentPadding:
-              EdgeInsets.zero,
-          title:
-              const Text(
-            'Notifications',
-          ),
-          subtitle:
-              const Text(
-            'Receive study and exam reminders.',
-          ),
-          value:
-              _notifications,
-          onChanged:
-              (
-            value,
-          ) async {
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Notifications'),
+          subtitle: const Text('Receive study and exam reminders.'),
+          value: _notifications,
+          onChanged: (value) async {
+            if (!mounted) {
+              return;
+            }
+
             setState(() {
-              _notifications =
-                  value;
+              _notifications = value;
             });
 
-            await _preferences
-                .setNotificationsEnabled(
-              value,
-            );
+            await _preferences.setNotificationsEnabled(value);
           },
         ),
         SwitchListTile(
-          contentPadding:
-              EdgeInsets.zero,
-          title:
-              const Text(
-            'Auto Play Media',
-          ),
-          subtitle:
-              const Text(
-            'Automatically start audio or video.',
-          ),
-          value:
-              _autoPlay,
-          onChanged:
-              (
-            value,
-          ) async {
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Auto Play Media'),
+          subtitle: const Text('Automatically start audio or video.'),
+          value: _autoPlay,
+          onChanged: (value) async {
+            if (!mounted) {
+              return;
+            }
+
             setState(() {
-              _autoPlay =
-                  value;
+              _autoPlay = value;
             });
 
-            await _preferences
-                .setAutoPlayEnabled(
-              value,
-            );
+            await _preferences.setAutoPlayEnabled(value);
           },
         ),
         SwitchListTile(
-          contentPadding:
-              EdgeInsets.zero,
-          title:
-              const Text(
-            'Wi-Fi Only Downloads',
-          ),
-          subtitle:
-              const Text(
-            'Prevent lecture downloads over mobile data.',
-          ),
-          value:
-              _wifiOnlyDownloads,
-          onChanged:
-              (
-            value,
-          ) async {
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Wi-Fi Only Downloads'),
+          subtitle: const Text('Prevent lecture downloads over mobile data.'),
+          value: _wifiOnlyDownloads,
+          onChanged: (value) async {
+            if (!mounted) {
+              return;
+            }
+
             setState(() {
-              _wifiOnlyDownloads =
-                  value;
+              _wifiOnlyDownloads = value;
             });
 
-            await _preferences
-                .setWifiOnlyDownloads(
-              value,
-            );
+            await _preferences.setWifiOnlyDownloads(value);
           },
         ),
         ListTile(
-          contentPadding:
-              EdgeInsets.zero,
-          title:
-              const Text(
-            'Default Playback Speed',
-          ),
-          subtitle:
-              const Text(
-            'Used when opening audio lectures.',
-          ),
-          trailing:
-              DropdownButton<double>(
-            value:
-                _defaultSpeed,
-            items:
-                const [
-              DropdownMenuItem(
-                value:
-                    0.75,
-                child:
-                    Text(
-                  '0.75x',
-                ),
-              ),
-              DropdownMenuItem(
-                value:
-                    1.0,
-                child:
-                    Text(
-                  '1.0x',
-                ),
-              ),
-              DropdownMenuItem(
-                value:
-                    1.25,
-                child:
-                    Text(
-                  '1.25x',
-                ),
-              ),
-              DropdownMenuItem(
-                value:
-                    1.5,
-                child:
-                    Text(
-                  '1.5x',
-                ),
-              ),
-              DropdownMenuItem(
-                value:
-                    1.75,
-                child:
-                    Text(
-                  '1.75x',
-                ),
-              ),
-              DropdownMenuItem(
-                value:
-                    2.0,
-                child:
-                    Text(
-                  '2.0x',
-                ),
-              ),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Default Playback Speed'),
+          subtitle: const Text('Used when opening audio lectures.'),
+          trailing: DropdownButton<double>(
+            value: _defaultSpeed,
+            items: const [
+              DropdownMenuItem(value: 0.75, child: Text('0.75x')),
+              DropdownMenuItem(value: 1.0, child: Text('1.0x')),
+              DropdownMenuItem(value: 1.25, child: Text('1.25x')),
+              DropdownMenuItem(value: 1.5, child: Text('1.5x')),
+              DropdownMenuItem(value: 1.75, child: Text('1.75x')),
+              DropdownMenuItem(value: 2.0, child: Text('2.0x')),
             ],
-            onChanged:
-                (
-              value,
-            ) async {
-              if (value ==
-                  null) {
+            onChanged: (value) async {
+              if (value == null) {
+                return;
+              }
+
+              if (!mounted) {
                 return;
               }
 
               setState(() {
-                _defaultSpeed =
-                    value;
+                _defaultSpeed = value;
               });
 
-              await _preferences
-                  .setDefaultPlaybackSpeed(
-                value,
-              );
+              await _preferences.setDefaultPlaybackSpeed(value);
             },
           ),
         ),
@@ -2221,79 +1978,37 @@ class _StudentSettingsState
 // ACCOUNT ACTIONS
 // ============================================================================
 
-class _AccountActions
-    extends StatelessWidget {
-  final VoidCallback
-      onPassword;
+class _AccountActions extends StatelessWidget {
+  final VoidCallback onPassword;
+  final VoidCallback onLogout;
 
-  final VoidCallback
-      onLogout;
-
-  const _AccountActions({
-    required this.onPassword,
-    required this.onLogout,
-  });
+  const _AccountActions({required this.onPassword, required this.onLogout});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
     return Card(
-      elevation:
-          0,
-      child:
-          Column(
+      elevation: 0,
+      child: Column(
         children: [
           ListTile(
-            leading:
-                const Icon(
-              Icons
-                  .lock_outline_rounded,
-            ),
-            title:
-                const Text(
-              'Change Password',
-            ),
-            trailing:
-                const Icon(
-              Icons
-                  .chevron_right_rounded,
-            ),
-            onTap:
-                onPassword,
+            leading: const Icon(Icons.lock_outline_rounded),
+            title: const Text('Change Password'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: onPassword,
           ),
-          const Divider(
-            height:
-                1,
-          ),
+          const Divider(height: 1),
           ListTile(
-            leading:
-                Icon(
-              Icons
-                  .logout_rounded,
-              color:
-                  theme
-                      .colorScheme
-                      .error,
-            ),
-            title:
-                Text(
+            leading: Icon(Icons.logout_rounded, color: theme.colorScheme.error),
+            title: Text(
               'Sign Out',
-              style:
-                  TextStyle(
-                color:
-                    theme
-                        .colorScheme
-                        .error,
-                fontWeight:
-                    FontWeight.w700,
+              style: TextStyle(
+                color: theme.colorScheme.error,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            onTap:
-                onLogout,
+            onTap: onLogout,
           ),
         ],
       ),
@@ -2305,62 +2020,48 @@ class _AccountActions
 // ERROR
 // ============================================================================
 
-class _ErrorView
-    extends StatelessWidget {
-  final Future<void>
-      Function() onRetry;
+class _ErrorView extends StatelessWidget {
+  final Future<void> Function() onRetry;
 
-  const _ErrorView({
-    required this.onRetry,
-  });
+  const _ErrorView({required this.onRetry});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Center(
-      child:
-          Padding(
-        padding:
-            const EdgeInsets
-                .all(
-          30,
-        ),
-        child:
-            Column(
-          mainAxisSize:
-              MainAxisSize.min,
+      child: Padding(
+        padding: EdgeInsets.all(Responsive.cardPadding(context)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons
-                  .cloud_off_rounded,
-              size:
-                  60,
+            Icon(
+              Icons.cloud_off_rounded,
+              size: Responsive.clamped(context, base: 60, min: 50, max: 76),
             ),
-            const SizedBox(
-              height:
-                  16,
+            SizedBox(
+              height: Responsive.spacing(context, base: 16, min: 10, max: 22),
             ),
-            const Text(
+            Text(
               'Unable to load profile data.',
-              textAlign:
-                  TextAlign.center,
-            ),
-            const SizedBox(
-              height:
-                  16,
-            ),
-            FilledButton.icon(
-              onPressed:
-                  onRetry,
-              icon:
-                  const Icon(
-                Icons
-                    .refresh_rounded,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: Responsive.titleSize(
+                  context,
+                  base: 18,
+                  min: 16,
+                  max: 24,
+                ),
+                fontWeight: FontWeight.w700,
               ),
-              label:
-                  const Text(
-                'Try Again',
+            ),
+            SizedBox(
+              height: Responsive.spacing(context, base: 16, min: 12, max: 24),
+            ),
+            SizedBox(
+              height: Responsive.buttonHeight(context),
+              child: FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Try Again'),
               ),
             ),
           ],

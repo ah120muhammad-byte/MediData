@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../core/responsive/responsive.dart';
 import '../../services/audio_player_service.dart';
 import '../../services/download_service.dart';
 
@@ -40,11 +41,12 @@ class _LectureAudioPlayerScreenState
 
   double _playbackSpeed = 1.0;
 
-  StreamSubscription<ProcessingState>? _processingSubscription;
+  StreamSubscription<ProcessingState>?
+      _processingSubscription;
 
-  // ===========================================================================
+  // ==========================================================================
   // INIT
-  // ===========================================================================
+  // ==========================================================================
 
   @override
   void initState() {
@@ -53,9 +55,9 @@ class _LectureAudioPlayerScreenState
     _initializePlayer();
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // DISPOSE
-  // ===========================================================================
+  // ==========================================================================
 
   @override
   void dispose() {
@@ -69,9 +71,9 @@ class _LectureAudioPlayerScreenState
     super.dispose();
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // INITIALIZE
-  // ===========================================================================
+  // ==========================================================================
 
   Future<void> _initializePlayer() async {
     try {
@@ -104,8 +106,9 @@ class _LectureAudioPlayerScreenState
       // -----------------------------------------------------------------------
 
       if (!isLocal) {
-        source = await DownloadsService.instance
-            .createSignedUrlForLectureFile(
+        source =
+            await DownloadsService.instance
+                .createSignedUrlForLectureFile(
           fileUrl: widget.fileUrl,
           fileType: 'audio',
         );
@@ -130,7 +133,8 @@ class _LectureAudioPlayerScreenState
             return;
           }
 
-          if (state == ProcessingState.completed) {
+          if (state ==
+              ProcessingState.completed) {
             setState(() {});
           }
         },
@@ -157,25 +161,29 @@ class _LectureAudioPlayerScreenState
 
       setState(() {
         _loading = false;
-        _error = 'Unable to play this audio.';
+        _error =
+            'Unable to play this audio.';
       });
     }
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // FORMAT DURATION
-  // ===========================================================================
+  // ==========================================================================
 
   String _formatDuration(
     Duration duration,
   ) {
-    final hours = duration.inHours;
+    final hours =
+        duration.inHours;
 
     final minutes =
-        duration.inMinutes.remainder(60);
+        duration.inMinutes
+            .remainder(60);
 
     final seconds =
-        duration.inSeconds.remainder(60);
+        duration.inSeconds
+            .remainder(60);
 
     if (hours > 0) {
       return '$hours:'
@@ -187,9 +195,9 @@ class _LectureAudioPlayerScreenState
         '${seconds.toString().padLeft(2, '0')}';
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // BUILD
-  // ===========================================================================
+  // ==========================================================================
 
   @override
   Widget build(
@@ -200,202 +208,494 @@ class _LectureAudioPlayerScreenState
         title: Text(
           widget.lectureTitle,
           maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+          overflow:
+              TextOverflow.ellipsis,
         ),
       ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(),
+              child:
+                  CircularProgressIndicator(),
             )
           : _error != null
-              ? _buildError()
-              : _buildPlayer(),
+              ? _buildError(context)
+              : _buildPlayer(context),
     );
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // ERROR
-  // ===========================================================================
+  // ==========================================================================
 
-  Widget _buildError() {
-    final theme = Theme.of(context);
+  Widget _buildError(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final maxWidth =
+        Responsive.width(context) >=
+                900
+            ? 560.0
+            : 480.0;
 
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.error_outline_rounded,
-              size: 64,
-              color: theme.colorScheme.error,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _initializePlayer,
-              child: const Text('Retry'),
-            ),
-          ],
+      child: SingleChildScrollView(
+        padding:
+            EdgeInsets.all(
+          Responsive.cardPadding(
+            context,
+          ),
+        ),
+        child: ConstrainedBox(
+          constraints:
+              BoxConstraints(
+            maxWidth:
+                maxWidth,
+          ),
+          child: Column(
+            mainAxisSize:
+                MainAxisSize.min,
+            children: [
+              Icon(
+                Icons
+                    .error_outline_rounded,
+                size:
+                    Responsive.clamped(
+                  context,
+                  base: 64,
+                  min: 52,
+                  max: 82,
+                ),
+                color:
+                    theme
+                        .colorScheme
+                        .error,
+              ),
+
+              SizedBox(
+                height:
+                    Responsive.spacing(
+                  context,
+                  base: 16,
+                  min: 10,
+                  max: 22,
+                ),
+              ),
+
+              Text(
+                _error!,
+                textAlign:
+                    TextAlign.center,
+                style:
+                    TextStyle(
+                  fontSize:
+                      Responsive.bodyTextSize(
+                    context,
+                    base: 15,
+                    min: 13,
+                    max: 19,
+                  ),
+                  height: 1.4,
+                ),
+              ),
+
+              SizedBox(
+                height:
+                    Responsive.spacing(
+                  context,
+                  base: 18,
+                  min: 12,
+                  max: 24,
+                ),
+              ),
+
+              SizedBox(
+                height:
+                    Responsive.buttonHeight(
+                  context,
+                ),
+                child: FilledButton.icon(
+                  onPressed:
+                      _initializePlayer,
+                  icon:
+                      const Icon(
+                    Icons
+                        .refresh_rounded,
+                  ),
+                  label:
+                      const Text(
+                    'Retry',
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // PLAYER
-  // ===========================================================================
+  // ==========================================================================
 
-  Widget _buildPlayer() {
-    final theme = Theme.of(context);
+  Widget _buildPlayer(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
 
     return LayoutBuilder(
       builder: (
         context,
         constraints,
       ) {
-        final isTablet =
-            MediaQuery.sizeOf(context).shortestSide >=
-                600;
-
         final horizontalPadding =
-            isTablet ? 48.0 : 24.0;
+            Responsive.horizontalPadding(
+          context,
+        );
+
+        final contentMaxWidth =
+            constraints.maxWidth >=
+                    900
+                ? 820.0
+                : 680.0;
+
+        final artSize =
+            Responsive.clamped(
+          context,
+          base: 190,
+          min: 155,
+          max: 250,
+        );
+
+        final artIconSize =
+            Responsive.clamped(
+          context,
+          base: 88,
+          min: 72,
+          max: 116,
+        );
+
+        final titleSize =
+            Responsive.titleSize(
+          context,
+          base: 23,
+          min: 20,
+          max: 31,
+        );
 
         return SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
+          physics:
+              const BouncingScrollPhysics(),
+          padding:
+              EdgeInsets.fromLTRB(
             horizontalPadding,
-            24,
-            horizontalPadding,
-            32,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: constraints.maxHeight - 56,
+            Responsive.spacing(
+              context,
+              base: 22,
+              min: 14,
+              max: 34,
             ),
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
+            horizontalPadding,
+            Responsive.scrollBottomPadding(
+              context,
+              base: 32,
+            ),
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints:
+                  BoxConstraints(
+                maxWidth:
+                    contentMaxWidth,
+              ),
+              child: Column(
+                children: [
+                  // ===========================================================
+                  // ART
+                  // ===========================================================
 
-                // =================================================================
-                // ART
-                // =================================================================
-
-                Container(
-                  width: isTablet ? 220 : 170,
-                  height: isTablet ? 220 : 170,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color:
-                        theme.colorScheme.primary.withValues(
-                      alpha: 0.10,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            theme.colorScheme.primary.withValues(
-                          alpha: 0.12,
-                        ),
-                        blurRadius: 30,
-                        spreadRadius: 4,
+                  Container(
+                    width:
+                        artSize,
+                    height:
+                        artSize,
+                    decoration:
+                        BoxDecoration(
+                      shape:
+                          BoxShape.circle,
+                      color:
+                          theme.colorScheme.primary
+                              .withValues(
+                        alpha:
+                            0.10,
                       ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.headphones_rounded,
-                    size: isTablet ? 100 : 82,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-
-                // =================================================================
-                // TITLE
-                // =================================================================
-
-                Text(
-                  widget.fileTitle,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: isTablet ? 25 : 21,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  widget.lectureTitle,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: isTablet ? 15 : 13,
-                    color:
-                        theme.colorScheme.onSurface.withValues(
-                      alpha: 0.60,
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              theme.colorScheme.primary
+                                  .withValues(
+                            alpha:
+                                0.12,
+                          ),
+                          blurRadius:
+                              Responsive.clamped(
+                            context,
+                            base:
+                                30,
+                            min:
+                                22,
+                            max:
+                                40,
+                          ),
+                          spreadRadius:
+                              Responsive.clamped(
+                            context,
+                            base:
+                                4,
+                            min:
+                                2,
+                            max:
+                                7,
+                          ),
+                        ),
+                      ],
+                    ),
+                    child:
+                        Icon(
+                      Icons
+                          .headphones_rounded,
+                      size:
+                          artIconSize,
+                      color:
+                          theme.colorScheme.primary,
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 34),
-
-                // =================================================================
-                // PROGRESS
-                // =================================================================
-
-                _buildProgress(isTablet),
-
-                const SizedBox(height: 22),
-
-                // =================================================================
-                // CONTROLS
-                // =================================================================
-
-                _buildControls(isTablet),
-
-                const SizedBox(height: 22),
-
-                // =================================================================
-                // SPEED
-                // =================================================================
-
-                OutlinedButton.icon(
-                  onPressed: () {
-                    _showSpeedPicker(
+                  SizedBox(
+                    height:
+                        Responsive.spacing(
                       context,
-                      _playbackSpeed,
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.speed_rounded,
-                  ),
-                  label: Text(
-                    '${_playbackSpeed}x',
-                  ),
-                ),
-
-                const SizedBox(height: 26),
-
-                Text(
-                  'Background playback is enabled',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color:
-                        theme.colorScheme.onSurface.withValues(
-                      alpha: 0.45,
+                      base:
+                          28,
+                      min:
+                          20,
+                      max:
+                          38,
                     ),
                   ),
-                ),
-              ],
+
+                  // ===========================================================
+                  // TITLE
+                  // ===========================================================
+
+                  Text(
+                    widget.fileTitle,
+                    textAlign:
+                        TextAlign.center,
+                    maxLines:
+                        3,
+                    overflow:
+                        TextOverflow.ellipsis,
+                    style:
+                        TextStyle(
+                      fontSize:
+                          titleSize,
+                      fontWeight:
+                          FontWeight.w800,
+                      height:
+                          1.25,
+                    ),
+                  ),
+
+                  SizedBox(
+                    height:
+                        Responsive.spacing(
+                      context,
+                      base:
+                          8,
+                      min:
+                          5,
+                      max:
+                          12,
+                    ),
+                  ),
+
+                  Text(
+                    widget.lectureTitle,
+                    textAlign:
+                        TextAlign.center,
+                    maxLines:
+                        2,
+                    overflow:
+                        TextOverflow.ellipsis,
+                    style:
+                        TextStyle(
+                      fontSize:
+                          Responsive.bodyTextSize(
+                        context,
+                        base:
+                            14,
+                        min:
+                            12,
+                        max:
+                            18,
+                      ),
+                      height:
+                          1.35,
+                      color:
+                          theme.colorScheme
+                              .onSurface
+                              .withValues(
+                        alpha:
+                            0.60,
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(
+                    height:
+                        Responsive.spacing(
+                      context,
+                      base:
+                          30,
+                      min:
+                          20,
+                      max:
+                          40,
+                    ),
+                  ),
+
+                  // ===========================================================
+                  // PROGRESS
+                  // ===========================================================
+
+                  _buildProgress(
+                    context,
+                  ),
+
+                  SizedBox(
+                    height:
+                        Responsive.spacing(
+                      context,
+                      base:
+                          22,
+                      min:
+                          16,
+                      max:
+                          30,
+                    ),
+                  ),
+
+                  // ===========================================================
+                  // CONTROLS
+                  // ===========================================================
+
+                  _buildControls(
+                    context,
+                  ),
+
+                  SizedBox(
+                    height:
+                        Responsive.spacing(
+                      context,
+                      base:
+                          22,
+                      min:
+                          16,
+                      max:
+                          30,
+                    ),
+                  ),
+
+                  // ===========================================================
+                  // SPEED
+                  // ===========================================================
+
+                  OutlinedButton.icon(
+                    onPressed:
+                        () {
+                      _showSpeedPicker(
+                        context,
+                        _playbackSpeed,
+                      );
+                    },
+                    icon:
+                        Icon(
+                      Icons
+                          .speed_rounded,
+                      size:
+                          Responsive.iconSize(
+                        context,
+                        base:
+                            20,
+                        min:
+                            18,
+                        max:
+                            25,
+                      ),
+                    ),
+                    label:
+                        Text(
+                      '${_playbackSpeed}x',
+                      style:
+                          TextStyle(
+                        fontSize:
+                            Responsive.bodyTextSize(
+                          context,
+                          base:
+                              14,
+                          min:
+                              12,
+                          max:
+                              17,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(
+                    height:
+                        Responsive.spacing(
+                      context,
+                      base:
+                          24,
+                      min:
+                          18,
+                      max:
+                          34,
+                    ),
+                  ),
+
+                  Text(
+                    'Background playback is enabled',
+                    textAlign:
+                        TextAlign.center,
+                    style:
+                        TextStyle(
+                      fontSize:
+                          Responsive.smallTextSize(
+                        context,
+                        base:
+                            12,
+                        min:
+                            10,
+                        max:
+                            14,
+                      ),
+                      color:
+                          theme.colorScheme
+                              .onSurface
+                              .withValues(
+                        alpha:
+                            0.45,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -403,30 +703,36 @@ class _LectureAudioPlayerScreenState
     );
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // PROGRESS
-  // ===========================================================================
+  // ==========================================================================
 
   Widget _buildProgress(
-    bool isTablet,
+    BuildContext context,
   ) {
     return StreamBuilder<Duration>(
-      stream: _audio.positionStream,
-      builder: (
+      stream:
+          _audio.positionStream,
+      builder:
+          (
         context,
         positionSnapshot,
       ) {
         final position =
-            positionSnapshot.data ?? Duration.zero;
+            positionSnapshot.data ??
+                Duration.zero;
 
         return StreamBuilder<Duration?>(
-          stream: _audio.durationStream,
-          builder: (
+          stream:
+              _audio.durationStream,
+          builder:
+              (
             context,
             durationSnapshot,
           ) {
             final duration =
-                durationSnapshot.data ?? Duration.zero;
+                durationSnapshot.data ??
+                    Duration.zero;
 
             final durationMs =
                 duration.inMilliseconds;
@@ -439,58 +745,147 @@ class _LectureAudioPlayerScreenState
                     ? durationMs.toDouble()
                     : 1.0;
 
-            final currentValue = positionMs
-                .clamp(
-                  0,
-                  durationMs > 0
-                      ? durationMs
-                      : 0,
-                )
-                .toDouble();
+            final currentValue =
+                positionMs
+                    .clamp(
+                      0,
+                      durationMs > 0
+                          ? durationMs
+                          : 0,
+                    )
+                    .toDouble();
+
+            final horizontal =
+                Responsive.spacing(
+              context,
+              base:
+                  4,
+              min:
+                  2,
+              max:
+                  8,
+            );
 
             return Column(
               children: [
-                Slider(
-                  min: 0,
-                  max: maxValue,
-                  value: currentValue,
-                  onChanged: duration > Duration.zero
-                      ? (value) {
-                          unawaited(
-                            _audio.seek(
-                              Duration(
-                                milliseconds:
-                                    value.round(),
-                              ),
-                            ),
-                          );
-                        }
-                      : null,
+                SliderTheme(
+                  data:
+                      SliderTheme.of(
+                    context,
+                  ).copyWith(
+                    trackHeight:
+                        Responsive.clamped(
+                      context,
+                      base:
+                          5,
+                      min:
+                          4,
+                      max:
+                          7,
+                    ),
+                    thumbShape:
+                        RoundSliderThumbShape(
+                      enabledThumbRadius:
+                          Responsive.clamped(
+                        context,
+                        base:
+                            7,
+                        min:
+                            6,
+                        max:
+                            9,
+                      ),
+                    ),
+                    overlayShape:
+                        RoundSliderOverlayShape(
+                      overlayRadius:
+                          Responsive.clamped(
+                        context,
+                        base:
+                            16,
+                        min:
+                            13,
+                        max:
+                            20,
+                      ),
+                    ),
+                  ),
+                  child:
+                      Slider(
+                    min:
+                        0,
+                    max:
+                        maxValue,
+                    value:
+                        currentValue,
+                    onChanged:
+                        duration >
+                                Duration.zero
+                            ? (
+                                value,
+                              ) {
+                                unawaited(
+                                  _audio.seek(
+                                    Duration(
+                                      milliseconds:
+                                          value.round(),
+                                    ),
+                                  ),
+                                );
+                              }
+                            : null,
+                  ),
                 ),
 
                 Padding(
                   padding:
-                      const EdgeInsets.symmetric(
-                    horizontal: 4,
+                      EdgeInsets.symmetric(
+                    horizontal:
+                        horizontal,
                   ),
-                  child: Row(
+                  child:
+                      Row(
                     mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
+                        MainAxisAlignment
+                            .spaceBetween,
                     children: [
                       Text(
-                        _formatDuration(position),
-                        style: TextStyle(
+                        _formatDuration(
+                          position,
+                        ),
+                        style:
+                            TextStyle(
                           fontSize:
-                              isTablet ? 13 : 12,
+                              Responsive.smallTextSize(
+                            context,
+                            base:
+                                12,
+                            min:
+                                10,
+                            max:
+                                14,
+                          ),
                           fontWeight:
                               FontWeight.w600,
                         ),
                       ),
+
                       Text(
-                        _formatDuration(duration),
-                        style: TextStyle(
+                        _formatDuration(
+                          duration,
+                        ),
+                        style:
+                            TextStyle(
                           fontSize:
-                              isTablet ? 13 : 12,
+                              Responsive.smallTextSize(
+                            context,
+                            base:
+                                12,
+                            min:
+                                10,
+                            max:
+                                14,
+                          ),
                           fontWeight:
                               FontWeight.w600,
                         ),
@@ -506,92 +901,158 @@ class _LectureAudioPlayerScreenState
     );
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // CONTROLS
-  // ===========================================================================
+  // ==========================================================================
 
   Widget _buildControls(
-    bool isTablet,
+    BuildContext context,
   ) {
+    final skipSize =
+        Responsive.clamped(
+      context,
+      base:
+          32,
+      min:
+          28,
+      max:
+          40,
+    );
+
+    final playButtonSize =
+        Responsive.clamped(
+      context,
+      base:
+          68,
+      min:
+          58,
+      max:
+          84,
+    );
+
+    final playIconSize =
+        playButtonSize *
+            0.52;
+
+    final controlGap =
+        Responsive.spacing(
+      context,
+      base:
+          18,
+      min:
+          12,
+      max:
+          26,
+    );
+
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment:
+          MainAxisAlignment.center,
       children: [
         IconButton(
-          onPressed: () {
+          onPressed:
+              () {
             unawaited(
               _audio.skipBackward(),
             );
           },
-          tooltip: 'Rewind 15 seconds',
-          icon: Icon(
-            Icons.replay_10_rounded,
-            size: isTablet ? 34 : 30,
+          tooltip:
+              'Rewind 10 seconds',
+          icon:
+              Icon(
+            Icons
+                .replay_10_rounded,
+            size:
+                skipSize,
           ),
         ),
 
         SizedBox(
-          width: isTablet ? 22 : 14,
+          width:
+              controlGap,
         ),
 
         StreamBuilder<bool>(
-          stream: _audio.playingStream,
-          builder: (
+          stream:
+              _audio.playingStream,
+          builder:
+              (
             context,
             snapshot,
           ) {
             final playing =
-                snapshot.data ?? false;
+                snapshot.data ??
+                    false;
 
-            return FilledButton(
-              onPressed:
-                  playing
-                      ? _audio.pause
-                      : _audio.play,
-              style: FilledButton.styleFrom(
-                shape: const CircleBorder(),
-                padding: EdgeInsets.all(
-                  isTablet ? 22 : 19,
+            return SizedBox(
+              width:
+                  playButtonSize,
+              height:
+                  playButtonSize,
+              child:
+                  FilledButton(
+                onPressed:
+                    playing
+                        ? _audio.pause
+                        : _audio.play,
+                style:
+                    FilledButton.styleFrom(
+                  shape:
+                      const CircleBorder(),
+                  padding:
+                      EdgeInsets.zero,
                 ),
-              ),
-              child: Icon(
-                playing
-                    ? Icons.pause_rounded
-                    : Icons.play_arrow_rounded,
-                size: isTablet ? 38 : 34,
+                child:
+                    Icon(
+                  playing
+                      ? Icons
+                          .pause_rounded
+                      : Icons
+                          .play_arrow_rounded,
+                  size:
+                      playIconSize,
+                ),
               ),
             );
           },
         ),
 
         SizedBox(
-          width: isTablet ? 22 : 14,
+          width:
+              controlGap,
         ),
 
         IconButton(
-          onPressed: () {
+          onPressed:
+              () {
             unawaited(
               _audio.skipForward(),
             );
           },
-          tooltip: 'Forward 15 seconds',
-          icon: Icon(
-            Icons.forward_10_rounded,
-            size: isTablet ? 34 : 30,
+          tooltip:
+              'Forward 10 seconds',
+          icon:
+              Icon(
+            Icons
+                .forward_10_rounded,
+            size:
+                skipSize,
           ),
         ),
       ],
     );
   }
 
-  // ===========================================================================
-  // SPEED
-  // ===========================================================================
+  // ==========================================================================
+  // SPEED PICKER
+  // ==========================================================================
 
   void _showSpeedPicker(
     BuildContext context,
     double currentSpeed,
   ) {
-    const speeds = <double>[
+    const speeds =
+        <double>[
       0.75,
       1.0,
       1.25,
@@ -601,52 +1062,118 @@ class _LectureAudioPlayerScreenState
     ];
 
     showModalBottomSheet<void>(
-      context: context,
-      builder: (
+      context:
+          context,
+      showDragHandle:
+          true,
+      builder:
+          (
         sheetContext,
       ) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child:
+              ListView(
+            shrinkWrap:
+                true,
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  18,
-                  20,
+              Padding(
+                padding:
+                    EdgeInsets.fromLTRB(
+                  Responsive.cardPadding(
+                    context,
+                  ),
+                  4,
+                  Responsive.cardPadding(
+                    context,
+                  ),
                   8,
                 ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Playback Speed',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                child:
+                    Text(
+                  'Playback Speed',
+                  style:
+                      TextStyle(
+                    fontSize:
+                        Responsive.titleSize(
+                      context,
+                      base:
+                          18,
+                      min:
+                          16,
+                      max:
+                          23,
                     ),
+                    fontWeight:
+                        FontWeight.w800,
                   ),
                 ),
               ),
 
               ...speeds.map(
-                (speed) {
+                (
+                  speed,
+                ) {
                   final selected =
-                      speed == currentSpeed;
+                      speed ==
+                          currentSpeed;
 
                   return ListTile(
-                    title: Text(
-                      '${speed}x',
+                    contentPadding:
+                        EdgeInsets.symmetric(
+                      horizontal:
+                          Responsive.cardPadding(
+                        context,
+                      ),
                     ),
-                    trailing: selected
-                        ? const Icon(
-                            Icons.check_rounded,
-                          )
-                        : null,
-                    onTap: () {
-                      setState(() {
-                        _playbackSpeed =
-                            speed;
-                      });
+                    title:
+                        Text(
+                      '${speed}x',
+                      style:
+                          TextStyle(
+                        fontSize:
+                            Responsive.bodyTextSize(
+                          context,
+                          base:
+                              15,
+                          min:
+                              13,
+                          max:
+                              18,
+                        ),
+                        fontWeight:
+                            selected
+                                ? FontWeight
+                                    .w700
+                                : FontWeight
+                                    .w400,
+                      ),
+                    ),
+                    trailing:
+                        selected
+                            ? Icon(
+                                Icons
+                                    .check_rounded,
+                                color:
+                                    Theme.of(
+                                  context,
+                                )
+                                        .colorScheme
+                                        .primary,
+                              )
+                            : null,
+                    onTap:
+                        () {
+                      if (!sheetContext
+                          .mounted) {
+                        return;
+                      }
+
+                      setState(
+                        () {
+                          _playbackSpeed =
+                              speed;
+                        },
+                      );
 
                       unawaited(
                         _audio.setSpeed(
@@ -662,7 +1189,18 @@ class _LectureAudioPlayerScreenState
                 },
               ),
 
-              const SizedBox(height: 8),
+              SizedBox(
+                height:
+                    Responsive.spacing(
+                  context,
+                  base:
+                      8,
+                  min:
+                      4,
+                  max:
+                      14,
+                ),
+              ),
             ],
           ),
         );

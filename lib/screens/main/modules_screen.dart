@@ -1,19 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../widgets/module_card.dart';
+
+import '../../core/responsive/responsive.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/level_card.dart';
+import '../../widgets/module_card.dart';
 import 'lectures_screen.dart';
 
 class ModulesScreen extends StatefulWidget {
-  const ModulesScreen({super.key});
+  const ModulesScreen({
+    super.key,
+  });
 
   @override
-  State<ModulesScreen> createState() => ModulesScreenState();
+  State<ModulesScreen> createState() =>
+      ModulesScreenState();
 }
 
-class ModulesScreenState extends State<ModulesScreen> {
-  final SupabaseClient _supabase = Supabase.instance.client;
+class ModulesScreenState
+    extends State<ModulesScreen> {
+  final SupabaseClient _supabase =
+      Supabase.instance.client;
+
   String? _pendingLectureId;
 
   // ==========================================================================
@@ -35,12 +43,18 @@ class ModulesScreenState extends State<ModulesScreen> {
   // ==========================================================================
 
   void _goToLevels() {
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _selectedLevelId = null;
       _selectedLevelName = null;
 
       _selectedModuleId = null;
       _selectedModuleName = null;
+
+      _pendingLectureId = null;
     });
   }
 
@@ -49,68 +63,100 @@ class ModulesScreenState extends State<ModulesScreen> {
   // ==========================================================================
 
   void _goToModules() {
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _selectedModuleId = null;
       _selectedModuleName = null;
+
+      _pendingLectureId = null;
     });
   }
 
   // ==========================================================================
   // OPEN LECTURE
-  // =========================================================================
+  // ==========================================================================
 
   Future<void> openLecture({
     required String moduleId,
     required String lectureId,
   }) async {
-    try {
-      final response = await _supabase
-          .from('modules')
-          .select('''
-          id,
-          name,
-          academic_level_id,
-          academic_levels (
-            id,
-            name
-          )
-        ''')
-          .eq('id', moduleId)
-          .maybeSingle();
+    final normalizedModuleId =
+        moduleId.trim();
 
-      if (response == null) {
+    final normalizedLectureId =
+        lectureId.trim();
+
+    if (normalizedModuleId.isEmpty ||
+        normalizedLectureId.isEmpty) {
+      return;
+    }
+
+    try {
+      final response =
+          await _supabase
+              .from('modules')
+              .select(
+                '''
+                id,
+                name,
+                academic_level_id,
+                academic_levels (
+                  id,
+                  name
+                )
+                ''',
+              )
+              .eq(
+                'id',
+                normalizedModuleId,
+              )
+              .maybeSingle();
+
+      if (response == null ||
+          !mounted) {
         return;
       }
 
-      final module = Map<String, dynamic>.from(response);
+      final module =
+          Map<String, dynamic>.from(
+        response,
+      );
 
-      final levelRaw = module['academic_levels'];
+      final levelRaw =
+          module['academic_levels'];
 
       if (levelRaw is! Map) {
         return;
       }
 
-      final level = Map<String, dynamic>.from(levelRaw);
-
-      if (!mounted) {
-        return;
-      }
+      final level =
+          Map<String, dynamic>.from(
+        levelRaw,
+      );
 
       setState(() {
-        _selectedLevelId = level['id']?.toString();
+        _selectedLevelId =
+            level['id']?.toString();
 
-        _selectedLevelName = level['name']?.toString();
+        _selectedLevelName =
+            level['name']?.toString();
 
-        _selectedModuleId = module['id']?.toString();
+        _selectedModuleId =
+            module['id']?.toString();
 
-        _selectedModuleName = module['name']?.toString();
+        _selectedModuleName =
+            module['name']?.toString();
+
+        _pendingLectureId =
+            normalizedLectureId;
       });
-
-      // Send lecture target to LecturesScreen
-      // after the widget rebuilds.
-      _pendingLectureId = lectureId;
     } catch (e) {
-      debugPrint('Open lecture from home error: $e');
+      debugPrint(
+        'Open lecture from module error: $e',
+      );
     }
   }
 
@@ -119,21 +165,34 @@ class ModulesScreenState extends State<ModulesScreen> {
   // ==========================================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     // ------------------------------------------------------------------------
     // LEVELS
     // ------------------------------------------------------------------------
 
     if (_selectedLevelId == null) {
       return _LevelsView(
-        supabase: _supabase,
-        onLevelSelected: (level) {
+        supabase:
+            _supabase,
+        onLevelSelected:
+            (level) {
+          if (!mounted) {
+            return;
+          }
+
           setState(() {
-            _selectedLevelId = level.id;
-            _selectedLevelName = level.name;
+            _selectedLevelId =
+                level.id;
+            _selectedLevelName =
+                level.name;
 
             _selectedModuleId = null;
-            _selectedModuleName = null;
+            _selectedModuleName =
+                null;
+            _pendingLectureId =
+                null;
           });
         },
       );
@@ -145,14 +204,28 @@ class ModulesScreenState extends State<ModulesScreen> {
 
     if (_selectedModuleId == null) {
       return _ModulesView(
-        supabase: _supabase,
-        levelId: _selectedLevelId!,
-        levelName: _selectedLevelName ?? '',
-        onBack: _goToLevels,
-        onModuleSelected: (module) {
+        supabase:
+            _supabase,
+        levelId:
+            _selectedLevelId!,
+        levelName:
+            _selectedLevelName ??
+                '',
+        onBack:
+            _goToLevels,
+        onModuleSelected:
+            (module) {
+          if (!mounted) {
+            return;
+          }
+
           setState(() {
-            _selectedModuleId = module.id;
-            _selectedModuleName = module.name;
+            _selectedModuleId =
+                module.id;
+            _selectedModuleName =
+                module.name;
+            _pendingLectureId =
+                null;
           });
         },
       );
@@ -162,15 +235,21 @@ class ModulesScreenState extends State<ModulesScreen> {
     // LECTURES
     // ------------------------------------------------------------------------
 
-    final lectureId = _pendingLectureId;
+    final lectureId =
+        _pendingLectureId;
 
     _pendingLectureId = null;
 
     return LecturesScreen(
-      moduleId: _selectedModuleId!,
-      moduleName: _selectedModuleName ?? '',
-      initialLectureId: lectureId,
-      onBack: _goToModules,
+      moduleId:
+          _selectedModuleId!,
+      moduleName:
+          _selectedModuleName ??
+              '',
+      initialLectureId:
+          lectureId,
+      onBack:
+          _goToModules,
     );
   }
 }
@@ -179,66 +258,137 @@ class ModulesScreenState extends State<ModulesScreen> {
 // LEVELS VIEW
 // ============================================================================
 
-class _LevelsView extends StatefulWidget {
+class _LevelsView
+    extends StatefulWidget {
   final SupabaseClient supabase;
-  final ValueChanged<_AcademicLevel> onLevelSelected;
 
-  const _LevelsView({required this.supabase, required this.onLevelSelected});
+  final ValueChanged<
+          _AcademicLevel>
+      onLevelSelected;
+
+  const _LevelsView({
+    required this.supabase,
+    required this.onLevelSelected,
+  });
 
   @override
-  State<_LevelsView> createState() => _LevelsViewState();
+  State<_LevelsView> createState() =>
+      _LevelsViewState();
 }
 
-class _LevelsViewState extends State<_LevelsView> {
-  late Future<List<_AcademicLevel>> _future;
+class _LevelsViewState
+    extends State<_LevelsView> {
+  late Future<
+      List<_AcademicLevel>>
+      _future;
 
   @override
   void initState() {
     super.initState();
-    _future = _loadLevels();
+
+    _future =
+        _loadLevels();
   }
 
   // ==========================================================================
   // LOAD LEVELS
   // ==========================================================================
 
-  Future<List<_AcademicLevel>> _loadLevels() async {
-    final levelsResponse = await widget.supabase
-        .from('academic_levels')
-        .select('id, name, description, image_url, display_order, is_active')
-        .eq('is_active', true)
-        .order('display_order', ascending: true);
+  Future<List<_AcademicLevel>>
+      _loadLevels() async {
+    final levelsResponse =
+        await widget.supabase
+            .from(
+              'academic_levels',
+            )
+            .select(
+              'id, name, description, image_url, display_order, is_active',
+            )
+            .eq(
+              'is_active',
+              true,
+            )
+            .order(
+              'display_order',
+              ascending:
+                  true,
+            );
 
-    final modulesResponse = await widget.supabase
-        .from('modules')
-        .select('id, academic_level_id')
-        .eq('is_active', true);
+    final modulesResponse =
+        await widget.supabase
+            .from(
+              'modules',
+            )
+            .select(
+              'id, academic_level_id',
+            )
+            .eq(
+              'is_active',
+              true,
+            );
 
-    final Map<String, int> moduleCountByLevel = {};
+    final Map<
+        String,
+        int>
+        moduleCountByLevel =
+        {};
 
-    for (final module in modulesResponse) {
-      final levelId = module['academic_level_id']?.toString();
+    for (final module
+        in modulesResponse) {
+      final levelId =
+          module[
+                  'academic_level_id']
+              ?.toString();
 
-      if (levelId == null) {
+      if (levelId ==
+          null) {
         continue;
       }
 
-      moduleCountByLevel[levelId] = (moduleCountByLevel[levelId] ?? 0) + 1;
+      moduleCountByLevel[
+              levelId] =
+          (moduleCountByLevel[
+                      levelId] ??
+                  0) +
+              1;
     }
 
-    return (levelsResponse as List).map((item) {
-      final map = Map<String, dynamic>.from(item);
+    return (levelsResponse
+            as List)
+        .map(
+          (item) {
+            final map =
+                Map<String,
+                    dynamic>.from(
+              item,
+            );
 
-      final id = map['id']?.toString() ?? '';
+            final id =
+                map['id']
+                        ?.toString() ??
+                    '';
 
-      return _AcademicLevel(
-        id: id,
-        name: map['name']?.toString() ?? '',
-        description: map['description']?.toString(),
-        imageUrl: map['image_url']?.toString(),
-        moduleCount: moduleCountByLevel[id] ?? 0,
-      );
-    }).toList();
+            return _AcademicLevel(
+              id:
+                  id,
+              name:
+                  map['name']
+                          ?.toString() ??
+                      '',
+              description:
+                  map['description']
+                      ?.toString(),
+              imageUrl:
+                  map['image_url']
+                      ?.toString(),
+              moduleCount:
+                  moduleCountByLevel[
+                          id] ??
+                      0,
+            );
+          },
+        )
+        .toList();
   }
 
   // ==========================================================================
@@ -246,8 +396,13 @@ class _LevelsViewState extends State<_LevelsView> {
   // ==========================================================================
 
   Future<void> _refresh() async {
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
-      _future = _loadLevels();
+      _future =
+          _loadLevels();
     });
 
     await _future;
@@ -258,68 +413,159 @@ class _LevelsViewState extends State<_LevelsView> {
   // ==========================================================================
 
   @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final isTablet = size.shortestSide >= 600;
-
-    return FutureBuilder<List<_AcademicLevel>>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+  Widget build(
+    BuildContext context,
+  ) {
+    return FutureBuilder<
+        List<_AcademicLevel>>(
+      future:
+          _future,
+      builder: (
+        context,
+        snapshot,
+      ) {
+        if (snapshot.connectionState ==
+            ConnectionState.waiting) {
+          return const Center(
+            child:
+                CircularProgressIndicator(),
+          );
         }
 
         if (snapshot.hasError) {
           return _ErrorState(
-            message: 'Unable to load levels.',
-            onRetry: _refresh,
+            message:
+                'Unable to load levels.',
+            onRetry:
+                _refresh,
           );
         }
 
-        final levels = snapshot.data ?? [];
+        final levels =
+            snapshot.data ??
+                [];
 
         if (levels.isEmpty) {
           return const _EmptyState(
-            icon: Icons.school_outlined,
-            title: 'No Levels Available',
-            message: 'Academic levels will appear here.',
+            icon:
+                Icons.school_outlined,
+            title:
+                'No Levels Available',
+            message:
+                'Academic levels will appear here.',
           );
         }
 
+        final horizontalPadding =
+            Responsive.horizontalPadding(
+          context,
+        );
+
+        final topPadding =
+            Responsive.spacing(
+          context,
+          base:
+              22,
+          min:
+              14,
+          max:
+              32,
+        );
+
+        final bottomPadding =
+            Responsive.scrollBottomPadding(
+          context,
+          base:
+              110,
+        );
+
+        final separator =
+            Responsive.spacing(
+          context,
+          base:
+              16,
+          min:
+              10,
+          max:
+              24,
+        );
+
         return RefreshIndicator(
-          onRefresh: _refresh,
-          color: AppColors.primary,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final maxWidth = isTablet ? 900.0 : constraints.maxWidth;
+          onRefresh:
+              _refresh,
+          color:
+              AppColors.primary,
+          child:
+              LayoutBuilder(
+            builder: (
+              context,
+              constraints,
+            ) {
+              final contentWidth =
+                  constraints.maxWidth >
+                          1100
+                      ? 1100.0
+                      : constraints
+                          .maxWidth;
 
               return Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: ListView.separated(
-                    physics: const AlwaysScrollableScrollPhysics(
-                      parent: BouncingScrollPhysics(),
+                child:
+                    ConstrainedBox(
+                  constraints:
+                      BoxConstraints(
+                    maxWidth:
+                        contentWidth,
+                  ),
+                  child:
+                      ListView.separated(
+                    physics:
+                        const AlwaysScrollableScrollPhysics(
+                      parent:
+                          BouncingScrollPhysics(),
                     ),
-                    padding: EdgeInsets.fromLTRB(
-                      isTablet ? 32 : 20,
-                      isTablet ? 28 : 22,
-                      isTablet ? 32 : 20,
-                      isTablet ? 120 : 110,
+                    padding:
+                        EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      topPadding,
+                      horizontalPadding,
+                      bottomPadding,
                     ),
-                    itemCount: levels.length,
-                    separatorBuilder: (_, _) {
-                      return SizedBox(height: isTablet ? 20 : 16);
+                    itemCount:
+                        levels.length,
+                    separatorBuilder:
+                        (
+                      _,
+                      _,
+                    ) {
+                      return SizedBox(
+                        height:
+                            separator,
+                      );
                     },
-                    itemBuilder: (context, index) {
-                      final level = levels[index];
+                    itemBuilder:
+                        (
+                      context,
+                      index,
+                    ) {
+                      final level =
+                          levels[
+                              index];
 
                       return LevelCard(
-                        name: level.name,
-                        description: level.description,
-                        imageUrl: level.imageUrl,
-                        moduleCount: level.moduleCount,
-                        onTap: () {
-                          widget.onLevelSelected(level);
+                        name:
+                            level.name,
+                        description:
+                            level.description,
+                        imageUrl:
+                            level.imageUrl,
+                        moduleCount:
+                            level.moduleCount,
+                        onTap:
+                            () {
+                          widget
+                              .onLevelSelected(
+                            level,
+                          );
                         },
                       );
                     },
@@ -338,12 +584,17 @@ class _LevelsViewState extends State<_LevelsView> {
 // MODULES VIEW
 // ============================================================================
 
-class _ModulesView extends StatefulWidget {
+class _ModulesView
+    extends StatefulWidget {
   final SupabaseClient supabase;
+
   final String levelId;
   final String levelName;
+
   final VoidCallback onBack;
-  final ValueChanged<_Module> onModuleSelected;
+
+  final ValueChanged<_Module>
+      onModuleSelected;
 
   const _ModulesView({
     required this.supabase,
@@ -354,41 +605,69 @@ class _ModulesView extends StatefulWidget {
   });
 
   @override
-  State<_ModulesView> createState() => _ModulesViewState();
+  State<_ModulesView> createState() =>
+      _ModulesViewState();
 }
 
-class _ModulesViewState extends State<_ModulesView> {
-  late Future<List<_Module>> _future;
+class _ModulesViewState
+    extends State<_ModulesView> {
+  late Future<
+      List<_Module>>
+      _future;
 
   @override
   void initState() {
     super.initState();
-    _future = _loadModules();
+
+    _future =
+        _loadModules();
   }
 
   // ==========================================================================
   // LOAD MODULES
   // ==========================================================================
 
-  Future<List<_Module>> _loadModules() async {
-    final response = await widget.supabase
-        .from('modules')
-        .select('''
-          id,
-          academic_level_id,
-          name,
-          description,
-          image_url,
-          display_order,
-          is_active
-          ''')
-        .eq('academic_level_id', widget.levelId)
-        .eq('is_active', true)
-        .order('display_order', ascending: true);
+  Future<List<_Module>>
+      _loadModules() async {
+    final response =
+        await widget.supabase
+            .from('modules')
+            .select(
+              '''
+              id,
+              academic_level_id,
+              name,
+              description,
+              image_url,
+              display_order,
+              is_active
+              ''',
+            )
+            .eq(
+              'academic_level_id',
+              widget.levelId,
+            )
+            .eq(
+              'is_active',
+              true,
+            )
+            .order(
+              'display_order',
+              ascending:
+                  true,
+            );
 
-    return (response as List).map((item) {
-      return _Module.fromMap(Map<String, dynamic>.from(item));
-    }).toList();
+    return (response as List)
+        .map(
+          (item) =>
+              _Module.fromMap(
+            Map<String,
+                dynamic>.from(
+              item,
+            ),
+          ),
+        )
+        .toList();
   }
 
   // ==========================================================================
@@ -396,8 +675,13 @@ class _ModulesViewState extends State<_ModulesView> {
   // ==========================================================================
 
   Future<void> _refresh() async {
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
-      _future = _loadModules();
+      _future =
+          _loadModules();
     });
 
     await _future;
@@ -407,46 +691,146 @@ class _ModulesViewState extends State<_ModulesView> {
   // HEADER
   // ==========================================================================
 
-  Widget _buildHeader(BuildContext context, bool isTablet) {
-    final theme = Theme.of(context);
+  Widget _buildHeader(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final headerPadding =
+        Responsive.spacing(
+      context,
+      base:
+          16,
+      min:
+          10,
+      max:
+          28,
+    );
+
+    final backButtonPadding =
+        Responsive.spacing(
+      context,
+      base:
+          9,
+      min:
+          7,
+      max:
+          12,
+    );
+
+    final iconSize =
+        Responsive.iconSize(
+      context,
+      base:
+          23,
+      min:
+          20,
+      max:
+          28,
+    );
+
+    final titleSize =
+        Responsive.titleSize(
+      context,
+      base:
+          20,
+      min:
+          18,
+      max:
+          28,
+    );
+
+    final gap =
+        Responsive.spacing(
+      context,
+      base:
+          12,
+      min:
+          8,
+      max:
+          18,
+    );
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        isTablet ? 24 : 16,
-        isTablet ? 18 : 12,
-        isTablet ? 24 : 16,
-        4,
+      padding:
+          EdgeInsets.fromLTRB(
+        headerPadding,
+        headerPadding,
+        headerPadding,
+        Responsive.spacing(
+          context,
+          base:
+              4,
+          min:
+              2,
+          max:
+              8,
+        ),
       ),
-      child: Row(
+      child:
+          Row(
         children: [
           Material(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: widget.onBack,
-              child: Padding(
-                padding: EdgeInsets.all(isTablet ? 11 : 9),
-                child: Icon(
-                  Icons.arrow_back_rounded,
-                  size: isTablet ? 27 : 23,
-                  color: theme.colorScheme.onSurface,
+            color: theme
+                .colorScheme
+                .onSurface
+                .withValues(
+              alpha:
+                  0.06,
+            ),
+            shape:
+                const CircleBorder(),
+            child:
+                InkWell(
+              customBorder:
+                  const CircleBorder(),
+              onTap:
+                  widget.onBack,
+              child:
+                  Padding(
+                padding:
+                    EdgeInsets.all(
+                  backButtonPadding,
+                ),
+                child:
+                    Icon(
+                  Icons
+                      .arrow_back_rounded,
+                  size:
+                      iconSize,
+                  color:
+                      theme
+                          .colorScheme
+                          .onSurface,
                 ),
               ),
             ),
           ),
 
-          SizedBox(width: isTablet ? 16 : 12),
+          SizedBox(
+            width:
+                gap,
+          ),
 
           Expanded(
-            child: Text(
+            child:
+                Text(
               widget.levelName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: isTablet ? 22 : 19,
-                fontWeight: FontWeight.w700,
-                color: theme.colorScheme.onSurface,
+              maxLines:
+                  1,
+              overflow:
+                  TextOverflow.ellipsis,
+              style:
+                  TextStyle(
+                fontSize:
+                    titleSize,
+                fontWeight:
+                    FontWeight.w700,
+                color:
+                    theme
+                        .colorScheme
+                        .onSurface,
               ),
             ),
           ),
@@ -460,66 +844,172 @@ class _ModulesViewState extends State<_ModulesView> {
   // ==========================================================================
 
   @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final isTablet = size.shortestSide >= 600;
-
+  Widget build(
+    BuildContext context,
+  ) {
     return Column(
       children: [
-        _buildHeader(context, isTablet),
+        _buildHeader(
+          context,
+        ),
 
         Expanded(
-          child: FutureBuilder<List<_Module>>(
-            future: _future,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+          child:
+              FutureBuilder<
+                  List<_Module>>(
+            future:
+                _future,
+            builder: (
+              context,
+              snapshot,
+            ) {
+              if (snapshot.connectionState ==
+                  ConnectionState.waiting) {
+                return const Center(
+                  child:
+                      CircularProgressIndicator(),
+                );
               }
 
               if (snapshot.hasError) {
                 return _ErrorState(
-                  message: 'Unable to load modules.',
-                  onRetry: _refresh,
+                  message:
+                      'Unable to load modules.',
+                  onRetry:
+                      _refresh,
                 );
               }
 
-              final modules = snapshot.data ?? [];
+              final modules =
+                  snapshot.data ??
+                      [];
 
               if (modules.isEmpty) {
                 return const _EmptyState(
-                  icon: Icons.menu_book_outlined,
-                  title: 'No Modules Available',
-                  message: 'Modules will appear here.',
+                  icon:
+                      Icons
+                          .menu_book_outlined,
+                  title:
+                      'No Modules Available',
+                  message:
+                      'Modules will appear here.',
                 );
               }
 
-              return RefreshIndicator(
-                onRefresh: _refresh,
-                color: AppColors.primary,
-                child: ListView.separated(
-                  physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  padding: EdgeInsets.fromLTRB(
-                    isTablet ? 32 : 20,
-                    isTablet ? 20 : 14,
-                    isTablet ? 32 : 20,
-                    isTablet ? 120 : 110,
-                  ),
-                  itemCount: modules.length,
-                  separatorBuilder: (_, _) {
-                    return const SizedBox(height: 12);
-                  },
-                  itemBuilder: (context, index) {
-                    final module = modules[index];
+              final horizontalPadding =
+                  Responsive.horizontalPadding(
+                context,
+              );
 
-                    return ModuleCard(
-                      name: module.name,
-                      description: module.description,
-                      imageUrl: module.imageUrl,
-                      onTap: () {
-                        widget.onModuleSelected(module);
-                      },
+              final topPadding =
+                  Responsive.spacing(
+                context,
+                base:
+                    14,
+                min:
+                    10,
+                max:
+                    24,
+              );
+
+              final bottomPadding =
+                  Responsive.scrollBottomPadding(
+                context,
+                base:
+                    110,
+              );
+
+              final separator =
+                  Responsive.spacing(
+                context,
+                base:
+                    12,
+                min:
+                    8,
+                max:
+                    18,
+              );
+
+              return RefreshIndicator(
+                onRefresh:
+                    _refresh,
+                color:
+                    AppColors.primary,
+                child:
+                    LayoutBuilder(
+                  builder: (
+                    context,
+                    constraints,
+                  ) {
+                    final contentWidth =
+                        constraints
+                                .maxWidth >
+                            1100
+                        ? 1100.0
+                        : constraints
+                            .maxWidth;
+
+                    return Center(
+                      child:
+                          ConstrainedBox(
+                        constraints:
+                            BoxConstraints(
+                          maxWidth:
+                              contentWidth,
+                        ),
+                        child:
+                            ListView.separated(
+                          physics:
+                              const AlwaysScrollableScrollPhysics(
+                            parent:
+                                BouncingScrollPhysics(),
+                          ),
+                          padding:
+                              EdgeInsets.fromLTRB(
+                            horizontalPadding,
+                            topPadding,
+                            horizontalPadding,
+                            bottomPadding,
+                          ),
+                          itemCount:
+                              modules.length,
+                          separatorBuilder:
+                              (
+                            _,
+                            _,
+                          ) {
+                            return SizedBox(
+                              height:
+                                  separator,
+                            );
+                          },
+                          itemBuilder:
+                              (
+                            context,
+                            index,
+                          ) {
+                            final module =
+                                modules[
+                                    index];
+
+                            return ModuleCard(
+                              name:
+                                  module.name,
+                              description:
+                                  module.description,
+                              imageUrl:
+                                  module.imageUrl,
+                              onTap:
+                                  () {
+                                widget
+                                    .onModuleSelected(
+                                  module,
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -571,15 +1061,37 @@ class _Module {
     required this.isActive,
   });
 
-  factory _Module.fromMap(Map<String, dynamic> map) {
+  factory _Module.fromMap(
+    Map<String, dynamic> map,
+  ) {
     return _Module(
-      id: map['id']?.toString() ?? '',
-      academicLevelId: map['academic_level_id']?.toString() ?? '',
-      name: map['name']?.toString() ?? '',
-      description: map['description']?.toString(),
-      imageUrl: map['image_url']?.toString(),
-      displayOrder: (map['display_order'] as num?)?.toInt() ?? 0,
-      isActive: map['is_active'] as bool? ?? true,
+      id:
+          map['id']
+                  ?.toString() ??
+              '',
+      academicLevelId:
+          map['academic_level_id']
+                  ?.toString() ??
+              '',
+      name:
+          map['name']
+                  ?.toString() ??
+              '',
+      description:
+          map['description']
+              ?.toString(),
+      imageUrl:
+          map['image_url']
+              ?.toString(),
+      displayOrder:
+          (map['display_order']
+                      as num?)
+                  ?.toInt() ??
+              0,
+      isActive:
+          map['is_active']
+                  as bool? ??
+              true,
     );
   }
 }
@@ -588,7 +1100,8 @@ class _Module {
 // EMPTY STATE
 // ============================================================================
 
-class _EmptyState extends StatelessWidget {
+class _EmptyState
+    extends StatelessWidget {
   final IconData icon;
   final String title;
   final String message;
@@ -600,50 +1113,151 @@ class _EmptyState extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  Widget build(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final iconSize =
+        Responsive.clamped(
+      context,
+      base:
+          65,
+      min:
+          52,
+      max:
+          82,
+    );
+
+    final titleSize =
+        Responsive.titleSize(
+      context,
+      base:
+          21,
+      min:
+          18,
+      max:
+          28,
+    );
+
+    final horizontalPadding =
+        Responsive.horizontalPadding(
+      context,
+    );
 
     return ListView(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
+      physics:
+          const AlwaysScrollableScrollPhysics(
+        parent:
+            BouncingScrollPhysics(),
       ),
       children: [
         SizedBox(
-          height: MediaQuery.sizeOf(context).height * 0.60,
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(30),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+          height:
+              MediaQuery.sizeOf(
+                    context,
+                  ).height *
+                  0.60,
+          child:
+              Center(
+            child:
+                Padding(
+              padding:
+                  EdgeInsets.symmetric(
+                horizontal:
+                    horizontalPadding,
+                vertical:
+                    30,
+              ),
+              child:
+                  Column(
+                mainAxisSize:
+                    MainAxisSize.min,
                 children: [
                   Icon(
                     icon,
-                    size: 65,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.30),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 21,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
+                    size:
+                        iconSize,
+                    color:
+                        theme
+                            .colorScheme
+                            .onSurface
+                            .withValues(
+                      alpha:
+                          0.30,
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  SizedBox(
+                    height:
+                        Responsive.spacing(
+                      context,
+                      base:
+                          16,
+                      min:
+                          10,
+                      max:
+                          22,
+                    ),
+                  ),
+
+                  Text(
+                    title,
+                    textAlign:
+                        TextAlign.center,
+                    style:
+                        TextStyle(
+                      fontSize:
+                          titleSize,
+                      fontWeight:
+                          FontWeight
+                              .bold,
+                      color:
+                          theme
+                              .colorScheme
+                              .onSurface,
+                    ),
+                  ),
+
+                  SizedBox(
+                    height:
+                        Responsive.spacing(
+                      context,
+                      base:
+                          8,
+                      min:
+                          6,
+                      max:
+                          12,
+                    ),
+                  ),
 
                   Text(
                     message,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.4,
-                      color: theme.colorScheme.onSurface.withValues(
-                        alpha: 0.60,
+                    textAlign:
+                        TextAlign.center,
+                    style:
+                        TextStyle(
+                      fontSize:
+                          Responsive.bodyTextSize(
+                        context,
+                        base:
+                            13,
+                        min:
+                            12,
+                        max:
+                            16,
+                      ),
+                      height:
+                          1.4,
+                      color:
+                          theme
+                              .colorScheme
+                              .onSurface
+                              .withValues(
+                        alpha:
+                            0.60,
                       ),
                     ),
                   ),
@@ -661,48 +1275,148 @@ class _EmptyState extends StatelessWidget {
 // ERROR STATE
 // ============================================================================
 
-class _ErrorState extends StatelessWidget {
+class _ErrorState
+    extends StatelessWidget {
   final String message;
-  final Future<void> Function() onRetry;
+  final Future<void>
+      Function()
+      onRetry;
 
-  const _ErrorState({required this.message, required this.onRetry});
+  const _ErrorState({
+    required this.message,
+    required this.onRetry,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  Widget build(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final iconSize =
+        Responsive.clamped(
+      context,
+      base:
+          60,
+      min:
+          50,
+      max:
+          76,
+    );
+
+    final titleSize =
+        Responsive.titleSize(
+      context,
+      base:
+          18,
+      min:
+          16,
+      max:
+          24,
+    );
+
+    final buttonHeight =
+        Responsive.buttonHeight(
+      context,
+    );
 
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(30),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.cloud_off_rounded,
-              size: 60,
-              color: theme.colorScheme.error,
-            ),
-
-            const SizedBox(height: 16),
-
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface,
+      child:
+          Padding(
+        padding:
+            EdgeInsets.all(
+          Responsive.cardPadding(
+            context,
+          ),
+        ),
+        child:
+            ConstrainedBox(
+          constraints:
+              const BoxConstraints(
+            maxWidth:
+                560,
+          ),
+          child:
+              Column(
+            mainAxisSize:
+                MainAxisSize.min,
+            children: [
+              Icon(
+                Icons
+                    .cloud_off_rounded,
+                size:
+                    iconSize,
+                color:
+                    theme
+                        .colorScheme
+                        .error,
               ),
-            ),
 
-            const SizedBox(height: 18),
+              SizedBox(
+                height:
+                    Responsive.spacing(
+                  context,
+                  base:
+                      16,
+                  min:
+                      10,
+                  max:
+                      22,
+                ),
+              ),
 
-            ElevatedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try Again'),
-            ),
-          ],
+              Text(
+                message,
+                textAlign:
+                    TextAlign.center,
+                style:
+                    TextStyle(
+                  fontSize:
+                      titleSize,
+                  fontWeight:
+                      FontWeight.bold,
+                  color:
+                      theme
+                          .colorScheme
+                          .onSurface,
+                ),
+              ),
+
+              SizedBox(
+                height:
+                    Responsive.spacing(
+                  context,
+                  base:
+                      18,
+                  min:
+                      12,
+                  max:
+                      24,
+                ),
+              ),
+
+              SizedBox(
+                height:
+                    buttonHeight,
+                child:
+                    ElevatedButton
+                        .icon(
+                  onPressed:
+                      onRetry,
+                  icon:
+                      const Icon(
+                    Icons
+                        .refresh_rounded,
+                  ),
+                  label:
+                      const Text(
+                    'Try Again',
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

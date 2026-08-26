@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/responsive/responsive.dart';
 import '../../core/theme/app_brand.dart';
 import '../../core/theme/app_colors.dart';
+import 'auth_config.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({
@@ -20,17 +19,6 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState
     extends State<RegisterScreen> {
-  // ===========================================================================
-  // CONSTANTS
-  // ===========================================================================
-
-  static const String _authRedirectUrl =
-      'medidata26://auth-callback';
-
-  // ===========================================================================
-  // CONTROLLERS
-  // ===========================================================================
-
   final _firstNameController =
       TextEditingController();
 
@@ -49,19 +37,14 @@ class _RegisterScreenState
   final _passwordController =
       TextEditingController();
 
-  // ===========================================================================
-  // STATE
-  // ===========================================================================
+  bool _isPasswordVisible =
+      false;
 
-  bool _isPasswordVisible = false;
+  bool _isLoading =
+      false;
 
-  bool _isLoading = false;
-
-  bool _registrationSubmitted = false;
-
-  // ===========================================================================
-  // DISPOSE
-  // ===========================================================================
+  bool _registrationSubmitted =
+      false;
 
   @override
   void dispose() {
@@ -75,9 +58,9 @@ class _RegisterScreenState
     super.dispose();
   }
 
-  // ===========================================================================
-  // DATE PICKER
-  // ===========================================================================
+  // ==========================================================================
+  // DATE
+  // ==========================================================================
 
   Future<void>
       _selectDateOfBirth() async {
@@ -86,33 +69,27 @@ class _RegisterScreenState
     final now =
         DateTime.now();
 
-    final initialDate =
-        DateTime(
-      now.year - 18,
-      now.month,
-      now.day,
-    );
-
-    final firstDate =
-        DateTime(
-      now.year - 100,
-      now.month,
-      now.day,
-    );
-
-    final lastDate =
-        DateTime(
-      now.year - 10,
-      now.month,
-      now.day,
-    );
-
     final pickedDate =
         await showDatePicker(
       context: context,
-      initialDate: initialDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
+      initialDate:
+          DateTime(
+        now.year - 18,
+        now.month,
+        now.day,
+      ),
+      firstDate:
+          DateTime(
+        now.year - 100,
+        now.month,
+        now.day,
+      ),
+      lastDate:
+          DateTime(
+        now.year - 10,
+        now.month,
+        now.day,
+      ),
       helpText:
           'Select your date of birth',
     );
@@ -122,20 +99,17 @@ class _RegisterScreenState
       return;
     }
 
-    final formattedDate =
-        '${pickedDate.day.toString().padLeft(2, '0')}/'
-        '${pickedDate.month.toString().padLeft(2, '0')}/'
-        '${pickedDate.year}';
-
     setState(() {
-      _dateOfBirthController
-          .text = formattedDate;
+      _dateOfBirthController.text =
+          '${pickedDate.day.toString().padLeft(2, '0')}/'
+          '${pickedDate.month.toString().padLeft(2, '0')}/'
+          '${pickedDate.year}';
     });
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // REGISTER
-  // ===========================================================================
+  // ==========================================================================
 
   Future<void> _register() async {
     FocusScope.of(context).unfocus();
@@ -152,7 +126,7 @@ class _RegisterScreenState
         _emailController.text
             .trim();
 
-    final dateOfBirthText =
+    final dob =
         _dateOfBirthController.text
             .trim();
 
@@ -163,20 +137,15 @@ class _RegisterScreenState
     final password =
         _passwordController.text;
 
-    // -------------------------------------------------------------------------
-    // VALIDATION
-    // -------------------------------------------------------------------------
-
     if (firstName.isEmpty ||
         lastName.isEmpty ||
         email.isEmpty ||
-        dateOfBirthText.isEmpty ||
+        dob.isEmpty ||
         phone.isEmpty ||
         password.isEmpty) {
       _showMessage(
         'Please complete all fields.',
       );
-
       return;
     }
 
@@ -184,7 +153,6 @@ class _RegisterScreenState
       _showMessage(
         'Please enter a valid email address.',
       );
-
       return;
     }
 
@@ -192,39 +160,27 @@ class _RegisterScreenState
       _showMessage(
         'Password must be at least 6 characters.',
       );
-
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // DATE
-    // -------------------------------------------------------------------------
+    final parts =
+        dob.split('/');
 
-    final dateParts =
-        dateOfBirthText.split('/');
-
-    if (dateParts.length != 3) {
+    if (parts.length != 3) {
       _showMessage(
         'Invalid date of birth.',
       );
-
       return;
     }
 
     final day =
-        int.tryParse(
-          dateParts[0],
-        );
+        int.tryParse(parts[0]);
 
     final month =
-        int.tryParse(
-          dateParts[1],
-        );
+        int.tryParse(parts[1]);
 
     final year =
-        int.tryParse(
-          dateParts[2],
-        );
+        int.tryParse(parts[2]);
 
     if (day == null ||
         month == null ||
@@ -232,7 +188,22 @@ class _RegisterScreenState
       _showMessage(
         'Invalid date of birth.',
       );
+      return;
+    }
 
+    final parsed =
+        DateTime(
+      year,
+      month,
+      day,
+    );
+
+    if (parsed.year != year ||
+        parsed.month != month ||
+        parsed.day != day) {
+      _showMessage(
+        'Invalid date of birth.',
+      );
       return;
     }
 
@@ -241,28 +212,27 @@ class _RegisterScreenState
         '${month.toString().padLeft(2, '0')}-'
         '${day.toString().padLeft(2, '0')}';
 
-    // -------------------------------------------------------------------------
-    // LOADING
-    // -------------------------------------------------------------------------
+    if (!mounted) {
+      return;
+    }
 
     setState(() {
-      _isLoading = true;
+      _isLoading =
+          true;
     });
 
     try {
       final supabase =
           Supabase.instance.client;
 
-      // -----------------------------------------------------------------------
-      // CREATE ACCOUNT
-      // -----------------------------------------------------------------------
-
       final response =
           await supabase.auth.signUp(
-        email: email,
-        password: password,
+        email:
+            email,
+        password:
+            password,
         emailRedirectTo:
-            _authRedirectUrl,
+            AuthConfig.redirectUrl,
         data: {
           'first_name':
               firstName,
@@ -272,8 +242,13 @@ class _RegisterScreenState
               '$firstName $lastName',
           'date_of_birth':
               dateOfBirth,
+
+          // Important:
+          // This is PROFILE DATA only.
+          // It is NOT Supabase Auth phone.
           'phone':
               phone,
+
           'role':
               'student',
         },
@@ -288,16 +263,28 @@ class _RegisterScreenState
         );
       }
 
-      if (!mounted) {
-        return;
-      }
+      // ----------------------------------------------------------------------
+      // Email must be confirmed.
+      // ----------------------------------------------------------------------
 
-      // -----------------------------------------------------------------------
-      // EMAIL CONFIRMATION REQUIRED
-      // -----------------------------------------------------------------------
-
-      if (response.session ==
+      if (user.emailConfirmedAt ==
           null) {
+        if (response.session !=
+            null) {
+          try {
+            await supabase.auth
+                .signOut();
+          } catch (e) {
+            debugPrint(
+              'Signup session cleanup error: $e',
+            );
+          }
+        }
+
+        if (!mounted) {
+          return;
+        }
+
         setState(() {
           _registrationSubmitted =
               true;
@@ -306,42 +293,34 @@ class _RegisterScreenState
         return;
       }
 
-      // -----------------------------------------------------------------------
-      // SESSION EXISTS
-      //
-      // This can happen when email confirmation
-      // is disabled in Supabase.
-      //
-      // During production we expect confirmation
-      // to be enabled, so this branch should not
-      // be the normal registration path.
-      // -----------------------------------------------------------------------
+      if (!mounted) {
+        return;
+      }
 
       _showMessage(
         'Account created successfully.',
       );
 
-      Navigator.of(context).pop();
-    } on AuthException catch (error) {
-      if (!mounted) {
-        return;
+      Navigator.of(context)
+          .pop();
+    } on AuthException catch (
+      error
+    ) {
+      if (mounted) {
+        _showMessage(
+          error.message,
+        );
       }
-
-      _showMessage(
-        error.message,
-      );
     } catch (error) {
       debugPrint(
         'Registration error: $error',
       );
 
-      if (!mounted) {
-        return;
+      if (mounted) {
+        _showMessage(
+          'Registration failed. Please try again.',
+        );
       }
-
-      _showMessage(
-        'Registration failed. Please try again.',
-      );
     } finally {
       if (mounted) {
         setState(() {
@@ -352,26 +331,9 @@ class _RegisterScreenState
     }
   }
 
-  // ===========================================================================
-  // EMAIL VALIDATION
-  // ===========================================================================
-
-  bool _isValidEmail(
-    String email,
-  ) {
-    final pattern =
-        RegExp(
-      r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-    );
-
-    return pattern.hasMatch(
-      email,
-    );
-  }
-
-  // ===========================================================================
-  // RESEND CONFIRMATION EMAIL
-  // ===========================================================================
+  // ==========================================================================
+  // RESEND
+  // ==========================================================================
 
   Future<void>
       _resendConfirmationEmail() async {
@@ -379,22 +341,25 @@ class _RegisterScreenState
         _emailController.text
             .trim();
 
-    if (email.isEmpty ||
-        !_isValidEmail(email)) {
+    if (!_isValidEmail(email)) {
       _showMessage(
         'Please enter a valid email address.',
       );
+      return;
+    }
 
+    if (!mounted) {
       return;
     }
 
     setState(() {
-      _isLoading = true;
+      _isLoading =
+          true;
     });
 
     try {
-      await Supabase
-          .instance.client.auth
+      await Supabase.instance.client
+          .auth
           .resend(
         type:
             OtpType.signup,
@@ -402,33 +367,29 @@ class _RegisterScreenState
             email,
       );
 
-      if (!mounted) {
-        return;
+      if (mounted) {
+        _showMessage(
+          'A new confirmation email has been sent.',
+        );
       }
-
-      _showMessage(
-        'A new confirmation email has been sent.',
-      );
-    } on AuthException catch (error) {
-      if (!mounted) {
-        return;
+    } on AuthException catch (
+      error
+    ) {
+      if (mounted) {
+        _showMessage(
+          error.message,
+        );
       }
-
-      _showMessage(
-        error.message,
-      );
     } catch (error) {
       debugPrint(
         'Resend confirmation error: $error',
       );
 
-      if (!mounted) {
-        return;
+      if (mounted) {
+        _showMessage(
+          'Unable to resend confirmation email.',
+        );
       }
-
-      _showMessage(
-        'Unable to resend confirmation email.',
-      );
     } finally {
       if (mounted) {
         setState(() {
@@ -439,17 +400,30 @@ class _RegisterScreenState
     }
   }
 
-  // ===========================================================================
-  // LOGIN
-  // ===========================================================================
+  // ==========================================================================
+  // VALIDATION
+  // ==========================================================================
 
-  void _goToLogin() {
-    Navigator.of(context).pop();
+  bool _isValidEmail(
+    String email,
+  ) {
+    return RegExp(
+      r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+    ).hasMatch(email);
   }
 
-  // ===========================================================================
+  // ==========================================================================
+  // NAVIGATION
+  // ==========================================================================
+
+  void _goToLogin() {
+    Navigator.of(context)
+        .pop();
+  }
+
+  // ==========================================================================
   // MESSAGE
-  // ===========================================================================
+  // ==========================================================================
 
   void _showMessage(
     String message,
@@ -468,9 +442,9 @@ class _RegisterScreenState
       );
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // BUILD
-  // ===========================================================================
+  // ==========================================================================
 
   @override
   Widget build(
@@ -489,6 +463,36 @@ class _RegisterScreenState
             _goToLogin,
       );
     }
+
+    final horizontalPadding =
+        Responsive.horizontalPadding(
+      context,
+    );
+
+    final contentWidth =
+        Responsive.contentWidth(
+      context,
+    );
+
+    final cardPadding =
+        Responsive.cardPadding(
+      context,
+    );
+
+    final fieldHeight =
+        Responsive.fieldHeight(
+      context,
+    );
+
+    final buttonHeight =
+        Responsive.buttonHeight(
+      context,
+    );
+
+    final cardRadius =
+        Responsive.cardRadius(
+      context,
+    );
 
     return Scaffold(
       resizeToAvoidBottomInset:
@@ -535,61 +539,18 @@ class _RegisterScreenState
                 context,
               );
 
-              final horizontalPadding =
-                  Responsive
-                      .horizontalPadding(
-                context,
-              );
-
               final availableWidth =
-                  constraints
-                      .maxWidth -
-                  (horizontalPadding *
-                      2);
+                  constraints.maxWidth -
+                  horizontalPadding *
+                      2;
 
-              final responsiveContentWidth =
-                  Responsive
-                      .contentWidth(
-                context,
-              );
-
-              final contentWidth =
-                  responsiveContentWidth >
+              final width =
+                  contentWidth <
                           availableWidth
-                      ? availableWidth
-                      : responsiveContentWidth;
+                      ? contentWidth
+                      : availableWidth;
 
-              final cardPadding =
-                  Responsive
-                      .cardPadding(
-                context,
-              );
-
-              final logoSize =
-                  Responsive
-                      .logoSize(
-                context,
-              );
-
-              final fieldHeight =
-                  Responsive
-                      .fieldHeight(
-                context,
-              );
-
-              final buttonHeight =
-                  Responsive
-                      .buttonHeight(
-                context,
-              );
-
-              final cardRadius =
-                  Responsive
-                      .cardRadius(
-                context,
-              );
-
-              final isVeryNarrow =
+              final narrow =
                   availableWidth <
                       360;
 
@@ -609,38 +570,356 @@ class _RegisterScreenState
                           : 20,
                 ),
                 child:
-                    ConstrainedBox(
-                  constraints:
-                      BoxConstraints(
-                    minHeight:
-                        constraints
-                                .maxHeight -
-                            (keyboardIsOpen
-                                ? 24
-                                : 40),
-                  ),
+                    Center(
                   child:
-                      Center(
+                      SizedBox(
+                    width:
+                        width,
                     child:
-                        SizedBox(
-                      width:
-                          contentWidth,
-                      child:
-                          _buildRegisterContent(
-                        context,
-                        isVeryNarrow:
-                            isVeryNarrow,
-                        cardPadding:
+                        Column(
+                      children: [
+                        Align(
+                          alignment:
+                              Alignment.centerLeft,
+                          child:
+                              IconButton(
+                            onPressed:
+                                _goToLogin,
+                            icon:
+                                const Icon(
+                              Icons
+                                  .arrow_back_rounded,
+                            ),
+                          ),
+                        ),
+
+                        Image.asset(
+                          AppBrand
+                              .logoPath,
+                          height:
+                              Responsive
+                                  .logoSize(
+                            context,
+                          ),
+                        ),
+
+                        const SizedBox(
+                          height:
+                              14,
+                        ),
+
+                        Container(
+                          padding:
+                              EdgeInsets.all(
                             cardPadding,
-                        logoSize:
-                            logoSize,
-                        fieldHeight:
-                            fieldHeight,
-                        buttonHeight:
-                            buttonHeight,
-                        cardRadius:
-                            cardRadius,
-                      ),
+                          ),
+                          decoration:
+                              BoxDecoration(
+                            color:
+                                Colors.white
+                                    .withValues(
+                              alpha:
+                                  0.92,
+                            ),
+                            borderRadius:
+                                BorderRadius.circular(
+                              cardRadius,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    Colors.black
+                                        .withValues(
+                                  alpha:
+                                      0.05,
+                                ),
+                                blurRadius:
+                                    22,
+                                offset:
+                                    const Offset(
+                                  0,
+                                  8,
+                                ),
+                              ),
+                            ],
+                          ),
+                          child:
+                              Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment
+                                    .stretch,
+                            children: [
+                              const AutoSizeText(
+                                'Create your Account',
+                                maxLines:
+                                    1,
+                                minFontSize:
+                                    21,
+                                maxFontSize:
+                                    29,
+                                textAlign:
+                                    TextAlign
+                                        .center,
+                                style:
+                                    TextStyle(
+                                  fontSize:
+                                      29,
+                                  fontWeight:
+                                      FontWeight
+                                          .bold,
+                                ),
+                              ),
+
+                              const SizedBox(
+                                height:
+                                    7,
+                              ),
+
+                              const Text(
+                                'Create an account to continue!',
+                                textAlign:
+                                    TextAlign
+                                        .center,
+                                style:
+                                    TextStyle(
+                                  fontSize:
+                                      13,
+                                  color:
+                                      Color(
+                                    0xFF707784,
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(
+                                height:
+                                    20,
+                              ),
+
+                              if (narrow)
+                                Column(
+                                  children: [
+                                    _field(
+                                      label:
+                                          'First Name',
+                                      controller:
+                                          _firstNameController,
+                                      hint:
+                                          'First name',
+                                      icon:
+                                          Icons
+                                              .person_outline,
+                                      height:
+                                          fieldHeight,
+                                      keyboardType:
+                                          TextInputType
+                                              .name,
+                                    ),
+                                    const SizedBox(
+                                      height:
+                                          12,
+                                    ),
+                                    _field(
+                                      label:
+                                          'Last Name',
+                                      controller:
+                                          _lastNameController,
+                                      hint:
+                                          'Last name',
+                                      icon:
+                                          Icons
+                                              .person_outline,
+                                      height:
+                                          fieldHeight,
+                                      keyboardType:
+                                          TextInputType
+                                              .name,
+                                    ),
+                                  ],
+                                )
+                              else
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child:
+                                          _field(
+                                        label:
+                                            'First Name',
+                                        controller:
+                                            _firstNameController,
+                                        hint:
+                                            'First name',
+                                        icon:
+                                            Icons
+                                                .person_outline,
+                                        height:
+                                            fieldHeight,
+                                        keyboardType:
+                                            TextInputType
+                                                .name,
+                                      ),
+                                    ),
+                                    const SizedBox(
+                                      width:
+                                          10,
+                                    ),
+                                    Expanded(
+                                      child:
+                                          _field(
+                                        label:
+                                            'Last Name',
+                                        controller:
+                                            _lastNameController,
+                                        hint:
+                                            'Last name',
+                                        icon:
+                                            Icons
+                                                .person_outline,
+                                        height:
+                                            fieldHeight,
+                                        keyboardType:
+                                            TextInputType
+                                                .name,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                              const SizedBox(
+                                height:
+                                    12,
+                              ),
+
+                              _field(
+                                label:
+                                    'Email',
+                                controller:
+                                    _emailController,
+                                hint:
+                                    'Enter your email',
+                                icon:
+                                    Icons
+                                        .email_outlined,
+                                height:
+                                    fieldHeight,
+                                keyboardType:
+                                    TextInputType
+                                        .emailAddress,
+                              ),
+
+                              const SizedBox(
+                                height:
+                                    12,
+                              ),
+
+                              _dateField(
+                                height:
+                                    fieldHeight,
+                              ),
+
+                              const SizedBox(
+                                height:
+                                    12,
+                              ),
+
+                              _field(
+                                label:
+                                    'Phone',
+                                controller:
+                                    _phoneController,
+                                hint:
+                                    'Phone number',
+                                icon:
+                                    Icons
+                                        .phone_outlined,
+                                height:
+                                    fieldHeight,
+                                keyboardType:
+                                    TextInputType
+                                        .phone,
+                              ),
+
+                              const SizedBox(
+                                height:
+                                    12,
+                              ),
+
+                              _passwordField(
+                                height:
+                                    fieldHeight,
+                              ),
+
+                              const SizedBox(
+                                height:
+                                    18,
+                              ),
+
+                              SizedBox(
+                                height:
+                                    buttonHeight,
+                                child:
+                                    FilledButton(
+                                  onPressed:
+                                      _isLoading
+                                          ? null
+                                          : _register,
+                                  child:
+                                      _isLoading
+                                          ? const SizedBox(
+                                              width:
+                                                  21,
+                                              height:
+                                                  21,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                strokeWidth:
+                                                    2.4,
+                                                color:
+                                                    Colors.white,
+                                              ),
+                                            )
+                                          : const Text(
+                                              'Register',
+                                            ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(
+                          height:
+                              16,
+                        ),
+
+                        Wrap(
+                          alignment:
+                              WrapAlignment
+                                  .center,
+                          children: [
+                            const Text(
+                              'Already have an account? ',
+                            ),
+                            TextButton(
+                              onPressed:
+                                  _goToLogin,
+                              child:
+                                  Text(
+                                'Log In',
+                                style:
+                                    TextStyle(
+                                  fontWeight:
+                                      FontWeight
+                                          .w700,
+                                  color:
+                                      AppColors
+                                          .primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -652,620 +931,14 @@ class _RegisterScreenState
     );
   }
 
-  // ===========================================================================
-  // REGISTER CONTENT
-  // ===========================================================================
-
-  Widget _buildRegisterContent(
-    BuildContext context, {
-    required bool isVeryNarrow,
-    required double cardPadding,
-    required double logoSize,
-    required double fieldHeight,
-    required double buttonHeight,
-    required double cardRadius,
-  }) {
-    return Column(
-      mainAxisSize:
-          MainAxisSize.min,
-      children: [
-        // =====================================================================
-        // BACK
-        // =====================================================================
-
-        Align(
-          alignment:
-              Alignment.centerLeft,
-          child:
-              IconButton(
-            onPressed:
-                _goToLogin,
-            icon:
-                const Icon(
-              Icons
-                  .arrow_back_rounded,
-              size:
-                  25,
-              color:
-                  Color(
-                0xFF20242C,
-              ),
-            ),
-            padding:
-                EdgeInsets.zero,
-            constraints:
-                const BoxConstraints(),
-          ),
-        ),
-
-        SizedBox(
-          height:
-              Responsive.value<double>(
-            context,
-            phone:
-                8,
-            tablet:
-                12,
-            large:
-                16,
-          ),
-        ),
-
-        // =====================================================================
-        // LOGO
-        // =====================================================================
-
-        Image.asset(
-          AppBrand.logoPath,
-          height:
-              logoSize,
-          fit:
-              BoxFit.contain,
-        ),
-
-        SizedBox(
-          height:
-              Responsive.value<double>(
-            context,
-            phone:
-                12,
-            tablet:
-                16,
-            large:
-                18,
-          ),
-        ),
-
-        // =====================================================================
-        // CARD
-        // =====================================================================
-
-        ClipRRect(
-          borderRadius:
-              BorderRadius.circular(
-            cardRadius,
-          ),
-          child:
-              BackdropFilter(
-            filter:
-                ImageFilter.blur(
-              sigmaX:
-                  12,
-              sigmaY:
-                  12,
-            ),
-            child:
-                Container(
-              width:
-                  double.infinity,
-              padding:
-                  EdgeInsets.all(
-                cardPadding,
-              ),
-              decoration:
-                  BoxDecoration(
-                color:
-                    Colors.white.withValues(
-                  alpha:
-                      0.35,
-                ),
-                borderRadius:
-                    BorderRadius.circular(
-                  cardRadius,
-                ),
-                border:
-                    Border.all(
-                  color:
-                      Colors.white.withValues(
-                    alpha:
-                        0.5,
-                  ),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        Colors.black.withValues(
-                      alpha:
-                          0.04,
-                    ),
-                    blurRadius:
-                        18,
-                    offset:
-                        const Offset(
-                      0,
-                      6,
-                    ),
-                  ),
-                ],
-              ),
-              child:
-                  Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-                children: [
-                  // ===========================================================
-                  // TITLE
-                  // ===========================================================
-
-                  const SizedBox(
-                    width:
-                        double.infinity,
-                    child:
-                        AutoSizeText(
-                      'Create your Account',
-                      maxLines:
-                          1,
-                      minFontSize:
-                          21,
-                      maxFontSize:
-                          29,
-                      stepGranularity:
-                          1,
-                      textAlign:
-                          TextAlign.center,
-                      style:
-                          TextStyle(
-                        fontSize:
-                            29,
-                        fontWeight:
-                            FontWeight.bold,
-                        color:
-                            Color(
-                          0xFF151922,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(
-                    height:
-                        Responsive.value<double>(
-                      context,
-                      phone:
-                          6,
-                      tablet:
-                          8,
-                      large:
-                          10,
-                    ),
-                  ),
-
-                  const SizedBox(
-                    width:
-                        double.infinity,
-                    child:
-                        Text(
-                      'Create an account to continue!',
-                      textAlign:
-                          TextAlign.center,
-                      style:
-                          TextStyle(
-                        fontSize:
-                            13,
-                        color:
-                            Color(
-                          0xFF707784,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(
-                    height:
-                        Responsive.value<double>(
-                      context,
-                      phone:
-                          18,
-                      tablet:
-                          22,
-                      large:
-                          24,
-                    ),
-                  ),
-
-                  // ===========================================================
-                  // FIRST / LAST NAME
-                  // ===========================================================
-
-                  if (isVeryNarrow)
-                    Column(
-                      children: [
-                        _buildField(
-                          label:
-                              'First Name',
-                          controller:
-                              _firstNameController,
-                          hint:
-                              'First name',
-                          icon:
-                              Icons
-                                  .person_outline_rounded,
-                          height:
-                              fieldHeight,
-                          keyboardType:
-                              TextInputType
-                                  .name,
-                        ),
-                        const SizedBox(
-                          height:
-                              10,
-                        ),
-                        _buildField(
-                          label:
-                              'Last Name',
-                          controller:
-                              _lastNameController,
-                          hint:
-                              'Last name',
-                          icon:
-                              Icons
-                                  .person_outline_rounded,
-                          height:
-                              fieldHeight,
-                          keyboardType:
-                              TextInputType
-                                  .name,
-                        ),
-                      ],
-                    )
-                  else
-                    Row(
-                      children: [
-                        Expanded(
-                          child:
-                              _buildField(
-                            label:
-                                'First Name',
-                            controller:
-                                _firstNameController,
-                            hint:
-                                'First name',
-                            icon:
-                                Icons
-                                    .person_outline_rounded,
-                            height:
-                                fieldHeight,
-                            keyboardType:
-                                TextInputType
-                                    .name,
-                          ),
-                        ),
-                        const SizedBox(
-                          width:
-                              10,
-                        ),
-                        Expanded(
-                          child:
-                              _buildField(
-                            label:
-                                'Last Name',
-                            controller:
-                                _lastNameController,
-                            hint:
-                                'Last name',
-                            icon:
-                                Icons
-                                    .person_outline_rounded,
-                            height:
-                                fieldHeight,
-                            keyboardType:
-                                TextInputType
-                                    .name,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                  const SizedBox(
-                    height:
-                        12,
-                  ),
-
-                  // ===========================================================
-                  // EMAIL
-                  // ===========================================================
-
-                  _buildField(
-                    label:
-                        'Email',
-                    controller:
-                        _emailController,
-                    hint:
-                        'Enter your email',
-                    icon:
-                        Icons
-                            .email_outlined,
-                    height:
-                        fieldHeight,
-                    keyboardType:
-                        TextInputType
-                            .emailAddress,
-                    textInputAction:
-                        TextInputAction
-                            .next,
-                  ),
-
-                  const SizedBox(
-                    height:
-                        12,
-                  ),
-
-                  // ===========================================================
-                  // DOB
-                  // ===========================================================
-
-                  _buildDateField(
-                    height:
-                        fieldHeight,
-                  ),
-
-                  const SizedBox(
-                    height:
-                        12,
-                  ),
-
-                  // ===========================================================
-                  // PHONE
-                  // ===========================================================
-
-                  _buildField(
-                    label:
-                        'Phone',
-                    controller:
-                        _phoneController,
-                    hint:
-                        'Enter your phone number',
-                    icon:
-                        Icons
-                            .phone_outlined,
-                    height:
-                        fieldHeight,
-                    keyboardType:
-                        TextInputType
-                            .phone,
-                    textInputAction:
-                        TextInputAction
-                            .next,
-                  ),
-
-                  const SizedBox(
-                    height:
-                        12,
-                  ),
-
-                  // ===========================================================
-                  // PASSWORD
-                  // ===========================================================
-
-                  _buildPasswordField(
-                    height:
-                        fieldHeight,
-                  ),
-
-                  SizedBox(
-                    height:
-                        Responsive.value<double>(
-                      context,
-                      phone:
-                          16,
-                      tablet:
-                          18,
-                      large:
-                          20,
-                    ),
-                  ),
-
-                  // ===========================================================
-                  // REGISTER BUTTON
-                  // ===========================================================
-
-                  SizedBox(
-                    width:
-                        double.infinity,
-                    height:
-                        buttonHeight,
-                    child:
-                        DecoratedBox(
-                      decoration:
-                          BoxDecoration(
-                        gradient:
-                            LinearGradient(
-                          colors: [
-                            AppColors.primary,
-                            AppColors.primary
-                                .withValues(
-                              alpha:
-                                  0.85,
-                            ),
-                          ],
-                        ),
-                        borderRadius:
-                            BorderRadius.circular(
-                          16,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary
-                                .withValues(
-                              alpha:
-                                  0.18,
-                            ),
-                            blurRadius:
-                                10,
-                            offset:
-                                const Offset(
-                              0,
-                              5,
-                            ),
-                          ),
-                        ],
-                      ),
-                      child:
-                          ElevatedButton(
-                        onPressed:
-                            _isLoading
-                                ? null
-                                : _register,
-                        style:
-                            ElevatedButton.styleFrom(
-                          backgroundColor:
-                              Colors.transparent,
-                          disabledBackgroundColor:
-                              Colors.transparent,
-                          shadowColor:
-                              Colors.transparent,
-                          shape:
-                              RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(
-                              16,
-                            ),
-                          ),
-                        ),
-                        child:
-                            _isLoading
-                                ? const SizedBox(
-                                    width:
-                                        21,
-                                    height:
-                                        21,
-                                    child:
-                                        CircularProgressIndicator(
-                                      strokeWidth:
-                                          2.5,
-                                      color:
-                                          Colors.white,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Register',
-                                    style:
-                                        TextStyle(
-                                      fontSize:
-                                          17,
-                                      fontWeight:
-                                          FontWeight.w600,
-                                      color:
-                                          Colors.white,
-                                    ),
-                                  ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-
-        SizedBox(
-          height:
-              Responsive.value<double>(
-            context,
-            phone:
-                16,
-            tablet:
-                22,
-            large:
-                28,
-          ),
-        ),
-
-        // =====================================================================
-        // LOGIN
-        // =====================================================================
-
-        Row(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child:
-                  Text(
-                'Already have an account?',
-                overflow:
-                    TextOverflow.ellipsis,
-                style:
-                    const TextStyle(
-                  fontSize:
-                      13,
-                  color:
-                      Color(
-                    0xFF707784,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(
-              width:
-                  5,
-            ),
-            TextButton(
-              onPressed:
-                  _goToLogin,
-              style:
-                  TextButton.styleFrom(
-                padding:
-                    EdgeInsets.zero,
-                minimumSize:
-                    Size.zero,
-                tapTargetSize:
-                    MaterialTapTargetSize
-                        .shrinkWrap,
-              ),
-              child:
-                  Text(
-                'Log In',
-                style:
-                    TextStyle(
-                  fontSize:
-                      13,
-                  fontWeight:
-                      FontWeight.w600,
-                  color:
-                      AppColors.primary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // ===========================================================================
-  // GENERIC FIELD
-  // ===========================================================================
-
-  Widget _buildField({
+  Widget _field({
     required String label,
-    required TextEditingController controller,
+    required TextEditingController
+        controller,
     required String hint,
     required IconData icon,
     required double height,
     TextInputType? keyboardType,
-    TextInputAction? textInputAction,
   }) {
     return Column(
       crossAxisAlignment:
@@ -1279,10 +952,6 @@ class _RegisterScreenState
                 14,
             fontWeight:
                 FontWeight.w600,
-            color:
-                Color(
-              0xFF252A34,
-            ),
           ),
         ),
         const SizedBox(
@@ -1298,14 +967,30 @@ class _RegisterScreenState
                 controller,
             keyboardType:
                 keyboardType,
-            textInputAction:
-                textInputAction,
             decoration:
-                _inputDecoration(
-              hint:
+                InputDecoration(
+              hintText:
                   hint,
-              icon:
-                  icon,
+              prefixIcon:
+                  Icon(
+                icon,
+              ),
+              border:
+                  OutlineInputBorder(
+                borderRadius:
+                    BorderRadius
+                        .circular(
+                  16,
+                ),
+                borderSide:
+                    BorderSide.none,
+              ),
+              filled:
+                  true,
+              fillColor:
+                  const Color(
+                0xFFF8F9FB,
+              ),
             ),
           ),
         ),
@@ -1313,11 +998,7 @@ class _RegisterScreenState
     );
   }
 
-  // ===========================================================================
-  // DATE FIELD
-  // ===========================================================================
-
-  Widget _buildDateField({
+  Widget _dateField({
     required double height,
   }) {
     return Column(
@@ -1332,10 +1013,6 @@ class _RegisterScreenState
                 14,
             fontWeight:
                 FontWeight.w600,
-            color:
-                Color(
-              0xFF252A34,
-            ),
           ),
         ),
         const SizedBox(
@@ -1354,20 +1031,24 @@ class _RegisterScreenState
             onTap:
                 _selectDateOfBirth,
             decoration:
-                _inputDecoration(
-              hint:
+                const InputDecoration(
+              hintText:
                   'DD/MM/YYYY',
-              icon:
-                  Icons
-                      .calendar_today_outlined,
-              suffixIcon:
-                  const Icon(
+              prefixIcon:
+                  Icon(
                 Icons
-                    .arrow_drop_down_rounded,
-                color:
-                    Color(
-                  0xFF606775,
-                ),
+                    .calendar_today_outlined,
+              ),
+              border:
+                  OutlineInputBorder(
+                borderSide:
+                    BorderSide.none,
+              ),
+              filled:
+                  true,
+              fillColor:
+                  Color(
+                0xFFF8F9FB,
               ),
             ),
           ),
@@ -1376,11 +1057,7 @@ class _RegisterScreenState
     );
   }
 
-  // ===========================================================================
-  // PASSWORD
-  // ===========================================================================
-
-  Widget _buildPasswordField({
+  Widget _passwordField({
     required double height,
   }) {
     return Column(
@@ -1395,10 +1072,6 @@ class _RegisterScreenState
                 14,
             fontWeight:
                 FontWeight.w600,
-            color:
-                Color(
-              0xFF252A34,
-            ),
           ),
         ),
         const SizedBox(
@@ -1414,17 +1087,17 @@ class _RegisterScreenState
                 _passwordController,
             obscureText:
                 !_isPasswordVisible,
-            textInputAction:
-                TextInputAction.done,
             onSubmitted:
                 (_) => _register(),
             decoration:
-                _inputDecoration(
-              hint:
+                InputDecoration(
+              hintText:
                   'Enter your password',
-              icon:
-                  Icons
-                      .lock_outline_rounded,
+              prefixIcon:
+                  const Icon(
+                Icons
+                    .lock_outline_rounded,
+              ),
               suffixIcon:
                   IconButton(
                 onPressed:
@@ -1441,11 +1114,18 @@ class _RegisterScreenState
                           .visibility_off_outlined
                       : Icons
                           .visibility_outlined,
-                  color:
-                      const Color(
-                    0xFF606775,
-                  ),
                 ),
+              ),
+              border:
+                  const OutlineInputBorder(
+                borderSide:
+                    BorderSide.none,
+              ),
+              filled:
+                  true,
+              fillColor:
+                  const Color(
+                0xFFF8F9FB,
               ),
             ),
           ),
@@ -1453,93 +1133,19 @@ class _RegisterScreenState
       ],
     );
   }
-
-  // ===========================================================================
-  // INPUT DECORATION
-  // ===========================================================================
-
-  InputDecoration _inputDecoration({
-    required String hint,
-    required IconData icon,
-    Widget? suffixIcon,
-  }) {
-    return InputDecoration(
-      hintText:
-          hint,
-      prefixIcon:
-          Icon(
-        icon,
-        color:
-            const Color(
-          0xFF606775,
-        ),
-      ),
-      suffixIcon:
-          suffixIcon,
-      filled:
-          true,
-      fillColor:
-          Colors.white.withValues(
-        alpha:
-            0.65,
-      ),
-      contentPadding:
-          const EdgeInsets.symmetric(
-        horizontal:
-            16,
-      ),
-      border:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(
-          16,
-        ),
-        borderSide:
-            BorderSide.none,
-      ),
-      enabledBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(
-          16,
-        ),
-        borderSide:
-            BorderSide.none,
-      ),
-      focusedBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(
-          16,
-        ),
-        borderSide:
-            BorderSide(
-          color:
-              AppColors.primary,
-          width:
-              1.5,
-        ),
-      ),
-    );
-  }
 }
 
 // ============================================================================
-// CHECK EMAIL VIEW
+// CHECK EMAIL
 // ============================================================================
 
 class _CheckEmailView
     extends StatelessWidget {
   final String email;
-
   final bool isLoading;
-
   final Future<void>
-      Function()
-      onResend;
-
-  final VoidCallback
-      onBackToLogin;
+      Function() onResend;
+  final VoidCallback onBackToLogin;
 
   const _CheckEmailView({
     required this.email,
@@ -1552,360 +1158,198 @@ class _CheckEmailView
   Widget build(
     BuildContext context,
   ) {
-    final horizontalPadding =
-        Responsive
-            .horizontalPadding(
-      context,
-    );
-
-    final contentWidth =
-        Responsive
-            .contentWidth(
-      context,
-    );
-
-    final cardPadding =
-        Responsive
-            .cardPadding(
-      context,
-    );
-
-    final cardRadius =
-        Responsive
-            .cardRadius(
-      context,
-    );
-
     return Scaffold(
       body:
-          Container(
-        width:
-            double.infinity,
-        height:
-            double.infinity,
-        decoration:
-            const BoxDecoration(
-          gradient:
-              LinearGradient(
-            begin:
-                Alignment.topLeft,
-            end:
-                Alignment.bottomRight,
-            colors: [
-              Color(
-                0xFFE0ECFF,
-              ),
-              Color(
-                0xFFF5F7FA,
-              ),
-              Color(
-                0xFFE8EEF7,
-              ),
-            ],
-          ),
-        ),
+          SafeArea(
         child:
-            SafeArea(
+            Center(
           child:
-              LayoutBuilder(
-            builder:
-                (
-              context,
-              constraints,
-            ) {
-              final availableWidth =
-                  constraints
-                      .maxWidth -
-                  (horizontalPadding *
-                      2);
-
-              final width =
-                  contentWidth >
-                          availableWidth
-                      ? availableWidth
-                      : contentWidth;
-
-              return SingleChildScrollView(
-                padding:
-                    EdgeInsets.symmetric(
-                  horizontal:
-                      horizontalPadding,
-                  vertical:
-                      24,
-                ),
+              SingleChildScrollView(
+            padding:
+                EdgeInsets.all(
+              Responsive.cardPadding(
+                context,
+              ),
+            ),
+            child:
+                ConstrainedBox(
+              constraints:
+                  const BoxConstraints(
+                maxWidth:
+                    620,
+              ),
+              child:
+                  Card(
+                elevation:
+                    0,
                 child:
-                    ConstrainedBox(
-                  constraints:
-                      BoxConstraints(
-                    minHeight:
-                        constraints
-                            .maxHeight -
-                        48,
+                    Padding(
+                  padding:
+                      EdgeInsets.all(
+                    Responsive.cardPadding(
+                      context,
+                    ),
                   ),
                   child:
-                      Center(
-                    child:
-                        SizedBox(
-                      width:
-                          width,
-                      child:
-                          ClipRRect(
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                          cardRadius,
+                      Column(
+                    mainAxisSize:
+                        MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons
+                            .mark_email_read_outlined,
+                        size:
+                            Responsive.clamped(
+                          context,
+                          base:
+                              80,
+                          min:
+                              64,
+                          max:
+                              104,
+                        ),
+                        color:
+                            AppColors
+                                .primary,
+                      ),
+                      const SizedBox(
+                        height:
+                            22,
+                      ),
+                      Text(
+                        'Check your email',
+                        textAlign:
+                            TextAlign.center,
+                        style:
+                            TextStyle(
+                          fontSize:
+                              Responsive.titleSize(
+                            context,
+                            base:
+                                27,
+                            min:
+                                22,
+                            max:
+                                34,
+                          ),
+                          fontWeight:
+                              FontWeight
+                                  .w800,
+                        ),
+                      ),
+                      const SizedBox(
+                        height:
+                            12,
+                      ),
+                      const Text(
+                        'We sent a confirmation link to:',
+                        textAlign:
+                            TextAlign.center,
+                      ),
+                      const SizedBox(
+                        height:
+                            8,
+                      ),
+                      Text(
+                        email,
+                        textAlign:
+                            TextAlign.center,
+                        style:
+                            TextStyle(
+                          fontWeight:
+                              FontWeight
+                                  .w700,
+                          color:
+                              AppColors
+                                  .primary,
+                        ),
+                      ),
+                      const SizedBox(
+                        height:
+                            16,
+                      ),
+                      const Text(
+                        'Open the email and tap the confirmation link to activate your account. After confirmation, the link will return you to MediData.',
+                        textAlign:
+                            TextAlign.center,
+                        style:
+                            TextStyle(
+                          height:
+                              1.5,
+                        ),
+                      ),
+                      const SizedBox(
+                        height:
+                            24,
+                      ),
+                      SizedBox(
+                        width:
+                            double.infinity,
+                        height:
+                            Responsive
+                                .buttonHeight(
+                          context,
                         ),
                         child:
-                            BackdropFilter(
-                          filter:
-                              ImageFilter.blur(
-                            sigmaX:
-                                12,
-                            sigmaY:
-                                12,
-                          ),
-                          child:
-                              Container(
-                            padding:
-                                EdgeInsets.all(
-                              cardPadding,
-                            ),
-                            decoration:
-                                BoxDecoration(
-                              color:
-                                  Colors.white.withValues(
-                                alpha:
-                                    0.40,
-                              ),
-                              borderRadius:
-                                  BorderRadius.circular(
-                                cardRadius,
-                              ),
-                              border:
-                                  Border.all(
-                                color:
-                                    Colors.white.withValues(
-                                  alpha:
-                                      0.55,
-                                ),
-                              ),
-                            ),
-                            child:
-                                Column(
-                              mainAxisSize:
-                                  MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width:
-                                      82,
-                                  height:
-                                      82,
-                                  decoration:
-                                      BoxDecoration(
-                                    color:
-                                        AppColors.primary.withValues(
-                                      alpha:
-                                          0.10,
+                            FilledButton.icon(
+                          onPressed:
+                              isLoading
+                                  ? null
+                                  : onResend,
+                          icon:
+                              isLoading
+                                  ? const SizedBox(
+                                      width:
+                                          18,
+                                      height:
+                                          18,
+                                      child:
+                                          CircularProgressIndicator(
+                                        strokeWidth:
+                                            2,
+                                        color:
+                                            Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons
+                                          .refresh_rounded,
                                     ),
-                                    shape:
-                                        BoxShape.circle,
-                                  ),
-                                  child:
-                                      Icon(
-                                    Icons
-                                        .mark_email_read_outlined,
-                                    size:
-                                        42,
-                                    color:
-                                        AppColors.primary,
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  height:
-                                      24,
-                                ),
-
-                                const Text(
-                                  'Check your email',
-                                  textAlign:
-                                      TextAlign.center,
-                                  style:
-                                      TextStyle(
-                                    fontSize:
-                                        27,
-                                    fontWeight:
-                                        FontWeight.w800,
-                                    color:
-                                        Color(
-                                      0xFF151922,
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  height:
-                                      12,
-                                ),
-
-                                Text(
-                                  'We sent a confirmation link to:',
-                                  textAlign:
-                                      TextAlign.center,
-                                  style:
-                                      TextStyle(
-                                    fontSize:
-                                        14,
-                                    color:
-                                        const Color(
-                                      0xFF707784,
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  height:
-                                      8,
-                                ),
-
-                                Text(
-                                  email,
-                                  textAlign:
-                                      TextAlign.center,
-                                  style:
-                                      TextStyle(
-                                    fontSize:
-                                        15,
-                                    fontWeight:
-                                        FontWeight.w700,
-                                    color:
-                                        AppColors.primary,
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  height:
-                                      16,
-                                ),
-
-                                const Text(
-                                  'Open your email and tap the confirmation link to activate your account. After confirmation, the link will return you to MediData.',
-                                  textAlign:
-                                      TextAlign.center,
-                                  style:
-                                      TextStyle(
-                                    fontSize:
-                                        14,
-                                    height:
-                                        1.5,
-                                    color:
-                                        Color(
-                                      0xFF606775,
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  height:
-                                      26,
-                                ),
-
-                                SizedBox(
-                                  width:
-                                      double.infinity,
-                                  height:
-                                      Responsive.buttonHeight(
-                                    context,
-                                  ),
-                                  child:
-                                      FilledButton.icon(
-                                    onPressed:
-                                        isLoading
-                                            ? null
-                                            : onResend,
-                                    icon:
-                                        isLoading
-                                            ? const SizedBox(
-                                                width:
-                                                    18,
-                                                height:
-                                                    18,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  strokeWidth:
-                                                      2,
-                                                  color:
-                                                      Colors.white,
-                                                ),
-                                              )
-                                            : const Icon(
-                                                Icons
-                                                    .refresh_rounded,
-                                              ),
-                                    label:
-                                        Text(
-                                      isLoading
-                                          ? 'Sending...'
-                                          : 'Resend confirmation email',
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  height:
-                                      12,
-                                ),
-
-                                SizedBox(
-                                  width:
-                                      double.infinity,
-                                  height:
-                                      Responsive.buttonHeight(
-                                    context,
-                                  ),
-                                  child:
-                                      OutlinedButton(
-                                    onPressed:
-                                        onBackToLogin,
-                                    child:
-                                        const Text(
-                                      'Back to Login',
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  height:
-                                      18,
-                                ),
-
-                                Text(
-                                  'Check your Spam or Junk folder if you do not see the email.',
-                                  textAlign:
-                                      TextAlign.center,
-                                  style:
-                                      TextStyle(
-                                    fontSize:
-                                        12,
-                                    color:
-                                        const Color(
-                                      0xFF707784,
-                                    ).withValues(
-                                      alpha:
-                                          0.85,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          label:
+                              Text(
+                            isLoading
+                                ? 'Sending...'
+                                : 'Resend confirmation email',
                           ),
                         ),
                       ),
-                    ),
+                      const SizedBox(
+                        height:
+                            12,
+                      ),
+                      SizedBox(
+                        width:
+                            double.infinity,
+                        height:
+                            Responsive
+                                .buttonHeight(
+                          context,
+                        ),
+                        child:
+                            OutlinedButton(
+                          onPressed:
+                              onBackToLogin,
+                          child:
+                              const Text(
+                            'Back to Login',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
+              ),
+            ),
           ),
         ),
       ),

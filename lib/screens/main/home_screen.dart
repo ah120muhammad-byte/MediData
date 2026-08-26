@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/responsive/responsive.dart';
 import '../../core/theme/app_colors.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -31,7 +32,8 @@ class _HomeScreenState
   void initState() {
     super.initState();
 
-    _homeFuture = _loadHomeData();
+    _homeFuture =
+        _loadHomeData();
   }
 
   // ===========================================================================
@@ -48,28 +50,38 @@ class _HomeScreenState
 
     _LectureHomeData? latestLecture;
 
-    final latestResponse = await _supabase
-        .from('lectures')
-        .select('''
-          id,
-          module_id,
-          title,
-          description,
-          published_at,
-          is_published,
-          is_active,
-          modules (
-            id,
-            name
-          )
-        ''')
-        .eq('is_active', true)
-        .eq('is_published', true)
-        .order(
-          'published_at',
-          ascending: false,
-        )
-        .limit(1);
+    final latestResponse =
+        await _supabase
+            .from('lectures')
+            .select(
+              '''
+              id,
+              module_id,
+              title,
+              description,
+              published_at,
+              is_published,
+              is_active,
+              modules (
+                id,
+                name
+              )
+              ''',
+            )
+            .eq(
+              'is_active',
+              true,
+            )
+            .eq(
+              'is_published',
+              true,
+            )
+            .order(
+              'published_at',
+              ascending:
+                  false,
+            )
+            .limit(1);
 
     final latestRows =
         List<Map<String, dynamic>>.from(
@@ -91,7 +103,8 @@ class _HomeScreenState
       latestLecture =
           _LectureHomeData(
         id:
-            row['id']?.toString() ?? '',
+            row['id']?.toString() ??
+                '',
         moduleId:
             row['module_id']
                     ?.toString() ??
@@ -119,9 +132,6 @@ class _HomeScreenState
 
     // =========================================================================
     // CURRENT MODULE
-    //
-    // Determined from the student's
-    // latest lecture activity.
     // =========================================================================
 
     _ModuleHomeData? currentModule;
@@ -129,8 +139,11 @@ class _HomeScreenState
     if (user != null) {
       final latestProgressResponse =
           await _supabase
-              .from('lecture_progress')
-              .select('''
+              .from(
+                'lecture_progress',
+              )
+              .select(
+                '''
                 lecture_id,
                 last_opened_at,
                 lectures (
@@ -142,14 +155,16 @@ class _HomeScreenState
                     description
                   )
                 )
-              ''')
+                ''',
+              )
               .eq(
                 'user_id',
                 user.id,
               )
               .order(
                 'last_opened_at',
-                ascending: false,
+                ascending:
+                    false,
               )
               .limit(1);
 
@@ -222,10 +237,12 @@ class _HomeScreenState
       final lecturesResponse =
           await _supabase
               .from('lectures')
-              .select('''
+              .select(
+                '''
                 id,
                 title
-              ''')
+                ''',
+              )
               .eq(
                 'module_id',
                 currentModule.id,
@@ -240,7 +257,8 @@ class _HomeScreenState
               )
               .order(
                 'display_order',
-                ascending: true,
+                ascending:
+                    true,
               );
 
       final lectures =
@@ -264,18 +282,22 @@ class _HomeScreenState
                 .toList();
 
         // ---------------------------------------------------------------------
-        // LOAD ACTIVE MEDIA FOR THESE LECTURES
+        // LOAD ACTIVE MEDIA
         // ---------------------------------------------------------------------
 
         final filesResponse =
             await _supabase
-                .from('lecture_files')
-                .select('''
+                .from(
+                  'lecture_files',
+                )
+                .select(
+                  '''
                   id,
                   lecture_id,
                   file_type,
                   is_active
-                ''')
+                  ''',
+                )
                 .inFilter(
                   'lecture_id',
                   lectureIds,
@@ -297,15 +319,13 @@ class _HomeScreenState
 
         // ---------------------------------------------------------------------
         // TRACKABLE LECTURES
-        //
-        // A lecture is trackable when it has
-        // at least one audio or video file.
         // ---------------------------------------------------------------------
 
         final trackableLectureIds =
             <String>{};
 
-        for (final file in files) {
+        for (final file
+            in files) {
           final type =
               file['file_type']
                       ?.toString()
@@ -342,11 +362,13 @@ class _HomeScreenState
                   .from(
                     'lecture_progress',
                   )
-                  .select('''
+                  .select(
+                    '''
                     lecture_id,
                     audio_completed,
                     video_completed
-                  ''')
+                    ''',
+                  )
                   .eq(
                     'user_id',
                     user.id,
@@ -361,7 +383,8 @@ class _HomeScreenState
               in (progressResponse
                   as List)) {
             final map =
-                Map<String, dynamic>.from(
+                Map<String,
+                    dynamic>.from(
               item,
             );
 
@@ -375,18 +398,12 @@ class _HomeScreenState
                         as bool? ??
                     false;
 
-            // A lecture is considered
-            // completed when at least
-            // one available media track
-            // has been completed.
             if (audioCompleted ||
                 videoCompleted) {
               completedLectures++;
             }
           }
 
-          // Protect against bad/duplicate
-          // records.
           if (completedLectures >
               totalTrackableLectures) {
             completedLectures =
@@ -395,7 +412,8 @@ class _HomeScreenState
         }
       }
 
-      if (totalTrackableLectures > 0) {
+      if (totalTrackableLectures >
+          0) {
         moduleProgress =
             completedLectures /
                 totalTrackableLectures;
@@ -421,6 +439,10 @@ class _HomeScreenState
   // ===========================================================================
 
   Future<void> _refresh() async {
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _homeFuture =
           _loadHomeData();
@@ -437,34 +459,28 @@ class _HomeScreenState
   Widget build(
     BuildContext context,
   ) {
-    final size =
-        MediaQuery.sizeOf(context);
-
-    final isTablet =
-        size.shortestSide >= 600;
-
-    final horizontalPadding =
-        isTablet ? 32.0 : 20.0;
-
     return LayoutBuilder(
       builder: (
         context,
         constraints,
       ) {
-        final contentWidth =
-            isTablet
-                ? 850.0
+        final contentMaxWidth =
+            constraints.maxWidth >=
+                    900
+                ? 900.0
                 : constraints.maxWidth;
 
         return Center(
-          child: ConstrainedBox(
+          child:
+              ConstrainedBox(
             constraints:
                 BoxConstraints(
               maxWidth:
-                  contentWidth,
+                  contentMaxWidth,
             ),
             child:
-                FutureBuilder<_HomeData>(
+                FutureBuilder<
+                    _HomeData>(
               future:
                   _homeFuture,
               builder:
@@ -472,10 +488,8 @@ class _HomeScreenState
                 context,
                 snapshot,
               ) {
-                if (snapshot
-                        .connectionState ==
-                    ConnectionState
-                        .waiting) {
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
                   return const Center(
                     child:
                         CircularProgressIndicator(),
@@ -484,8 +498,7 @@ class _HomeScreenState
 
                 if (snapshot.hasError) {
                   debugPrint(
-                    'Home error: '
-                    '${snapshot.error}',
+                    'Home error: ${snapshot.error}',
                   );
 
                   return _HomeErrorState(
@@ -497,6 +510,51 @@ class _HomeScreenState
                 final data =
                     snapshot.data ??
                         const _HomeData();
+
+                final horizontalPadding =
+                    Responsive.horizontalPadding(
+                  context,
+                );
+
+                final topPadding =
+                    Responsive.spacing(
+                  context,
+                  base:
+                      24,
+                  min:
+                      16,
+                  max:
+                      36,
+                );
+
+                final bottomPadding =
+                    Responsive.scrollBottomPadding(
+                  context,
+                  base:
+                      115,
+                );
+
+                final sectionGap =
+                    Responsive.spacing(
+                  context,
+                  base:
+                      28,
+                  min:
+                      20,
+                  max:
+                      40,
+                );
+
+                final titleGap =
+                    Responsive.spacing(
+                  context,
+                  base:
+                      12,
+                  min:
+                      8,
+                  max:
+                      18,
+                );
 
                 return RefreshIndicator(
                   onRefresh:
@@ -511,13 +569,9 @@ class _HomeScreenState
                     padding:
                         EdgeInsets.fromLTRB(
                       horizontalPadding,
-                      isTablet
-                          ? 28
-                          : 22,
+                      topPadding,
                       horizontalPadding,
-                      isTablet
-                          ? 130
-                          : 115,
+                      bottomPadding,
                     ),
                     child:
                         Column(
@@ -525,29 +579,19 @@ class _HomeScreenState
                           CrossAxisAlignment
                               .start,
                       children: [
-                        // =====================================================
-                        // WHAT'S NEW
-                        // =====================================================
-
                         _SectionTitle(
                           title:
                               "What's New",
-                          isTablet:
-                              isTablet,
                         ),
 
                         SizedBox(
                           height:
-                              isTablet
-                                  ? 16
-                                  : 12,
+                              titleGap,
                         ),
 
                         _LatestLectureCard(
                           lecture:
                               data.latestLecture,
-                          isTablet:
-                              isTablet,
                           onTap:
                               data.latestLecture ==
                                       null
@@ -556,44 +600,30 @@ class _HomeScreenState
                                       final lecture =
                                           data.latestLecture!;
 
-                                      widget
-                                          .onOpenLecture(
+                                      widget.onOpenLecture(
                                         moduleId:
-                                            lecture
-                                                .moduleId,
+                                            lecture.moduleId,
                                         moduleName:
-                                            lecture
-                                                .moduleName,
+                                            lecture.moduleName,
                                         lectureId:
-                                            lecture
-                                                .id,
+                                            lecture.id,
                                       );
                                     },
                         ),
 
                         SizedBox(
                           height:
-                              isTablet
-                                  ? 34
-                                  : 28,
+                              sectionGap,
                         ),
-
-                        // =====================================================
-                        // YOUR MODULE
-                        // =====================================================
 
                         _SectionTitle(
                           title:
                               'Your Module',
-                          isTablet:
-                              isTablet,
                         ),
 
                         SizedBox(
                           height:
-                              isTablet
-                                  ? 16
-                                  : 12,
+                              titleGap,
                         ),
 
                         _YourModuleCard(
@@ -606,8 +636,6 @@ class _HomeScreenState
                           totalTrackableLectures:
                               data
                                   .totalTrackableLectures,
-                          isTablet:
-                              isTablet,
                         ),
                       ],
                     ),
@@ -634,7 +662,6 @@ class _HomeData {
       currentModule;
 
   final int completedLectures;
-
   final int totalTrackableLectures;
 
   final double moduleProgress;
@@ -642,9 +669,12 @@ class _HomeData {
   const _HomeData({
     this.latestLecture,
     this.currentModule,
-    this.completedLectures = 0,
-    this.totalTrackableLectures = 0,
-    this.moduleProgress = 0.0,
+    this.completedLectures =
+        0,
+    this.totalTrackableLectures =
+        0,
+    this.moduleProgress =
+        0.0,
   });
 }
 
@@ -695,11 +725,9 @@ class _ModuleHomeData {
 class _SectionTitle
     extends StatelessWidget {
   final String title;
-  final bool isTablet;
 
   const _SectionTitle({
     required this.title,
-    required this.isTablet,
   });
 
   @override
@@ -711,20 +739,31 @@ class _SectionTitle
 
     return Text(
       title,
-      style: TextStyle(
+      style:
+          TextStyle(
         fontSize:
-            isTablet ? 25 : 21,
+            Responsive.titleSize(
+          context,
+          base:
+              22,
+          min:
+              19,
+          max:
+              30,
+        ),
         fontWeight:
             FontWeight.bold,
         color:
-            theme.colorScheme.onSurface,
+            theme
+                .colorScheme
+                .onSurface,
       ),
     );
   }
 }
 
 // ============================================================================
-// LATEST LECTURE
+// LATEST LECTURE CARD
 // ============================================================================
 
 class _LatestLectureCard
@@ -732,12 +771,10 @@ class _LatestLectureCard
   final _LectureHomeData?
       lecture;
 
-  final bool isTablet;
   final VoidCallback? onTap;
 
   const _LatestLectureCard({
     required this.lecture,
-    required this.isTablet,
     required this.onTap,
   });
 
@@ -748,105 +785,179 @@ class _LatestLectureCard
     final theme =
         Theme.of(context);
 
+    final cardRadius =
+        Responsive.cardRadius(
+      context,
+    );
+
+    final cardPadding =
+        Responsive.cardPadding(
+      context,
+    );
+
+    final iconContainer =
+        Responsive.clamped(
+      context,
+      base:
+          62,
+      min:
+          54,
+      max:
+          78,
+    );
+
+    final iconSize =
+        Responsive.iconSize(
+      context,
+      base:
+          29,
+      min:
+          25,
+      max:
+          38,
+    );
+
+    final gap =
+        Responsive.spacing(
+      context,
+      base:
+          14,
+      min:
+          10,
+      max:
+          20,
+    );
+
+    final titleSize =
+        Responsive.titleSize(
+      context,
+      base:
+          16,
+          min:
+              14,
+          max:
+              21,
+    );
+
     if (lecture == null) {
       return _EmptyHomeCard(
         icon:
-            Icons.play_lesson_outlined,
+            Icons
+                .play_lesson_outlined,
         title:
             'No New Lectures',
         message:
             'New published lectures will appear here.',
-        isTablet:
-            isTablet,
       );
     }
 
     return Material(
       color:
-          theme.colorScheme.surface,
+          theme
+              .colorScheme
+              .surface,
       borderRadius:
           BorderRadius.circular(
-        isTablet ? 24 : 20,
+        cardRadius,
       ),
-      child: InkWell(
+      child:
+          InkWell(
         borderRadius:
             BorderRadius.circular(
-          isTablet ? 24 : 20,
+          cardRadius,
         ),
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
+        onTap:
+            onTap,
+        child:
+            Container(
+          width:
+              double.infinity,
           padding:
               EdgeInsets.all(
-            isTablet ? 22 : 17,
+            cardPadding,
           ),
           decoration:
               BoxDecoration(
             borderRadius:
                 BorderRadius.circular(
-              isTablet ? 24 : 20,
+              cardRadius,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black
-                    .withValues(
+                color:
+                    Colors.black
+                        .withValues(
                   alpha:
                       theme.brightness ==
                               Brightness.dark
                           ? 0.20
                           : 0.07,
                 ),
-                blurRadius: 16,
+                blurRadius:
+                    Responsive.clamped(
+                  context,
+                  base:
+                      16,
+                  min:
+                      12,
+                  max:
+                      24,
+                ),
                 offset:
-                    const Offset(
-                  0,
-                  6,
+                    Responsive.clampedOffset(
+                  context,
+                  base:
+                      const Offset(
+                    0,
+                    6,
+                  ),
+                  minScale:
+                      0.8,
+                  maxScale:
+                      1.25,
                 ),
               ),
             ],
           ),
-          child: Row(
+          child:
+              Row(
             children: [
               Container(
                 width:
-                    isTablet
-                        ? 72
-                        : 58,
+                    iconContainer,
                 height:
-                    isTablet
-                        ? 72
-                        : 58,
+                    iconContainer,
                 decoration:
                     BoxDecoration(
-                  color: AppColors
-                      .primary
-                      .withValues(
-                    alpha: 0.12,
+                  color:
+                      AppColors
+                          .primary
+                          .withValues(
+                    alpha:
+                        0.12,
                   ),
                   borderRadius:
                       BorderRadius.circular(
-                    isTablet
-                        ? 20
-                        : 16,
+                    Responsive.smallRadius(
+                      context,
+                    ),
                   ),
                 ),
-                child: Icon(
+                child:
+                    Icon(
                   Icons
                       .play_lesson_outlined,
                   size:
-                      isTablet
-                          ? 34
-                          : 28,
+                      iconSize,
                   color:
-                      AppColors.primary,
+                      AppColors
+                          .primary,
                 ),
               ),
 
               SizedBox(
                 width:
-                    isTablet
-                        ? 18
-                        : 14,
+                    gap,
               ),
 
               Expanded(
@@ -859,16 +970,23 @@ class _LatestLectureCard
                     Text(
                       lecture!
                           .moduleName,
-                      maxLines: 1,
+                      maxLines:
+                          1,
                       overflow:
                           TextOverflow
                               .ellipsis,
                       style:
                           TextStyle(
                         fontSize:
-                            isTablet
-                                ? 12
-                                : 11,
+                            Responsive.smallTextSize(
+                          context,
+                          base:
+                              11,
+                          min:
+                              10,
+                          max:
+                              14,
+                        ),
                         fontWeight:
                             FontWeight
                                 .w600,
@@ -879,22 +997,21 @@ class _LatestLectureCard
                     ),
 
                     const SizedBox(
-                      height: 4,
+                      height:
+                          4,
                     ),
 
                     Text(
-                      lecture!
-                          .title,
-                      maxLines: 2,
+                      lecture!.title,
+                      maxLines:
+                          2,
                       overflow:
                           TextOverflow
                               .ellipsis,
                       style:
                           TextStyle(
                         fontSize:
-                            isTablet
-                                ? 18
-                                : 16,
+                            titleSize,
                         fontWeight:
                             FontWeight
                                 .w700,
@@ -912,23 +1029,41 @@ class _LatestLectureCard
                             .description!
                             .trim()
                             .isNotEmpty) ...[
-                      const SizedBox(
-                        height: 5,
+                      SizedBox(
+                        height:
+                            Responsive.spacing(
+                          context,
+                          base:
+                              5,
+                          min:
+                              4,
+                          max:
+                              8,
+                        ),
                       ),
                       Text(
                         lecture!
                             .description!
                             .trim(),
-                        maxLines: 2,
+                        maxLines:
+                            2,
                         overflow:
                             TextOverflow
                                 .ellipsis,
                         style:
                             TextStyle(
                           fontSize:
-                              isTablet
-                                  ? 13
-                                  : 12,
+                              Responsive.bodyTextSize(
+                            context,
+                            base:
+                                12,
+                            min:
+                                11,
+                            max:
+                                15,
+                          ),
+                          height:
+                              1.35,
                           color: theme
                               .colorScheme
                               .onSurface
@@ -943,21 +1078,40 @@ class _LatestLectureCard
                 ),
               ),
 
-              const SizedBox(
-                width: 8,
+              SizedBox(
+                width:
+                    Responsive.spacing(
+                  context,
+                  base:
+                      8,
+                  min:
+                      4,
+                  max:
+                      12,
+                ),
               ),
 
               Icon(
                 Icons
                     .chevron_right_rounded,
-                color: theme
-                    .colorScheme
-                    .onSurface
-                    .withValues(
-                  alpha: 0.45,
+                color:
+                    theme
+                        .colorScheme
+                        .onSurface
+                        .withValues(
+                  alpha:
+                      0.45,
                 ),
                 size:
-                    isTablet ? 30 : 25,
+                    Responsive.iconSize(
+                  context,
+                  base:
+                      25,
+                  min:
+                      21,
+                  max:
+                      31,
+                ),
               ),
             ],
           ),
@@ -968,7 +1122,7 @@ class _LatestLectureCard
 }
 
 // ============================================================================
-// YOUR MODULE
+// YOUR MODULE CARD
 // ============================================================================
 
 class _YourModuleCard
@@ -981,14 +1135,11 @@ class _YourModuleCard
   final int completedLectures;
   final int totalTrackableLectures;
 
-  final bool isTablet;
-
   const _YourModuleCard({
     required this.module,
     required this.progress,
     required this.completedLectures,
     required this.totalTrackableLectures,
-    required this.isTablet,
   });
 
   @override
@@ -998,27 +1149,61 @@ class _YourModuleCard
     if (module == null) {
       return _EmptyHomeCard(
         icon:
-            Icons.menu_book_rounded,
+            Icons
+                .menu_book_rounded,
         title:
             'No Module Started',
         message:
             'Start studying a module and it will appear here.',
-        isTablet:
-            isTablet,
       );
     }
 
     final percentage =
         (progress * 100)
             .round()
-            .clamp(0, 100);
+            .clamp(
+              0,
+              100,
+            );
+
+    final cardPadding =
+        Responsive.cardPadding(
+      context,
+    );
+
+    final cardRadius =
+        Responsive.cardRadius(
+      context,
+    );
+
+    final avatarSize =
+        Responsive.clamped(
+      context,
+      base:
+          54,
+      min:
+          48,
+      max:
+          68,
+    );
+
+    final titleSize =
+        Responsive.titleSize(
+      context,
+      base:
+          19,
+      min:
+          17,
+      max:
+          25,
+    );
 
     return Container(
       width:
           double.infinity,
       padding:
           EdgeInsets.all(
-        isTablet ? 24 : 18,
+        cardPadding,
       ),
       decoration:
           BoxDecoration(
@@ -1032,27 +1217,45 @@ class _YourModuleCard
             AppColors.primary,
             AppColors.primary
                 .withValues(
-              alpha: 0.78,
+              alpha:
+                  0.78,
             ),
           ],
         ),
         borderRadius:
             BorderRadius.circular(
-          isTablet ? 26 : 21,
+          cardRadius,
         ),
         boxShadow: [
           BoxShadow(
             color:
                 AppColors.primary
                     .withValues(
-              alpha: 0.22,
+              alpha:
+                  0.22,
             ),
             blurRadius:
-                18,
+                Responsive.clamped(
+              context,
+              base:
+                  18,
+              min:
+                  14,
+              max:
+                  26,
+            ),
             offset:
-                const Offset(
-              0,
-              8,
+                Responsive.clampedOffset(
+              context,
+              base:
+                  const Offset(
+                0,
+                8,
+              ),
+              minScale:
+                  0.8,
+              maxScale:
+                  1.25,
             ),
           ),
         ],
@@ -1067,18 +1270,16 @@ class _YourModuleCard
             children: [
               Container(
                 width:
-                    isTablet
-                        ? 58
-                        : 50,
+                    avatarSize,
                 height:
-                    isTablet
-                        ? 58
-                        : 50,
+                    avatarSize,
                 decoration:
                     BoxDecoration(
-                  color: Colors.white
-                      .withValues(
-                    alpha: 0.18,
+                  color:
+                      Colors.white
+                          .withValues(
+                    alpha:
+                        0.18,
                   ),
                   shape:
                       BoxShape.circle,
@@ -1090,17 +1291,22 @@ class _YourModuleCard
                   color:
                       Colors.white,
                   size:
-                      isTablet
-                          ? 30
-                          : 26,
+                      avatarSize *
+                          0.48,
                 ),
               ),
 
               SizedBox(
                 width:
-                    isTablet
-                        ? 16
-                        : 13,
+                    Responsive.spacing(
+                  context,
+                  base:
+                      13,
+                  min:
+                      10,
+                  max:
+                      18,
+                ),
               ),
 
               Expanded(
@@ -1112,16 +1318,23 @@ class _YourModuleCard
                   children: [
                     Text(
                       'Current Module',
-                      maxLines: 1,
+                      maxLines:
+                          1,
                       overflow:
                           TextOverflow
                               .ellipsis,
                       style:
                           TextStyle(
                         fontSize:
-                            isTablet
-                                ? 14
-                                : 12,
+                            Responsive.smallTextSize(
+                          context,
+                          base:
+                              12,
+                          min:
+                              11,
+                          max:
+                              15,
+                        ),
                         color:
                             Colors.white
                                 .withValues(
@@ -1132,21 +1345,21 @@ class _YourModuleCard
                     ),
 
                     const SizedBox(
-                      height: 3,
+                      height:
+                          3,
                     ),
 
                     Text(
                       module!.name,
-                      maxLines: 2,
+                      maxLines:
+                          2,
                       overflow:
                           TextOverflow
                               .ellipsis,
                       style:
                           TextStyle(
                         fontSize:
-                            isTablet
-                                ? 21
-                                : 18,
+                            titleSize,
                         fontWeight:
                             FontWeight
                                 .bold,
@@ -1162,7 +1375,15 @@ class _YourModuleCard
 
           SizedBox(
             height:
-                isTablet ? 24 : 20,
+                Responsive.spacing(
+              context,
+              base:
+                  20,
+              min:
+                  16,
+              max:
+                  28,
+            ),
           ),
 
           Row(
@@ -1172,13 +1393,19 @@ class _YourModuleCard
                 style:
                     TextStyle(
                   fontSize:
-                      isTablet
-                          ? 14
-                          : 12,
+                      Responsive.bodyTextSize(
+                    context,
+                    base:
+                        13,
+                    min:
+                        12,
+                    max:
+                        16,
+                  ),
                   fontWeight:
-                      FontWeight.w600,
-                  color: Colors
-                      .white
+                      FontWeight
+                          .w600,
+                  color: Colors.white
                       .withValues(
                     alpha:
                         0.80,
@@ -1191,18 +1418,38 @@ class _YourModuleCard
               Text(
                 '$percentage%',
                 style:
-                    const TextStyle(
+                    TextStyle(
+                  fontSize:
+                      Responsive.bodyTextSize(
+                    context,
+                    base:
+                        14,
+                    min:
+                        13,
+                    max:
+                        18,
+                  ),
                   color:
                       Colors.white,
                   fontWeight:
-                      FontWeight.w800,
+                      FontWeight
+                          .w800,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(
-            height: 9,
+          SizedBox(
+            height:
+                Responsive.spacing(
+              context,
+              base:
+                  9,
+              min:
+                  7,
+              max:
+                  12,
+            ),
           ),
 
           ClipRRect(
@@ -1218,13 +1465,20 @@ class _YourModuleCard
                 1.0,
               ),
               minHeight:
-                  isTablet
-                      ? 8
-                      : 7,
+                  Responsive.clamped(
+                context,
+                base:
+                    7,
+                min:
+                    6,
+                max:
+                    10,
+              ),
               backgroundColor:
                   Colors.white
                       .withValues(
-                alpha: 0.20,
+                alpha:
+                    0.20,
               ),
               valueColor:
                   const AlwaysStoppedAnimation<
@@ -1234,8 +1488,17 @@ class _YourModuleCard
             ),
           ),
 
-          const SizedBox(
-            height: 9,
+          SizedBox(
+            height:
+                Responsive.spacing(
+              context,
+              base:
+                  9,
+              min:
+                  7,
+              max:
+                  12,
+            ),
           ),
 
           Text(
@@ -1243,15 +1506,24 @@ class _YourModuleCard
                     0
                 ? 'No audio or video content to track yet.'
                 : '$completedLectures of $totalTrackableLectures lectures completed.',
-            maxLines: 2,
+            maxLines:
+                2,
             overflow:
                 TextOverflow.ellipsis,
             style:
                 TextStyle(
               fontSize:
-                  isTablet
-                      ? 13
-                      : 11.5,
+                  Responsive.smallTextSize(
+                context,
+                base:
+                    11.5,
+                min:
+                    10.5,
+                max:
+                    14,
+              ),
+              height:
+                  1.35,
               color:
                   Colors.white
                       .withValues(
@@ -1267,7 +1539,7 @@ class _YourModuleCard
 }
 
 // ============================================================================
-// EMPTY CARD
+// EMPTY HOME CARD
 // ============================================================================
 
 class _EmptyHomeCard
@@ -1275,13 +1547,11 @@ class _EmptyHomeCard
   final IconData icon;
   final String title;
   final String message;
-  final bool isTablet;
 
   const _EmptyHomeCard({
     required this.icon,
     required this.title,
     required this.message,
-    required this.isTablet,
   });
 
   @override
@@ -1291,27 +1561,49 @@ class _EmptyHomeCard
     final theme =
         Theme.of(context);
 
+    final cardRadius =
+        Responsive.cardRadius(
+      context,
+    );
+
+    final cardPadding =
+        Responsive.cardPadding(
+      context,
+    );
+
+    final iconContainer =
+        Responsive.clamped(
+      context,
+      base:
+          56,
+      min:
+          50,
+      max:
+          72,
+    );
+
     return Container(
       width:
           double.infinity,
       padding:
           EdgeInsets.all(
-        isTablet
-            ? 24
-            : 20,
+        cardPadding,
       ),
       decoration:
           BoxDecoration(
         color:
-            theme.colorScheme.surface,
+            theme
+                .colorScheme
+                .surface,
         borderRadius:
             BorderRadius.circular(
-          isTablet ? 24 : 20,
+          cardRadius,
         ),
         boxShadow: [
           BoxShadow(
             color:
-                Colors.black.withValues(
+                Colors.black
+                    .withValues(
               alpha:
                   theme.brightness ==
                           Brightness.dark
@@ -1319,44 +1611,67 @@ class _EmptyHomeCard
                       : 0.06,
             ),
             blurRadius:
-                16,
+                Responsive.clamped(
+              context,
+              base:
+                  16,
+              min:
+                  12,
+              max:
+                  24,
+            ),
             offset:
-                const Offset(
-              0,
-              6,
+                Responsive.clampedOffset(
+              context,
+              base:
+                  const Offset(
+                0,
+                6,
+              ),
+              minScale:
+                  0.8,
+              maxScale:
+                  1.25,
             ),
           ),
         ],
       ),
-      child: Row(
+      child:
+          Row(
         children: [
           Container(
             width:
-                isTablet
-                    ? 64
-                    : 54,
+                iconContainer,
             height:
-                isTablet
-                    ? 64
-                    : 54,
+                iconContainer,
             decoration:
                 BoxDecoration(
               color:
                   AppColors.primary
                       .withValues(
-                alpha: 0.10,
+                alpha:
+                    0.10,
               ),
               borderRadius:
                   BorderRadius.circular(
-                16,
+                Responsive.smallRadius(
+                  context,
+                ),
               ),
             ),
-            child: Icon(
+            child:
+                Icon(
               icon,
               size:
-                  isTablet
-                      ? 30
-                      : 26,
+                  Responsive.iconSize(
+                context,
+                base:
+                    26,
+                min:
+                    22,
+                max:
+                    34,
+              ),
               color:
                   AppColors.primary,
             ),
@@ -1364,9 +1679,15 @@ class _EmptyHomeCard
 
           SizedBox(
             width:
-                isTablet
-                    ? 16
-                    : 13,
+                Responsive.spacing(
+              context,
+              base:
+                  13,
+              min:
+                  10,
+              max:
+                  18,
+            ),
           ),
 
           Expanded(
@@ -1378,34 +1699,61 @@ class _EmptyHomeCard
               children: [
                 Text(
                   title,
+                  maxLines:
+                      1,
+                  overflow:
+                      TextOverflow.ellipsis,
                   style:
                       TextStyle(
                     fontSize:
-                        isTablet
-                            ? 17
-                            : 15,
+                        Responsive.titleSize(
+                      context,
+                      base:
+                          15,
+                      min:
+                          14,
+                      max:
+                          20,
+                    ),
                     fontWeight:
                         FontWeight
                             .w700,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 5,
+                SizedBox(
+                  height:
+                      Responsive.spacing(
+                    context,
+                    base:
+                        5,
+                    min:
+                        4,
+                    max:
+                        8,
+                  ),
                 ),
 
                 Text(
                   message,
-                  maxLines: 2,
+                  maxLines:
+                      2,
                   overflow:
-                      TextOverflow
-                          .ellipsis,
+                      TextOverflow.ellipsis,
                   style:
                       TextStyle(
                     fontSize:
-                        isTablet
-                            ? 13
-                            : 12,
+                        Responsive.bodyTextSize(
+                      context,
+                      base:
+                          12,
+                      min:
+                          11,
+                      max:
+                          15,
+                    ),
+                    height:
+                        1.35,
                     color: theme
                         .colorScheme
                         .onSurface
@@ -1430,7 +1778,8 @@ class _EmptyHomeCard
 
 class _HomeErrorState
     extends StatelessWidget {
-  final Future<void> Function()
+  final Future<void>
+      Function()
       onRetry;
 
   const _HomeErrorState({
@@ -1445,68 +1794,154 @@ class _HomeErrorState
         Theme.of(context);
 
     return Center(
-      child: Padding(
+      child:
+          Padding(
         padding:
-            const EdgeInsets.all(
-          30,
+            EdgeInsets.all(
+          Responsive.cardPadding(
+            context,
+          ),
         ),
-        child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
-          children: [
-            Icon(
-              Icons
-                  .cloud_off_rounded,
-              size: 60,
-              color: theme
-                  .colorScheme
-                  .error,
-            ),
-
-            const SizedBox(
-              height: 16,
-            ),
-
-            const Text(
-              'Unable to load your home data.',
-              textAlign:
-                  TextAlign.center,
-              style:
-                  TextStyle(
-                fontSize: 18,
-                fontWeight:
-                    FontWeight.w700,
-              ),
-            ),
-
-            const SizedBox(
-              height: 8,
-            ),
-
-            const Text(
-              'Please check your connection and try again.',
-              textAlign:
-                  TextAlign.center,
-            ),
-
-            const SizedBox(
-              height: 18,
-            ),
-
-            FilledButton.icon(
-              onPressed:
-                  onRetry,
-              icon:
-                  const Icon(
+        child:
+            ConstrainedBox(
+          constraints:
+              const BoxConstraints(
+            maxWidth:
+                560,
+          ),
+          child:
+              Column(
+            mainAxisSize:
+                MainAxisSize.min,
+            children: [
+              Icon(
                 Icons
-                    .refresh_rounded,
+                    .cloud_off_rounded,
+                size:
+                    Responsive.clamped(
+                  context,
+                  base:
+                      60,
+                  min:
+                      50,
+                  max:
+                      76,
+                ),
+                color:
+                    theme
+                        .colorScheme
+                        .error,
               ),
-              label:
-                  const Text(
-                'Try Again',
+
+              SizedBox(
+                height:
+                    Responsive.spacing(
+                  context,
+                  base:
+                      16,
+                  min:
+                      10,
+                  max:
+                      22,
+                ),
               ),
-            ),
-          ],
+
+              Text(
+                'Unable to load your home data.',
+                textAlign:
+                    TextAlign.center,
+                style:
+                    TextStyle(
+                  fontSize:
+                      Responsive.titleSize(
+                    context,
+                    base:
+                        18,
+                    min:
+                        16,
+                    max:
+                        24,
+                  ),
+                  fontWeight:
+                      FontWeight.w700,
+                ),
+              ),
+
+              SizedBox(
+                height:
+                    Responsive.spacing(
+                  context,
+                  base:
+                      8,
+                  min:
+                      6,
+                  max:
+                      12,
+                ),
+              ),
+
+              Text(
+                'Please check your connection and try again.',
+                textAlign:
+                    TextAlign.center,
+                style:
+                    TextStyle(
+                  fontSize:
+                      Responsive.bodyTextSize(
+                    context,
+                    base:
+                        13,
+                    min:
+                        12,
+                    max:
+                        16,
+                  ),
+                  color:
+                      theme
+                          .colorScheme
+                          .onSurface
+                          .withValues(
+                    alpha:
+                        0.65,
+                  ),
+                ),
+              ),
+
+              SizedBox(
+                height:
+                    Responsive.spacing(
+                  context,
+                  base:
+                      18,
+                  min:
+                      12,
+                  max:
+                      24,
+                ),
+              ),
+
+              SizedBox(
+                height:
+                    Responsive.buttonHeight(
+                  context,
+                ),
+                child:
+                    FilledButton.icon(
+                  onPressed:
+                      onRetry,
+                  icon:
+                      const Icon(
+                    Icons
+                        .refresh_rounded,
+                  ),
+                  label:
+                      const Text(
+                    'Try Again',
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
