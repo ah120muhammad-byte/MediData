@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+
 import '../../core/responsive/responsive.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/student_preferences_service.dart';
@@ -15,6 +16,7 @@ class ProfileScreen extends StatefulWidget {
 
   final void Function(StudentExamAttempt attempt)? onExamAttemptTap;
   final VoidCallback? onOpenExamHistory;
+
   const ProfileScreen({
     super.key,
     this.onOpenLecture,
@@ -34,24 +36,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-
     _future = _loadData();
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // LOAD
-  // ===========================================================================
+  // ==========================================================================
 
   Future<_ProfilePageData> _loadData() async {
-    final profile = await _service.getProfile();
-    final analytics = await _service.getAnalytics();
+    final results = await Future.wait([
+      _service.getProfile(),
+      _service.getAnalytics(),
+      _service.getModuleProgress(),
+    ]);
 
-    return _ProfilePageData(profile: profile, analytics: analytics);
+    return _ProfilePageData(
+      profile: results[0] as StudentProfile,
+      analytics: results[1] as StudentProfileAnalytics,
+      moduleProgress: results[2] as List<StudentModuleProgress>,
+    );
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // REFRESH
-  // ===========================================================================
+  // ==========================================================================
 
   Future<void> _refresh() async {
     if (!mounted) {
@@ -65,9 +73,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _future;
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // BUILD
-  // ===========================================================================
+  // ==========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -90,148 +98,190 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         final horizontalPadding = Responsive.horizontalPadding(context);
 
-        final bottomPadding = Responsive.scrollBottomPadding(
-          context,
-          base: 125,
-        );
-
-        return RefreshIndicator(
-          onRefresh: _refresh,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            padding: EdgeInsets.fromLTRB(
-              horizontalPadding,
-              Responsive.spacing(context, base: 18, min: 12, max: 30),
-              horizontalPadding,
-              bottomPadding,
-            ),
-            child: Responsive.constrained(
-              context,
-              maxWidth: 1100,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _ProfileHeader(
-                    profile: data.profile,
-                    onEdit: () => _showEditProfile(data.profile),
-                  ),
-
-                  SizedBox(
-                    height: Responsive.spacing(
-                      context,
-                      base: 18,
-                      min: 14,
-                      max: 28,
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: Responsive.clamped(context, base: 92, min: 84, max: 105),
+          ),
+          child: RefreshIndicator(
+            onRefresh: _refresh,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                Responsive.spacing(context, base: 12, min: 8, max: 20),
+                horizontalPadding,
+                18,
+              ),
+              child: Responsive.constrained(
+                context,
+                maxWidth: 1100,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ==========================================================
+                    // PROFILE HEADER
+                    // ==========================================================
+                    _ProfileHeader(
+                      profile: data.profile,
+                      onEdit: () => _showEditProfile(data.profile),
                     ),
-                  ),
 
-                  _OverviewGrid(analytics: data.analytics),
-
-                  SizedBox(
-                    height: Responsive.spacing(
-                      context,
-                      base: 20,
-                      min: 16,
-                      max: 30,
+                    SizedBox(
+                      height: Responsive.spacing(
+                        context,
+                        base: 10,
+                        min: 7,
+                        max: 16,
+                      ),
                     ),
-                  ),
 
-                  _SectionCard(
-                    title: 'Study Activity',
-                    icon: Icons.insights_rounded,
-                    child: _StudyActivityChart(
-                      activity: data.analytics.dailyActivity,
+                    // ==========================================================
+                    // OVERVIEW
+                    // ==========================================================
+                    _OverviewGrid(analytics: data.analytics),
+
+                    SizedBox(
+                      height: Responsive.spacing(
+                        context,
+                        base: 12,
+                        min: 9,
+                        max: 18,
+                      ),
                     ),
-                  ),
 
-                  SizedBox(
-                    height: Responsive.spacing(
-                      context,
-                      base: 20,
-                      min: 16,
-                      max: 30,
+                    // ==========================================================
+                    // LEARNING PROGRESS
+                    // ==========================================================
+                    _SectionCard(
+                      title: 'Learning Progress',
+                      icon: Icons.school_rounded,
+                      child: _LearningProgress(modules: data.moduleProgress),
                     ),
-                  ),
 
-                  _SectionCard(
-                    title: 'Exam Performance',
-                    icon: Icons.analytics_rounded,
-                    child: _ExamChart(attempts: data.analytics.attempts),
-                  ),
-
-                  SizedBox(
-                    height: Responsive.spacing(
-                      context,
-                      base: 20,
-                      min: 16,
-                      max: 30,
+                    SizedBox(
+                      height: Responsive.spacing(
+                        context,
+                        base: 12,
+                        min: 9,
+                        max: 18,
+                      ),
                     ),
-                  ),
 
-                  _SectionCard(
-                    title: 'Exam Attempts',
-                    icon: Icons.history_rounded,
-                    trailing: widget.onOpenExamHistory == null
-                        ? null
-                        : TextButton(
-                            onPressed: widget.onOpenExamHistory,
-                            child: const Text('View All'),
-                          ),
-                    child: _ExamAttemptsList(
-                      attempts: data.analytics.attempts,
-                      onAttemptTap: widget.onExamAttemptTap,
+                    // ==========================================================
+                    // STUDY ACTIVITY
+                    // ==========================================================
+                    _SectionCard(
+                      title: 'Study Activity',
+                      icon: Icons.insights_rounded,
+                      child: _StudyActivityChart(
+                        activity: data.analytics.dailyActivity,
+                      ),
                     ),
-                  ),
 
-                  SizedBox(
-                    height: Responsive.spacing(
-                      context,
-                      base: 20,
-                      min: 16,
-                      max: 30,
+                    SizedBox(
+                      height: Responsive.spacing(
+                        context,
+                        base: 12,
+                        min: 9,
+                        max: 18,
+                      ),
                     ),
-                  ),
 
-                  _SectionCard(
-                    title: 'Lecture Activity',
-                    icon: Icons.menu_book_rounded,
-                    child: _LectureActivityList(
-                      activities: data.analytics.lectureActivities,
-                      onOpenLecture: widget.onOpenLecture,
+                    // ==========================================================
+                    // EXAM PERFORMANCE
+                    // ==========================================================
+                    _SectionCard(
+                      title: 'Exam Performance',
+                      icon: Icons.analytics_rounded,
+                      child: _ExamChart(attempts: data.analytics.attempts),
                     ),
-                  ),
 
-                  SizedBox(
-                    height: Responsive.spacing(
-                      context,
-                      base: 20,
-                      min: 16,
-                      max: 30,
+                    SizedBox(
+                      height: Responsive.spacing(
+                        context,
+                        base: 12,
+                        min: 9,
+                        max: 18,
+                      ),
                     ),
-                  ),
 
-                  _SectionCard(
-                    title: 'Settings',
-                    icon: Icons.settings_rounded,
-                    child: const _StudentSettings(),
-                  ),
-
-                  SizedBox(
-                    height: Responsive.spacing(
-                      context,
-                      base: 20,
-                      min: 16,
-                      max: 30,
+                    // ==========================================================
+                    // EXAM ATTEMPTS
+                    // ==========================================================
+                    _SectionCard(
+                      title: 'Exam Attempts',
+                      icon: Icons.history_rounded,
+                      trailing: widget.onOpenExamHistory == null
+                          ? null
+                          : TextButton(
+                              onPressed: widget.onOpenExamHistory,
+                              child: const Text('View All'),
+                            ),
+                      child: _ExamAttemptsList(
+                        attempts: data.analytics.attempts,
+                        onAttemptTap: widget.onExamAttemptTap,
+                      ),
                     ),
-                  ),
 
-                  _AccountActions(
-                    onPassword: _showChangePassword,
-                    onLogout: _showLogoutDialog,
-                  ),
-                ],
+                    SizedBox(
+                      height: Responsive.spacing(
+                        context,
+                        base: 12,
+                        min: 9,
+                        max: 18,
+                      ),
+                    ),
+
+                    // ==========================================================
+                    // LECTURE ACTIVITY
+                    // ==========================================================
+                    _SectionCard(
+                      title: 'Lecture Activity',
+                      icon: Icons.menu_book_rounded,
+                      child: _LectureActivityList(
+                        activities: data.analytics.lectureActivities,
+                        onOpenLecture: widget.onOpenLecture,
+                      ),
+                    ),
+
+                    SizedBox(
+                      height: Responsive.spacing(
+                        context,
+                        base: 12,
+                        min: 9,
+                        max: 18,
+                      ),
+                    ),
+
+                    // ==========================================================
+                    // SETTINGS
+                    // ==========================================================
+                    _SectionCard(
+                      title: 'Settings',
+                      icon: Icons.settings_rounded,
+                      child: const _StudentSettings(),
+                    ),
+
+                    SizedBox(
+                      height: Responsive.spacing(
+                        context,
+                        base: 12,
+                        min: 9,
+                        max: 18,
+                      ),
+                    ),
+
+                    // ==========================================================
+                    // ACCOUNT
+                    // ==========================================================
+                    _AccountActions(
+                      onPassword: _showChangePassword,
+                      onLogout: _showLogoutDialog,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -240,14 +290,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // EDIT PROFILE
-  // ===========================================================================
+  // ==========================================================================
 
   Future<void> _showEditProfile(StudentProfile profile) async {
     final nameController = TextEditingController(text: profile.fullName);
 
     final phoneController = TextEditingController(text: profile.phone ?? '');
+
+    final emailController = TextEditingController(text: profile.email);
 
     bool saving = false;
 
@@ -296,7 +348,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     TextField(
                       readOnly: true,
-                      controller: TextEditingController(text: profile.email),
+                      controller: emailController,
                       decoration: const InputDecoration(
                         labelText: 'Email',
                         prefixIcon: Icon(Icons.email_outlined),
@@ -332,18 +384,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               phone: phoneController.text,
                             );
 
-                            if (!mounted) {
-                              return;
-                            }
-
                             if (!dialogContext.mounted) {
                               return;
                             }
 
                             Navigator.of(dialogContext).pop();
+                          } catch (e) {
+                            debugPrint('Update profile error: $e');
 
-                            await _refresh();
-                          } catch (_) {
                             if (!dialogContext.mounted) {
                               return;
                             }
@@ -377,13 +425,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       },
     );
 
+    emailController.dispose();
     nameController.dispose();
     phoneController.dispose();
+
+    if (!mounted) {
+      return;
+    }
+
+    await _refresh();
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // PASSWORD
-  // ===========================================================================
+  // ==========================================================================
 
   Future<void> _showChangePassword() async {
     final passwordController = TextEditingController();
@@ -441,9 +496,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: saving
                       ? null
                       : () async {
-                          if (passwordController.text.length < 6 ||
-                              passwordController.text !=
-                                  confirmController.text) {
+                          final password = passwordController.text;
+
+                          final confirmation = confirmController.text;
+
+                          if (password.length < 6 || password != confirmation) {
                             if (!dialogContext.mounted) {
                               return;
                             }
@@ -453,6 +510,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 content: Text('Check your passwords.'),
                               ),
                             );
+
                             return;
                           }
 
@@ -461,9 +519,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           });
 
                           try {
-                            await _service.updatePassword(
-                              passwordController.text,
-                            );
+                            await _service.updatePassword(password);
 
                             if (!dialogContext.mounted) {
                               return;
@@ -480,7 +536,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 content: Text('Password updated successfully.'),
                               ),
                             );
-                          } catch (_) {
+                          } catch (e) {
+                            debugPrint('Update password error: $e');
+
                             if (!dialogContext.mounted) {
                               return;
                             }
@@ -518,9 +576,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     confirmController.dispose();
   }
 
-  // ===========================================================================
+  // ==========================================================================
   // LOGOUT
-  // ===========================================================================
+  // ==========================================================================
 
   Future<void> _showLogoutDialog() async {
     final result = await showDialog<bool>(
@@ -560,8 +618,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _ProfilePageData {
   final StudentProfile profile;
   final StudentProfileAnalytics analytics;
+  final List<StudentModuleProgress> moduleProgress;
 
-  const _ProfilePageData({required this.profile, required this.analytics});
+  const _ProfilePageData({
+    required this.profile,
+    required this.analytics,
+    required this.moduleProgress,
+  });
 }
 
 // ============================================================================
@@ -596,7 +659,7 @@ class _ProfileHeader extends StatelessWidget {
           children: [
             _Avatar(profile: profile, radius: avatarRadius),
             SizedBox(
-              width: Responsive.spacing(context, base: 16, min: 12, max: 24),
+              width: Responsive.spacing(context, base: 14, min: 10, max: 20),
             ),
             Expanded(
               child: Column(
@@ -619,9 +682,9 @@ class _ProfileHeader extends StatelessWidget {
                   SizedBox(
                     height: Responsive.spacing(
                       context,
-                      base: 5,
+                      base: 4,
                       min: 3,
-                      max: 8,
+                      max: 7,
                     ),
                   ),
                   Text(
@@ -642,9 +705,9 @@ class _ProfileHeader extends StatelessWidget {
                     SizedBox(
                       height: Responsive.spacing(
                         context,
-                        base: 4,
-                        min: 3,
-                        max: 7,
+                        base: 3,
+                        min: 2,
+                        max: 6,
                       ),
                     ),
                     Text(
@@ -725,71 +788,89 @@ class _OverviewGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final columns = Responsive.gridColumns(
-      context,
-      minItemWidth: 220,
-      minColumns: 1,
-      maxColumns: 4,
-    );
+    final width = Responsive.width(context);
 
-    return GridView.count(
-      crossAxisCount: columns,
-      crossAxisSpacing: Responsive.spacing(context, base: 12, min: 8, max: 18),
-      mainAxisSpacing: Responsive.spacing(context, base: 12, min: 8, max: 18),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: columns == 1
-          ? 3.0
-          : columns == 2
-          ? 1.65
-          : 1.75,
-      children: [
-        _StatCard(
-          title: 'Lectures Opened',
-          value: analytics.lecturesOpened,
-          icon: Icons.menu_book_rounded,
-        ),
-        _StatCard(
-          title: 'Audio Completed',
-          value: analytics.audioCompleted,
-          icon: Icons.audio_file_rounded,
-        ),
-        _StatCard(
-          title: 'Video Completed',
-          value: analytics.videoCompleted,
-          icon: Icons.video_file_rounded,
-        ),
-        _StatCard(
-          title: 'Exam Attempts',
-          value: analytics.examAttempts,
-          icon: Icons.quiz_rounded,
-        ),
-        _StatCard(
-          title: 'Average Score',
-          value: '${analytics.averageScore.toStringAsFixed(0)}%',
-          icon: Icons.analytics_rounded,
-        ),
-        _StatCard(
-          title: 'Best Score',
-          value: '${analytics.bestScore.toStringAsFixed(0)}%',
-          icon: Icons.emoji_events_rounded,
-        ),
-        _StatCard(
-          title: 'Passed Exams',
-          value: analytics.passedExams,
-          icon: Icons.check_circle_rounded,
-        ),
-        _StatCard(
-          title: 'Success Rate',
-          value: '${analytics.successRate.toStringAsFixed(0)}%',
-          icon: Icons.trending_up_rounded,
-        ),
-        _StatCard(
-          title: 'Study Time',
-          value: analytics.formattedStudyTime,
-          icon: Icons.timer_outlined,
-        ),
-      ],
+    final horizontalPadding = Responsive.horizontalPadding(context);
+
+    final availableWidth = width - (horizontalPadding * 2);
+
+    final int columns;
+
+    if (availableWidth >= 960) {
+      columns = 4;
+    } else if (availableWidth >= 600) {
+      columns = 3;
+    } else if (availableWidth >= 420) {
+      columns = 2;
+    } else {
+      columns = 1;
+    }
+
+    final spacing = Responsive.spacing(context, base: 8, min: 6, max: 12);
+
+    final itemWidth = (availableWidth - (spacing * (columns - 1))) / columns;
+
+    final itemHeight = columns == 1
+        ? Responsive.clamped(context, base: 70, min: 64, max: 78)
+        : Responsive.clamped(context, base: 90, min: 80, max: 102);
+
+    final cards = <Widget>[
+      _StatCard(
+        title: 'Lectures Opened',
+        value: analytics.lecturesOpened,
+        icon: Icons.menu_book_rounded,
+      ),
+      _StatCard(
+        title: 'Audio Completed',
+        value: analytics.audioCompleted,
+        icon: Icons.audio_file_rounded,
+      ),
+      _StatCard(
+        title: 'Video Completed',
+        value: analytics.videoCompleted,
+        icon: Icons.video_file_rounded,
+      ),
+      _StatCard(
+        title: 'Exam Attempts',
+        value: analytics.examAttempts,
+        icon: Icons.quiz_rounded,
+      ),
+      _StatCard(
+        title: 'Average Score',
+        value: '${analytics.averageScore.toStringAsFixed(0)}%',
+        icon: Icons.analytics_rounded,
+      ),
+      _StatCard(
+        title: 'Best Score',
+        value: '${analytics.bestScore.toStringAsFixed(0)}%',
+        icon: Icons.emoji_events_rounded,
+      ),
+      _StatCard(
+        title: 'Passed Exams',
+        value: analytics.passedExams,
+        icon: Icons.check_circle_rounded,
+      ),
+      _StatCard(
+        title: 'Success Rate',
+        value: '${analytics.successRate.toStringAsFixed(0)}%',
+        icon: Icons.trending_up_rounded,
+      ),
+      _StatCard(
+        title: 'Study Time',
+        value: analytics.formattedStudyTime,
+        icon: Icons.timer_outlined,
+      ),
+    ];
+
+    return Wrap(
+      spacing: spacing,
+      runSpacing: spacing,
+      children: cards
+          .map(
+            (card) =>
+                SizedBox(width: itemWidth, height: itemHeight, child: card),
+          )
+          .toList(),
     );
   }
 }
@@ -813,19 +894,38 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final horizontalPadding = Responsive.spacing(
+      context,
+      base: 9,
+      min: 7,
+      max: 13,
+    );
+
+    final verticalPadding = Responsive.spacing(
+      context,
+      base: 6,
+      min: 5,
+      max: 8,
+    );
+
+    final iconBoxSize = Responsive.clamped(context, base: 36, min: 32, max: 42);
+
     return Card(
       elevation: 0,
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: EdgeInsets.all(
-          Responsive.spacing(context, base: 14, min: 10, max: 20),
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
         ),
         child: Row(
           children: [
             Container(
-              width: Responsive.clamped(context, base: 45, min: 40, max: 54),
-              height: Responsive.clamped(context, base: 45, min: 40, max: 54),
+              width: iconBoxSize,
+              height: iconBoxSize,
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: .10),
+                color: theme.colorScheme.primary.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(
                   Responsive.smallRadius(context),
                 ),
@@ -833,39 +933,36 @@ class _StatCard extends StatelessWidget {
               child: Icon(
                 icon,
                 color: theme.colorScheme.primary,
-                size: Responsive.iconSize(context, base: 23, min: 20, max: 30),
+                size: Responsive.iconSize(context, base: 19, min: 17, max: 24),
               ),
             ),
             SizedBox(
-              width: Responsive.spacing(context, base: 11, min: 8, max: 16),
+              width: Responsive.spacing(context, base: 7, min: 5, max: 10),
             ),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: Responsive.smallTextSize(
                         context,
-                        base: 11,
-                        min: 10,
-                        max: 14,
+                        base: 9.5,
+                        min: 8.5,
+                        max: 12,
                       ),
-                      color: theme.colorScheme.onSurface.withValues(alpha: .55),
+                      height: 1.05,
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.55,
+                      ),
                     ),
                   ),
-                  SizedBox(
-                    height: Responsive.spacing(
-                      context,
-                      base: 4,
-                      min: 3,
-                      max: 6,
-                    ),
-                  ),
+                  const SizedBox(height: 1),
                   Text(
                     value.toString(),
                     maxLines: 1,
@@ -873,10 +970,11 @@ class _StatCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: Responsive.clamped(
                         context,
-                        base: 18,
-                        min: 16,
-                        max: 24,
+                        base: 16,
+                        min: 14,
+                        max: 21,
                       ),
+                      height: 1.0,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -914,7 +1012,9 @@ class _SectionCard extends StatelessWidget {
     return Card(
       elevation: 0,
       child: Padding(
-        padding: EdgeInsets.all(Responsive.cardPadding(context)),
+        padding: EdgeInsets.all(
+          Responsive.clamped(context, base: 13, min: 10, max: 18),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -924,14 +1024,14 @@ class _SectionCard extends StatelessWidget {
                   icon,
                   size: Responsive.iconSize(
                     context,
-                    base: 21,
-                    min: 18,
-                    max: 28,
+                    base: 20,
+                    min: 17,
+                    max: 26,
                   ),
                   color: theme.colorScheme.primary,
                 ),
                 SizedBox(
-                  width: Responsive.spacing(context, base: 9, min: 6, max: 14),
+                  width: Responsive.spacing(context, base: 7, min: 5, max: 12),
                 ),
                 Expanded(
                   child: Text(
@@ -939,19 +1039,19 @@ class _SectionCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: Responsive.titleSize(
                         context,
-                        base: 17,
-                        min: 15,
-                        max: 22,
+                        base: 16,
+                        min: 14,
+                        max: 21,
                       ),
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
-                if (trailing != null) trailing!,
+                ?trailing,
               ],
             ),
             SizedBox(
-              height: Responsive.spacing(context, base: 16, min: 12, max: 22),
+              height: Responsive.spacing(context, base: 9, min: 7, max: 14),
             ),
             child,
           ],
@@ -960,6 +1060,241 @@ class _SectionCard extends StatelessWidget {
     );
   }
 }
+
+// ============================================================================
+// LEARNING PROGRESS
+// ============================================================================
+
+class _LearningProgress extends StatelessWidget {
+  final List<StudentModuleProgress> modules;
+
+  const _LearningProgress({required this.modules});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (modules.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          'Learning progress will appear here once lectures are available.',
+        ),
+      );
+    }
+
+    final modulesWithLectures = modules
+        .where((module) => module.totalLectures > 0)
+        .toList();
+
+    final totalLectures = modulesWithLectures.fold<int>(
+      0,
+      (sum, module) => sum + module.totalLectures,
+    );
+
+    final completedLectures = modulesWithLectures.fold<int>(
+      0,
+      (sum, module) => sum + module.completedLectures,
+    );
+
+    final overallProgress = totalLectures == 0
+        ? 0
+        : ((completedLectures / totalLectures) * 100).round();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // --------------------------------------------------------------------
+        // OVERALL
+        // --------------------------------------------------------------------
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Overall Progress',
+                    style: TextStyle(
+                      fontSize: Responsive.bodyTextSize(
+                        context,
+                        base: 13,
+                        min: 12,
+                        max: 16,
+                      ),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '$completedLectures of '
+                    '$totalLectures lectures completed',
+                    style: TextStyle(
+                      fontSize: Responsive.smallTextSize(
+                        context,
+                        base: 11,
+                        min: 10,
+                        max: 14,
+                      ),
+                      color: theme.colorScheme.onSurface.withValues(alpha: .55),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '$overallProgress%',
+              style: TextStyle(
+                fontSize: Responsive.titleSize(
+                  context,
+                  base: 22,
+                  min: 19,
+                  max: 28,
+                ),
+                fontWeight: FontWeight.w900,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+
+        SizedBox(height: Responsive.spacing(context, base: 8, min: 6, max: 12)),
+
+        ClipRRect(
+          borderRadius: BorderRadius.circular(Responsive.smallRadius(context)),
+          child: LinearProgressIndicator(
+            value: overallProgress / 100,
+            minHeight: Responsive.clamped(context, base: 8, min: 7, max: 10),
+          ),
+        ),
+
+        if (modulesWithLectures.isNotEmpty) ...[
+          SizedBox(
+            height: Responsive.spacing(context, base: 16, min: 12, max: 22),
+          ),
+
+          Text(
+            'Modules',
+            style: TextStyle(
+              fontSize: Responsive.bodyTextSize(
+                context,
+                base: 13,
+                min: 12,
+                max: 16,
+              ),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+
+          SizedBox(
+            height: Responsive.spacing(context, base: 8, min: 6, max: 12),
+          ),
+
+          ...modulesWithLectures.map(
+            (module) => _ModuleProgressTile(module: module),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// MODULE PROGRESS TILE
+// ============================================================================
+
+class _ModuleProgressTile extends StatelessWidget {
+  final StudentModuleProgress module;
+
+  const _ModuleProgressTile({required this.module});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final progress = module.progressPercent / 100;
+
+    final isComplete = module.progressPercent >= 100;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: Responsive.spacing(context, base: 11, min: 8, max: 15),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  module.moduleName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: Responsive.bodyTextSize(
+                      context,
+                      base: 12.5,
+                      min: 11,
+                      max: 15,
+                    ),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: Responsive.spacing(context, base: 8, min: 6, max: 12),
+              ),
+              Text(
+                '${module.completedLectures}/'
+                '${module.totalLectures}',
+                style: TextStyle(
+                  fontSize: Responsive.smallTextSize(
+                    context,
+                    base: 10.5,
+                    min: 9,
+                    max: 13,
+                  ),
+                  color: theme.colorScheme.onSurface.withValues(alpha: .50),
+                ),
+              ),
+              SizedBox(
+                width: Responsive.spacing(context, base: 7, min: 5, max: 10),
+              ),
+              Text(
+                '${module.progressPercent}%',
+                style: TextStyle(
+                  fontSize: Responsive.smallTextSize(
+                    context,
+                    base: 11,
+                    min: 10,
+                    max: 14,
+                  ),
+                  fontWeight: FontWeight.w800,
+                  color: isComplete
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(
+            height: Responsive.spacing(context, base: 5, min: 4, max: 8),
+          ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(
+              Responsive.smallRadius(context),
+            ),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: Responsive.clamped(context, base: 6, min: 5, max: 8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ============================================================================
 // STUDY ACTIVITY CHART
 // ============================================================================
@@ -1004,9 +1339,9 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
 
     final chartHeight = Responsive.clamped(
       context,
-      base: 280,
-      min: 240,
-      max: 340,
+      base: 220,
+      min: 185,
+      max: 270,
     );
 
     return Column(
@@ -1020,28 +1355,25 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
               minX: 0,
               maxX: (widget.activity.length - 1).toDouble(),
               clipData: const FlClipData.none(),
-
               lineTouchData: LineTouchData(
                 enabled: true,
                 handleBuiltInTouches: true,
-                touchSpotThreshold: 28,
+                touchSpotThreshold: 22,
                 getTouchedSpotIndicator: (barData, spotIndexes) {
                   return spotIndexes.map((index) {
                     return TouchedSpotIndicatorData(
                       FlLine(
-                        color: theme.colorScheme.primary.withValues(
-                          alpha: 0.25,
-                        ),
-                        strokeWidth: 1.5,
+                        color: theme.colorScheme.primary.withValues(alpha: .25),
+                        strokeWidth: 1.2,
                         dashArray: [5, 5],
                       ),
                       FlDotData(
                         show: true,
                         getDotPainter: (spot, percent, bar, index) {
                           return FlDotCirclePainter(
-                            radius: 6,
+                            radius: 5.5,
                             color: theme.colorScheme.primary,
-                            strokeWidth: 3,
+                            strokeWidth: 2.5,
                             strokeColor: theme.colorScheme.surface,
                           );
                         },
@@ -1051,8 +1383,8 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
                 },
                 touchTooltipData: LineTouchTooltipData(
                   tooltipPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                    horizontal: 10,
+                    vertical: 7,
                   ),
                   getTooltipItems: (touchedSpots) {
                     return touchedSpots.map((touchedSpot) {
@@ -1075,14 +1407,12 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
                   },
                 ),
                 touchCallback: (event, response) {
-                  if (!mounted) {
-                    return;
-                  }
-
                   if (response == null || !event.isInterestedForInteractions) {
-                    setState(() {
-                      _touchedIndex = null;
-                    });
+                    if (_touchedIndex != null) {
+                      setState(() {
+                        _touchedIndex = null;
+                      });
+                    }
                     return;
                   }
 
@@ -1090,31 +1420,32 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
                       ? response.lineBarSpots!.first
                       : null;
 
-                  setState(() {
-                    _touchedIndex = firstSpot?.x.round();
-                  });
+                  final nextIndex = firstSpot?.x.round();
+
+                  if (_touchedIndex != nextIndex) {
+                    setState(() {
+                      _touchedIndex = nextIndex;
+                    });
+                  }
                 },
               ),
-
               gridData: FlGridData(
                 show: true,
                 drawVerticalLine: false,
                 horizontalInterval: chartMaxY <= 10 ? 2 : chartMaxY / 5,
                 getDrawingHorizontalLine: (value) {
                   return FlLine(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.07),
+                    color: theme.colorScheme.onSurface.withValues(alpha: .06),
                     strokeWidth: 1,
                   );
                 },
               ),
-
               borderData: FlBorderData(show: false),
-
               titlesData: FlTitlesData(
                 leftTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
-                    reservedSize: 36,
+                    reservedSize: 32,
                     interval: chartMaxY / 5,
                     getTitlesWidget: (value, meta) {
                       return Text(
@@ -1122,12 +1453,12 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
                         style: TextStyle(
                           fontSize: Responsive.smallTextSize(
                             context,
-                            base: 10,
-                            min: 9,
+                            base: 9,
+                            min: 8,
                             max: 12,
                           ),
                           color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.50,
+                            alpha: .45,
                           ),
                         ),
                       );
@@ -1144,7 +1475,7 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
                   sideTitles: SideTitles(
                     showTitles: true,
                     interval: widget.activity.length > 7 ? 2 : 1,
-                    reservedSize: 32,
+                    reservedSize: 28,
                     getTitlesWidget: (value, meta) {
                       final index = value.round();
 
@@ -1155,18 +1486,18 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
                       final day = widget.activity[index].day;
 
                       return Padding(
-                        padding: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           '${day.day}/${day.month}',
                           style: TextStyle(
                             fontSize: Responsive.smallTextSize(
                               context,
-                              base: 9.5,
+                              base: 9,
                               min: 8,
                               max: 12,
                             ),
                             color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.55,
+                              alpha: .50,
                             ),
                           ),
                         ),
@@ -1175,30 +1506,26 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
                   ),
                 ),
               ),
-
               lineBarsData: [
                 LineChartBarData(
                   spots: spots,
                   isCurved: true,
-                  curveSmoothness: 0.28,
-                  barWidth: 3.2,
+                  curveSmoothness: .28,
+                  barWidth: 3,
                   color: theme.colorScheme.primary,
                   isStrokeCapRound: true,
                   isStrokeJoinRound: true,
                   dotData: FlDotData(
                     show: true,
                     checkToShowDot: (spot, barData) {
-                      if (_touchedIndex == spot.x.round()) {
-                        return true;
-                      }
-
-                      return spots.length <= 7 ||
+                      return _touchedIndex == spot.x.round() ||
+                          spots.length <= 7 ||
                           spot.x == 0 ||
                           spot.x == spots.length - 1;
                     },
                     getDotPainter: (spot, percent, barData, index) {
                       return FlDotCirclePainter(
-                        radius: _touchedIndex == index ? 5.5 : 3.2,
+                        radius: _touchedIndex == index ? 5 : 2.8,
                         color: theme.colorScheme.primary,
                         strokeWidth: 2,
                         strokeColor: theme.colorScheme.surface,
@@ -1211,8 +1538,8 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        theme.colorScheme.primary.withValues(alpha: 0.18),
-                        theme.colorScheme.primary.withValues(alpha: 0.01),
+                        theme.colorScheme.primary.withValues(alpha: .14),
+                        theme.colorScheme.primary.withValues(alpha: .01),
                       ],
                     ),
                   ),
@@ -1221,7 +1548,7 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
             ),
           ),
         ),
-        SizedBox(height: Responsive.spacing(context, base: 8, min: 6, max: 12)),
+        const SizedBox(height: 5),
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
@@ -1229,11 +1556,11 @@ class _StudyActivityChartState extends State<_StudyActivityChart> {
             style: TextStyle(
               fontSize: Responsive.smallTextSize(
                 context,
-                base: 11,
-                min: 10,
-                max: 14,
+                base: 10.5,
+                min: 9,
+                max: 13,
               ),
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.50),
+              color: theme.colorScheme.onSurface.withValues(alpha: .48),
             ),
           ),
         ),
@@ -1281,13 +1608,13 @@ class _ExamChartState extends State<_ExamChart> {
       (index) => FlSpot(index.toDouble(), completed[index].score.toDouble()),
     );
 
-    final passingScore = _inferPassingScore(completed);
+    final commonPassingScore = _resolveCommonPassingScore(completed);
 
     final chartHeight = Responsive.clamped(
       context,
-      base: 280,
-      min: 240,
-      max: 340,
+      base: 220,
+      min: 185,
+      max: 270,
     );
 
     return Column(
@@ -1300,27 +1627,24 @@ class _ExamChartState extends State<_ExamChart> {
               maxY: 100,
               minX: 0,
               maxX: (completed.length - 1).toDouble(),
-
               lineTouchData: LineTouchData(
                 enabled: true,
-                touchSpotThreshold: 28,
+                touchSpotThreshold: 22,
                 getTouchedSpotIndicator: (barData, spotIndexes) {
                   return spotIndexes.map((index) {
                     return TouchedSpotIndicatorData(
                       FlLine(
-                        color: theme.colorScheme.primary.withValues(
-                          alpha: 0.25,
-                        ),
-                        strokeWidth: 1.5,
+                        color: theme.colorScheme.primary.withValues(alpha: .25),
+                        strokeWidth: 1.2,
                         dashArray: [5, 5],
                       ),
                       FlDotData(
                         show: true,
                         getDotPainter: (spot, percent, bar, index) {
                           return FlDotCirclePainter(
-                            radius: 6,
+                            radius: 5.5,
                             color: theme.colorScheme.primary,
-                            strokeWidth: 3,
+                            strokeWidth: 2.5,
                             strokeColor: theme.colorScheme.surface,
                           );
                         },
@@ -1330,8 +1654,8 @@ class _ExamChartState extends State<_ExamChart> {
                 },
                 touchTooltipData: LineTouchTooltipData(
                   tooltipPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                    horizontal: 10,
+                    vertical: 7,
                   ),
                   getTooltipItems: (touchedSpots) {
                     return touchedSpots.map((touchedSpot) {
@@ -1341,8 +1665,11 @@ class _ExamChartState extends State<_ExamChart> {
                         return null;
                       }
 
+                      final attempt = completed[index];
+
                       return LineTooltipItem(
-                        '${completed[index].score}%',
+                        '${attempt.score}%\n'
+                        '${attempt.examTitle}',
                         TextStyle(
                           color: theme.colorScheme.onSurface,
                           fontWeight: FontWeight.w800,
@@ -1352,14 +1679,12 @@ class _ExamChartState extends State<_ExamChart> {
                   },
                 ),
                 touchCallback: (event, response) {
-                  if (!mounted) {
-                    return;
-                  }
-
                   if (response == null || !event.isInterestedForInteractions) {
-                    setState(() {
-                      _touchedIndex = null;
-                    });
+                    if (_touchedIndex != null) {
+                      setState(() {
+                        _touchedIndex = null;
+                      });
+                    }
                     return;
                   }
 
@@ -1367,31 +1692,32 @@ class _ExamChartState extends State<_ExamChart> {
                       ? response.lineBarSpots!.first
                       : null;
 
-                  setState(() {
-                    _touchedIndex = firstSpot?.x.round();
-                  });
+                  final nextIndex = firstSpot?.x.round();
+
+                  if (_touchedIndex != nextIndex) {
+                    setState(() {
+                      _touchedIndex = nextIndex;
+                    });
+                  }
                 },
               ),
-
               gridData: FlGridData(
                 show: true,
                 drawVerticalLine: false,
                 horizontalInterval: 20,
                 getDrawingHorizontalLine: (value) {
                   return FlLine(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.07),
+                    color: theme.colorScheme.onSurface.withValues(alpha: .06),
                     strokeWidth: 1,
                   );
                 },
               ),
-
               borderData: FlBorderData(show: false),
-
               titlesData: FlTitlesData(
                 leftTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
-                    reservedSize: 38,
+                    reservedSize: 34,
                     interval: 20,
                     getTitlesWidget: (value, meta) {
                       return Text(
@@ -1399,12 +1725,12 @@ class _ExamChartState extends State<_ExamChart> {
                         style: TextStyle(
                           fontSize: Responsive.smallTextSize(
                             context,
-                            base: 10,
-                            min: 9,
+                            base: 9,
+                            min: 8,
                             max: 12,
                           ),
                           color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.50,
+                            alpha: .45,
                           ),
                         ),
                       );
@@ -1421,7 +1747,7 @@ class _ExamChartState extends State<_ExamChart> {
                   sideTitles: SideTitles(
                     showTitles: true,
                     interval: completed.length > 7 ? 2 : 1,
-                    reservedSize: 30,
+                    reservedSize: 27,
                     getTitlesWidget: (value, meta) {
                       final index = value.round();
 
@@ -1430,18 +1756,18 @@ class _ExamChartState extends State<_ExamChart> {
                       }
 
                       return Padding(
-                        padding: const EdgeInsets.only(top: 7),
+                        padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           '#${index + 1}',
                           style: TextStyle(
                             fontSize: Responsive.smallTextSize(
                               context,
-                              base: 9.5,
+                              base: 9,
                               min: 8,
                               max: 12,
                             ),
                             color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.55,
+                              alpha: .50,
                             ),
                           ),
                         ),
@@ -1450,15 +1776,12 @@ class _ExamChartState extends State<_ExamChart> {
                   ),
                 ),
               ),
-
-              extraLinesData: passingScore > 0
+              extraLinesData: commonPassingScore != null
                   ? ExtraLinesData(
                       horizontalLines: [
                         HorizontalLine(
-                          y: passingScore.toDouble(),
-                          color: theme.colorScheme.error.withValues(
-                            alpha: 0.40,
-                          ),
+                          y: commonPassingScore.toDouble(),
+                          color: theme.colorScheme.error.withValues(alpha: .40),
                           strokeWidth: 1.5,
                           dashArray: [6, 5],
                           label: HorizontalLineLabel(
@@ -1470,20 +1793,19 @@ class _ExamChartState extends State<_ExamChart> {
                               color: theme.colorScheme.error,
                             ),
                             labelResolver: (line) {
-                              return 'Pass $passingScore%';
+                              return 'Pass $commonPassingScore%';
                             },
                           ),
                         ),
                       ],
                     )
                   : const ExtraLinesData(),
-
               lineBarsData: [
                 LineChartBarData(
                   spots: spots,
                   isCurved: true,
-                  curveSmoothness: 0.22,
-                  barWidth: 3.2,
+                  curveSmoothness: .22,
+                  barWidth: 3,
                   color: theme.colorScheme.primary,
                   isStrokeCapRound: true,
                   isStrokeJoinRound: true,
@@ -1497,7 +1819,7 @@ class _ExamChartState extends State<_ExamChart> {
                     },
                     getDotPainter: (spot, percent, barData, index) {
                       return FlDotCirclePainter(
-                        radius: _touchedIndex == index ? 5.5 : 3.2,
+                        radius: _touchedIndex == index ? 5 : 2.8,
                         color: theme.colorScheme.primary,
                         strokeWidth: 2,
                         strokeColor: theme.colorScheme.surface,
@@ -1510,8 +1832,8 @@ class _ExamChartState extends State<_ExamChart> {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        theme.colorScheme.primary.withValues(alpha: 0.18),
-                        theme.colorScheme.primary.withValues(alpha: 0.01),
+                        theme.colorScheme.primary.withValues(alpha: .14),
+                        theme.colorScheme.primary.withValues(alpha: .01),
                       ],
                     ),
                   ),
@@ -1520,17 +1842,28 @@ class _ExamChartState extends State<_ExamChart> {
             ),
           ),
         ),
-        SizedBox(
-          height: Responsive.spacing(context, base: 10, min: 7, max: 14),
-        ),
+        const SizedBox(height: 7),
         Row(
           children: [
             _ChartLegendDot(color: theme.colorScheme.primary, label: 'Score'),
             const Spacer(),
-            if (passingScore > 0)
+            if (commonPassingScore != null)
               _ChartLegendDot(
                 color: theme.colorScheme.error,
                 label: 'Passing score',
+              )
+            else
+              Text(
+                'Passing score varies by exam',
+                style: TextStyle(
+                  fontSize: Responsive.smallTextSize(
+                    context,
+                    base: 10,
+                    min: 9,
+                    max: 13,
+                  ),
+                  color: theme.colorScheme.onSurface.withValues(alpha: .45),
+                ),
               ),
           ],
         ),
@@ -1538,26 +1871,26 @@ class _ExamChartState extends State<_ExamChart> {
     );
   }
 
-  int _inferPassingScore(List<StudentExamAttempt> completed) {
-    if (completed.isEmpty) {
-      return 0;
+  int? _resolveCommonPassingScore(List<StudentExamAttempt> attempts) {
+    if (attempts.isEmpty) {
+      return null;
     }
 
-    final passedScores = completed
-        .where((item) => item.passed)
-        .map((item) => item.score)
-        .toList();
+    final scores = attempts
+        .map((attempt) => attempt.passingScore)
+        .where((score) => score > 0 && score <= 100)
+        .toSet();
 
-    if (passedScores.isEmpty) {
-      return 0;
+    if (scores.length != 1) {
+      return null;
     }
 
-    return passedScores.reduce((a, b) => a < b ? a : b);
+    return scores.first;
   }
 }
 
 // ============================================================================
-// CHART LEGEND DOT
+// CHART LEGEND
 // ============================================================================
 
 class _ChartLegendDot extends StatelessWidget {
@@ -1572,18 +1905,18 @@ class _ChartLegendDot extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 9,
-          height: 9,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        SizedBox(width: Responsive.spacing(context, base: 6, min: 4, max: 8)),
+        const SizedBox(width: 5),
         Text(
           label,
           style: TextStyle(
             fontSize: Responsive.smallTextSize(
               context,
-              base: 11,
-              min: 10,
+              base: 10.5,
+              min: 9,
               max: 14,
             ),
           ),
@@ -1608,33 +1941,33 @@ class _ChartEmptyState extends StatelessWidget {
     final theme = Theme.of(context);
 
     return SizedBox(
-      height: Responsive.clamped(context, base: 220, min: 180, max: 260),
+      height: Responsive.clamped(context, base: 170, min: 145, max: 210),
       child: Center(
         child: Padding(
-          padding: EdgeInsets.all(Responsive.cardPadding(context)),
+          padding: EdgeInsets.all(
+            Responsive.clamped(context, base: 14, min: 10, max: 20),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 icon,
-                size: Responsive.clamped(context, base: 54, min: 46, max: 66),
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.25),
+                size: Responsive.clamped(context, base: 46, min: 40, max: 58),
+                color: theme.colorScheme.onSurface.withValues(alpha: .22),
               ),
-              SizedBox(
-                height: Responsive.spacing(context, base: 12, min: 8, max: 18),
-              ),
+              const SizedBox(height: 10),
               Text(
                 text,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: Responsive.bodyTextSize(
                     context,
-                    base: 13,
-                    min: 12,
-                    max: 16,
+                    base: 12,
+                    min: 11,
+                    max: 15,
                   ),
-                  height: 1.4,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.60),
+                  height: 1.35,
+                  color: theme.colorScheme.onSurface.withValues(alpha: .58),
                 ),
               ),
             ],
@@ -1651,7 +1984,6 @@ class _ChartEmptyState extends StatelessWidget {
 
 class _ExamAttemptsList extends StatelessWidget {
   final List<StudentExamAttempt> attempts;
-
   final void Function(StudentExamAttempt attempt)? onAttemptTap;
 
   const _ExamAttemptsList({required this.attempts, required this.onAttemptTap});
@@ -1660,14 +1992,13 @@ class _ExamAttemptsList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (attempts.isEmpty) {
       return const Padding(
-        padding: EdgeInsets.all(12),
+        padding: EdgeInsets.all(10),
         child: Text('No exam attempts yet.'),
       );
     }
 
     return Column(
       children: attempts
-          .take(15)
           .map(
             (attempt) => _ExamAttemptTile(
               attempt: attempt,
@@ -1706,14 +2037,12 @@ class _ExamAttemptTile extends StatelessWidget {
       statusLabel = 'In Progress';
     } else {
       statusColor = Colors.orange;
-
       statusLabel = 'Abandoned';
     }
 
     return ListTile(
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: Responsive.spacing(context, base: 4, min: 2, max: 8),
-      ),
+      contentPadding: EdgeInsets.zero,
+      dense: true,
       leading: CircleAvatar(
         backgroundColor: statusColor.withValues(alpha: .10),
         child: Icon(
@@ -1734,7 +2063,7 @@ class _ExamAttemptTile extends StatelessWidget {
       subtitle: Text(
         attempt.isCompleted ? '${attempt.score}% • $statusLabel' : statusLabel,
       ),
-      trailing: const Icon(Icons.chevron_right_rounded),
+      trailing: onTap == null ? null : const Icon(Icons.chevron_right_rounded),
       onTap: onTap,
     );
   }
@@ -1763,24 +2092,17 @@ class _LectureActivityList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (activities.isEmpty) {
       return const Padding(
-        padding: EdgeInsets.all(12),
+        padding: EdgeInsets.all(10),
         child: Text('No lecture activity yet.'),
       );
     }
 
     return Column(
       children: activities
-          .take(15)
           .map(
             (activity) => ListTile(
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: Responsive.spacing(
-                  context,
-                  base: 4,
-                  min: 2,
-                  max: 8,
-                ),
-              ),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
               leading: CircleAvatar(
                 backgroundColor: AppColors.primary.withValues(alpha: .10),
                 child: Icon(Icons.menu_book_rounded, color: AppColors.primary),
@@ -1795,7 +2117,9 @@ class _LectureActivityList extends StatelessWidget {
                 '${activity.moduleName} • '
                 '${activity.progressPercent}% progress',
               ),
-              trailing: const Icon(Icons.chevron_right_rounded),
+              trailing: onOpenLecture == null
+                  ? null
+                  : const Icon(Icons.chevron_right_rounded),
               onTap: onOpenLecture == null
                   ? null
                   : () {
@@ -1838,7 +2162,6 @@ class _StudentSettingsState extends State<_StudentSettings> {
   @override
   void initState() {
     super.initState();
-
     _loadSettings();
   }
 
@@ -1880,7 +2203,7 @@ class _StudentSettingsState extends State<_StudentSettings> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Padding(
-        padding: EdgeInsets.all(20),
+        padding: EdgeInsets.all(18),
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -1889,14 +2212,11 @@ class _StudentSettingsState extends State<_StudentSettings> {
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
+          dense: true,
           title: const Text('Notifications'),
           subtitle: const Text('Receive study and exam reminders.'),
           value: _notifications,
           onChanged: (value) async {
-            if (!mounted) {
-              return;
-            }
-
             setState(() {
               _notifications = value;
             });
@@ -1906,14 +2226,11 @@ class _StudentSettingsState extends State<_StudentSettings> {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
+          dense: true,
           title: const Text('Auto Play Media'),
           subtitle: const Text('Automatically start audio or video.'),
           value: _autoPlay,
           onChanged: (value) async {
-            if (!mounted) {
-              return;
-            }
-
             setState(() {
               _autoPlay = value;
             });
@@ -1923,14 +2240,11 @@ class _StudentSettingsState extends State<_StudentSettings> {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
+          dense: true,
           title: const Text('Wi-Fi Only Downloads'),
           subtitle: const Text('Prevent lecture downloads over mobile data.'),
           value: _wifiOnlyDownloads,
           onChanged: (value) async {
-            if (!mounted) {
-              return;
-            }
-
             setState(() {
               _wifiOnlyDownloads = value;
             });
@@ -1940,6 +2254,7 @@ class _StudentSettingsState extends State<_StudentSettings> {
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,
+          dense: true,
           title: const Text('Default Playback Speed'),
           subtitle: const Text('Used when opening audio lectures.'),
           trailing: DropdownButton<double>(
@@ -1954,10 +2269,6 @@ class _StudentSettingsState extends State<_StudentSettings> {
             ],
             onChanged: (value) async {
               if (value == null) {
-                return;
-              }
-
-              if (!mounted) {
                 return;
               }
 
@@ -1993,6 +2304,10 @@ class _AccountActions extends StatelessWidget {
       child: Column(
         children: [
           ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: Responsive.spacing(context, base: 4, min: 2, max: 8),
+            ),
             leading: const Icon(Icons.lock_outline_rounded),
             title: const Text('Change Password'),
             trailing: const Icon(Icons.chevron_right_rounded),
@@ -2000,6 +2315,10 @@ class _AccountActions extends StatelessWidget {
           ),
           const Divider(height: 1),
           ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: Responsive.spacing(context, base: 4, min: 2, max: 8),
+            ),
             leading: Icon(Icons.logout_rounded, color: theme.colorScheme.error),
             title: Text(
               'Sign Out',
@@ -2035,11 +2354,9 @@ class _ErrorView extends StatelessWidget {
           children: [
             Icon(
               Icons.cloud_off_rounded,
-              size: Responsive.clamped(context, base: 60, min: 50, max: 76),
+              size: Responsive.clamped(context, base: 56, min: 48, max: 72),
             ),
-            SizedBox(
-              height: Responsive.spacing(context, base: 16, min: 10, max: 22),
-            ),
+            const SizedBox(height: 12),
             Text(
               'Unable to load profile data.',
               textAlign: TextAlign.center,
@@ -2053,9 +2370,7 @@ class _ErrorView extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            SizedBox(
-              height: Responsive.spacing(context, base: 16, min: 12, max: 24),
-            ),
+            const SizedBox(height: 14),
             SizedBox(
               height: Responsive.buttonHeight(context),
               child: FilledButton.icon(

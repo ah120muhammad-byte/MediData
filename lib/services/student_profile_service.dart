@@ -448,6 +448,26 @@ class StudentProfileAnalytics {
 }
 
 // =============================================================================
+// MODULE LEARNING PROGRESS
+// =============================================================================
+
+class StudentModuleProgress {
+  final String moduleId;
+  final String moduleName;
+  final int totalLectures;
+  final int completedLectures;
+  final int progressPercent;
+
+  const StudentModuleProgress({
+    required this.moduleId,
+    required this.moduleName,
+    required this.totalLectures,
+    required this.completedLectures,
+    required this.progressPercent,
+  });
+}
+
+// =============================================================================
 // SERVICE
 // =============================================================================
 
@@ -460,7 +480,197 @@ class StudentProfileService {
 
   final SupabaseClient _supabase =
       Supabase.instance.client;
+// ===========================================================================
+// MODULE LEARNING PROGRESS
+// ===========================================================================
 
+Future<List<StudentModuleProgress>> getModuleProgress() async {
+  final user = _supabase.auth.currentUser;
+
+  if (user == null) {
+    throw Exception('No authenticated user.');
+  }
+
+  // -------------------------------------------------------------------------
+  // ALL ACTIVE MODULES
+  // -------------------------------------------------------------------------
+
+  final modulesResponse = await _supabase
+      .from('modules')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('name', ascending: true);
+
+  final modules = (modulesResponse as List)
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
+
+  if (modules.isEmpty) {
+    return const [];
+  }
+
+  final moduleIds = modules
+      .map((module) => module['id'].toString())
+      .toList();
+
+  // -------------------------------------------------------------------------
+  // ALL ACTIVE / PUBLISHED LECTURES
+  // -------------------------------------------------------------------------
+
+  final lecturesResponse = await _supabase
+      .from('lectures')
+      .select('id, module_id, title')
+      .inFilter('module_id', moduleIds)
+      .eq('is_active', true)
+      .eq('is_published', true)
+      .order('display_order', ascending: true);
+
+  final lectures = (lecturesResponse as List)
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
+
+  if (lectures.isEmpty) {
+    return modules.map((module) {
+      return StudentModuleProgress(
+        moduleId: module['id'].toString(),
+        moduleName: module['name']?.toString() ?? 'Module',
+        totalLectures: 0,
+        completedLectures: 0,
+        progressPercent: 0,
+      );
+    }).toList();
+  }
+
+  final lectureIds = lectures
+      .map((lecture) => lecture['id'].toString())
+      .toList();
+
+  // -------------------------------------------------------------------------
+  // STUDENT PROGRESS
+  // -------------------------------------------------------------------------
+
+  final progressResponse = await _supabase
+      .from('lecture_progress')
+      .select('''
+        lecture_id,
+        audio_position,
+        video_position,
+        audio_completed,
+        video_completed
+      ''')
+      .eq('user_id', user.id)
+      .inFilter('lecture_id', lectureIds);
+
+  final progressRows = (progressResponse as List)
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
+
+  final progressByLecture = <String, Map<String, dynamic>>{};
+
+  for (final row in progressRows) {
+    final lectureId = row['lecture_id']?.toString();
+
+    if (lectureId == null || lectureId.isEmpty) {
+      continue;
+    }
+
+    progressByLecture[lectureId] = row;
+  }
+
+  // -------------------------------------------------------------------------
+  // BUILD MODULE PROGRESS
+  // -------------------------------------------------------------------------
+
+  final result = <StudentModuleProgress>[];
+
+  for (final module in modules) {
+    final moduleId = module['id']?.toString() ?? '';
+
+    if (moduleId.isEmpty) {
+      continue;
+    }
+
+    final moduleLectures = lectures.where((lecture) {
+      return lecture['module_id']?.toString() == moduleId;
+    }).toList();
+
+    if (moduleLectures.isEmpty) {
+      result.add(
+        StudentModuleProgress(
+          moduleId: moduleId,
+          moduleName: module['name']?.toString() ?? 'Module',
+          totalLectures: 0,
+          completedLectures: 0,
+          progressPercent: 0,
+        ),
+      );
+
+      continue;
+    }
+
+    int completedLectures = 0;
+    int totalProgress = 0;
+
+    for (final lecture in moduleLectures) {
+      final lectureId = lecture['id']?.toString() ?? '';
+
+      final progress = progressByLecture[lectureId];
+
+      final audioCompleted =
+          progress?['audio_completed'] as bool? ?? false;
+
+      final videoCompleted =
+          progress?['video_completed'] as bool? ?? false;
+
+      final audioPosition =
+          (progress?['audio_position'] as num?)?.toInt() ?? 0;
+
+      final videoPosition =
+          (progress?['video_position'] as num?)?.toInt() ?? 0;
+
+      int lectureProgress = 0;
+
+      if (audioCompleted || videoCompleted) {
+        lectureProgress = 100;
+        completedLectures++;
+      } else if (audioPosition > 0 || videoPosition > 0) {
+        lectureProgress = 50;
+      }
+
+      totalProgress += lectureProgress;
+    }
+
+    final progressPercent =
+        (totalProgress / moduleLectures.length).round();
+
+    result.add(
+      StudentModuleProgress(
+        moduleId: moduleId,
+        moduleName: module['name']?.toString() ?? 'Module',
+        totalLectures: moduleLectures.length,
+        completedLectures: completedLectures,
+        progressPercent: progressPercent.clamp(0, 100),
+      ),
+    );
+  }
+
+  // Modules with lectures first, then empty modules.
+  result.sort((a, b) {
+    if (a.totalLectures == 0 && b.totalLectures > 0) {
+      return 1;
+    }
+
+    if (a.totalLectures > 0 && b.totalLectures == 0) {
+      return -1;
+    }
+
+    return a.moduleName.toLowerCase().compareTo(
+          b.moduleName.toLowerCase(),
+        );
+  });
+
+  return result;
+}
   // ===========================================================================
   // PROFILE
   // ===========================================================================
