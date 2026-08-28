@@ -1,11 +1,10 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-
+import '../../core/responsive/responsive.dart';
+import '../../core/theme/app_colors.dart';
 import '../../services/global_search_service.dart';
 
-class SearchScreen
-    extends StatefulWidget {
+class SearchScreen extends StatefulWidget {
   final Future<void> Function(
     String lectureId,
   )? onOpenLecture;
@@ -22,16 +21,26 @@ class SearchScreen
 
 class _SearchScreenState
     extends State<SearchScreen> {
-  final GlobalSearchService
-      _searchService =
+  // ===========================================================================
+  // SERVICE
+  // ===========================================================================
+
+  final GlobalSearchService _searchService =
       GlobalSearchService.instance;
 
-  final TextEditingController
-      _controller =
+  // ===========================================================================
+  // CONTROLLERS
+  // ===========================================================================
+
+  final TextEditingController _controller =
       TextEditingController();
 
   final FocusNode _focusNode =
       FocusNode();
+
+  // ===========================================================================
+  // STATE
+  // ===========================================================================
 
   Timer? _debounce;
 
@@ -39,10 +48,10 @@ class _SearchScreenState
 
   String _query = '';
 
-  List<GlobalSearchResult>
-      _results = [];
-
   String? _error;
+
+  List<GlobalSearchResult> _results =
+      <GlobalSearchResult>[];
 
   // ===========================================================================
   // INIT
@@ -52,12 +61,13 @@ class _SearchScreenState
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance
-        .addPostFrameCallback(
+    WidgetsBinding.instance.addPostFrameCallback(
       (_) {
-        if (mounted) {
-          _focusNode.requestFocus();
+        if (!mounted) {
+          return;
         }
+
+        _focusNode.requestFocus();
       },
     );
   }
@@ -69,16 +79,14 @@ class _SearchScreenState
   @override
   void dispose() {
     _debounce?.cancel();
-
     _controller.dispose();
-
     _focusNode.dispose();
 
     super.dispose();
   }
 
   // ===========================================================================
-  // SEARCH
+  // SEARCH INPUT
   // ===========================================================================
 
   void _onSearchChanged(
@@ -86,8 +94,11 @@ class _SearchScreenState
   ) {
     _debounce?.cancel();
 
-    final query =
-        value.trim();
+    final query = value.trim();
+
+    if (!mounted) {
+      return;
+    }
 
     setState(() {
       _query = query;
@@ -96,7 +107,7 @@ class _SearchScreenState
 
     if (query.isEmpty) {
       setState(() {
-        _results = [];
+        _results = <GlobalSearchResult>[];
         _loading = false;
       });
 
@@ -105,7 +116,7 @@ class _SearchScreenState
 
     _debounce = Timer(
       const Duration(
-        milliseconds: 400,
+        milliseconds: 350,
       ),
       () {
         unawaited(
@@ -118,7 +129,11 @@ class _SearchScreenState
   Future<void> _performSearch(
     String query,
   ) async {
-    if (!mounted) {
+    final normalizedQuery =
+        query.trim();
+
+    if (normalizedQuery.isEmpty ||
+        !mounted) {
       return;
     }
 
@@ -129,10 +144,17 @@ class _SearchScreenState
 
     try {
       final results =
-          await _searchService
-              .search(query);
+          await _searchService.search(
+        normalizedQuery,
+      );
 
       if (!mounted) {
+        return;
+      }
+
+      // Ignore stale responses when the user has
+      // already typed a different query.
+      if (_query != normalizedQuery) {
         return;
       }
 
@@ -140,9 +162,13 @@ class _SearchScreenState
         _results = results;
         _loading = false;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint(
         'Global search error: $e',
+      );
+
+      debugPrint(
+        stackTrace.toString(),
       );
 
       if (!mounted) {
@@ -158,7 +184,48 @@ class _SearchScreenState
   }
 
   // ===========================================================================
-  // OPEN RESULT
+  // SUBMIT
+  // ===========================================================================
+
+  void _submitSearch(
+    String value,
+  ) {
+    final query = value.trim();
+
+    if (query.isEmpty) {
+      return;
+    }
+
+    _debounce?.cancel();
+
+    _performSearch(query);
+  }
+
+  // ===========================================================================
+  // CLEAR
+  // ===========================================================================
+
+  void _clearSearch() {
+    _debounce?.cancel();
+
+    _controller.clear();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _query = '';
+      _results = <GlobalSearchResult>[];
+      _loading = false;
+      _error = null;
+    });
+
+    _focusNode.requestFocus();
+  }
+
+  // ===========================================================================
+  // OPEN LECTURE
   // ===========================================================================
 
   Future<void> _openResult(
@@ -177,40 +244,30 @@ class _SearchScreenState
       return;
     }
 
-    if (widget.onOpenLecture !=
-        null) {
-      await widget.onOpenLecture!(
-        lectureId,
-      );
+    final callback =
+        widget.onOpenLecture;
 
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.of(context).pop();
-
+    if (callback == null) {
       return;
     }
+
+    _focusNode.unfocus();
+
+    await callback(
+      lectureId,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(
+      context,
+    ).pop();
   }
 
   // ===========================================================================
-  // CLEAR
-  // ===========================================================================
-
-  void _clearSearch() {
-    _controller.clear();
-
-    setState(() {
-      _query = '';
-      _results = [];
-      _error = null;
-    });
-
-    _focusNode.requestFocus();
-  }
-
-  // ===========================================================================
-  // RESULT ICON
+  // TYPE ICON
   // ===========================================================================
 
   IconData _iconForType(
@@ -229,7 +286,7 @@ class _SearchScreenState
   }
 
   // ===========================================================================
-  // RESULT LABEL
+  // TYPE LABEL
   // ===========================================================================
 
   String _labelForType(
@@ -237,7 +294,7 @@ class _SearchScreenState
   ) {
     switch (type) {
       case SearchResultType.level:
-        return 'Academic Level';
+        return 'Level';
 
       case SearchResultType.module:
         return 'Module';
@@ -248,32 +305,23 @@ class _SearchScreenState
   }
 
   // ===========================================================================
-  // RESULT SUBTITLE
+  // RESULT CONTEXT
   // ===========================================================================
 
-  String _subtitleForResult(
+  String _contextForResult(
     GlobalSearchResult result,
   ) {
     switch (result.type) {
       case SearchResultType.level:
-        if (result.description !=
-                null &&
-            result.description!
-                .trim()
-                .isNotEmpty) {
-          return result.description!
-              .trim();
-        }
-
         return 'Academic Level';
 
       case SearchResultType.module:
-        final level =
-            result.levelName;
-
-        if (level != null &&
-            level.isNotEmpty) {
-          return '$level • Module';
+        if (result.levelName != null &&
+            result.levelName!
+                .trim()
+                .isNotEmpty) {
+          return result.levelName!
+              .trim();
         }
 
         return 'Module';
@@ -285,18 +333,22 @@ class _SearchScreenState
         if (result.levelName !=
                 null &&
             result.levelName!
+                .trim()
                 .isNotEmpty) {
           parts.add(
-            result.levelName!,
+            result.levelName!
+                .trim(),
           );
         }
 
         if (result.moduleName !=
                 null &&
             result.moduleName!
+                .trim()
                 .isNotEmpty) {
           parts.add(
-            result.moduleName!,
+            result.moduleName!
+                .trim(),
           );
         }
 
@@ -321,66 +373,191 @@ class _SearchScreenState
     final theme =
         Theme.of(context);
 
-    final size =
-        MediaQuery.sizeOf(context);
+    final colorScheme =
+        theme.colorScheme;
 
-    final isTablet =
-        size.shortestSide >= 600;
+    final width =
+        Responsive.width(context);
+
+    final isWide =
+        width >= 700;
 
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing:
-            isTablet ? 20 : 8,
-        title:
-            TextField(
-          controller:
-              _controller,
-          focusNode:
-              _focusNode,
-          textInputAction:
-              TextInputAction.search,
-          onSubmitted:
-              (value) {
-            final query =
-                value.trim();
+      resizeToAvoidBottomInset:
+          true,
+      backgroundColor:
+          colorScheme.surface,
+      appBar:
+          _buildAppBar(
+        context,
+        isWide,
+      ),
+      body:
+          SafeArea(
+        top: false,
+        child:
+            _buildBody(
+          context,
+          isWide,
+        ),
+      ),
+    );
+  }
 
-            if (query.isNotEmpty) {
-              unawaited(
-                _performSearch(
-                  query,
-                ),
-              );
-            }
-          },
-          onChanged:
-              _onSearchChanged,
-          decoration:
-              InputDecoration(
-            hintText:
-                'Search levels, modules, lectures...',
-            border:
-                InputBorder.none,
-            suffixIcon:
-                _query.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip:
-                            'Clear',
-                        onPressed:
-                            _clearSearch,
-                        icon:
-                            const Icon(
-                          Icons
-                              .clear_rounded,
-                        ),
-                      ),
+  // ===========================================================================
+  // APP BAR
+  // ===========================================================================
+
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    bool isWide,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final colorScheme =
+        theme.colorScheme;
+
+    return AppBar(
+      elevation:
+          0,
+      backgroundColor:
+          colorScheme.surface,
+      surfaceTintColor:
+          Colors.transparent,
+      automaticallyImplyLeading:
+          true,
+      titleSpacing:
+          isWide
+              ? 12
+              : 4,
+      title:
+          _buildSearchField(
+        context,
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // SEARCH FIELD
+  // ===========================================================================
+
+  Widget _buildSearchField(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final colorScheme =
+        theme.colorScheme;
+
+    return Container(
+      height:
+          Responsive.clamped(
+        context,
+        base: 46,
+        min: 42,
+        max: 52,
+      ),
+      decoration:
+          BoxDecoration(
+        color:
+            colorScheme
+                .surfaceContainerHighest
+                .withValues(
+              alpha:
+                  .72,
+            ),
+        borderRadius:
+            BorderRadius.circular(
+          15,
+        ),
+        border:
+            Border.all(
+          color:
+              colorScheme
+                  .outline
+                  .withValues(
+            alpha:
+                .10,
           ),
         ),
       ),
-      body:
-          _buildBody(
-        theme,
-        isTablet,
+      child:
+          TextField(
+        controller:
+            _controller,
+        focusNode:
+            _focusNode,
+        autofocus:
+            false,
+        textInputAction:
+            TextInputAction.search,
+        textCapitalization:
+            TextCapitalization.sentences,
+        onChanged:
+            _onSearchChanged,
+        onSubmitted:
+            _submitSearch,
+        decoration:
+            InputDecoration(
+          border:
+              InputBorder.none,
+          hintText:
+              'Search levels, modules or lectures...',
+          hintStyle:
+              TextStyle(
+            fontSize:
+                Responsive.bodyTextSize(
+              context,
+              base:
+                  13,
+              min:
+                  12,
+              max:
+                  16,
+            ),
+            color:
+                colorScheme
+                    .onSurface
+                    .withValues(
+              alpha:
+                  .45,
+            ),
+          ),
+          prefixIcon:
+              Icon(
+            Icons
+                .search_rounded,
+            color:
+                colorScheme
+                    .onSurface
+                    .withValues(
+              alpha:
+                  .55,
+            ),
+          ),
+          suffixIcon:
+              _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip:
+                          'Clear',
+                      onPressed:
+                          _clearSearch,
+                      icon:
+                          const Icon(
+                        Icons
+                            .close_rounded,
+                      ),
+                    ),
+          contentPadding:
+              const EdgeInsets
+                  .symmetric(
+            vertical:
+                12,
+          ),
+        ),
       ),
     );
   }
@@ -390,390 +567,192 @@ class _SearchScreenState
   // ===========================================================================
 
   Widget _buildBody(
-    ThemeData theme,
-    bool isTablet,
+    BuildContext context,
+    bool isWide,
   ) {
     if (_loading) {
-      return const Center(
-        child:
-            CircularProgressIndicator(),
+      return _buildLoading(
+        context,
       );
     }
 
     if (_error != null) {
-      return _ErrorState(
-        message:
-            _error!,
-        onRetry: () {
-          if (_query.isNotEmpty) {
-            unawaited(
-              _performSearch(
-                _query,
-              ),
-            );
-          }
-        },
+      return _buildError(
+        context,
       );
     }
 
     if (_query.isEmpty) {
-      return const _SearchInitialView();
+      return const _SearchEmptyState();
     }
 
     if (_results.isEmpty) {
-      return _NoResultsView(
-        query: _query,
+      return _SearchNoResultsState(
+        query:
+            _query,
       );
     }
 
-    return ListView.separated(
-      physics:
-          const BouncingScrollPhysics(),
-      padding:
-          EdgeInsets.fromLTRB(
-        isTablet ? 32 : 16,
-        isTablet ? 24 : 16,
-        isTablet ? 32 : 16,
-        32,
-      ),
-      itemCount:
-          _results.length,
-      separatorBuilder:
-          (_, _) =>
-              const SizedBox(
-        height: 10,
-      ),
-      itemBuilder:
-          (
-        context,
-        index,
-      ) {
-        final result =
-            _results[index];
-
-        final isLecture =
-            result.type ==
-                SearchResultType.lecture;
-
-        return Card(
-          elevation:
-              0,
-          child:
-              InkWell(
-            borderRadius:
-                BorderRadius.circular(
-              16,
+    return Center(
+      child:
+          ConstrainedBox(
+        constraints:
+            const BoxConstraints(
+          maxWidth:
+              1100,
+        ),
+        child:
+            ListView.separated(
+          keyboardDismissBehavior:
+              ScrollViewKeyboardDismissBehavior
+                  .onDrag,
+          physics:
+              const BouncingScrollPhysics(),
+          padding:
+              EdgeInsets.fromLTRB(
+            isWide
+                ? 28
+                : 16,
+            isWide
+                ? 24
+                : 16,
+            isWide
+                ? 28
+                : 16,
+            Responsive.clamped(
+              context,
+              base:
+                  22,
+              min:
+                  18,
+              max:
+                  30,
             ),
-            onTap:
-                isLecture
-                    ? () {
-                        unawaited(
-                          _openResult(
-                            result,
-                          ),
-                        );
-                      }
-                    : null,
-            child:
-                Padding(
-              padding:
-                  EdgeInsets.all(
-                isTablet
-                    ? 18
-                    : 14,
+          ),
+          itemCount:
+              _results.length,
+          separatorBuilder:
+              (
+            _,
+            _,
+          ) =>
+              const SizedBox(
+            height:
+                10,
+          ),
+          itemBuilder:
+              (
+            context,
+            index,
+          ) {
+            final result =
+                _results[index];
+
+            return _SearchResultCard(
+              result:
+                  result,
+              icon:
+                  _iconForType(
+                result.type,
               ),
-              child:
-                  Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-                children: [
-                  Container(
-                    width:
-                        isTablet
-                            ? 54
-                            : 48,
-                    height:
-                        isTablet
-                            ? 54
-                            : 48,
-                    decoration:
-                        BoxDecoration(
-                      color: theme
-                          .colorScheme
-                          .primary
-                          .withValues(
-                        alpha:
-                            0.10,
-                      ),
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                        14,
-                      ),
-                    ),
-                    child:
-                        Icon(
-                      _iconForType(
-                        result.type,
-                      ),
-                      color: theme
-                          .colorScheme
-                          .primary,
-                      size:
-                          isTablet
-                              ? 28
-                              : 24,
-                    ),
-                  ),
-
-                  const SizedBox(
-                    width: 14,
-                  ),
-
-                  Expanded(
-                    child:
-                        Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment
-                              .start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child:
-                                  Text(
-                                result.title,
-                                maxLines:
-                                    2,
-                                overflow:
-                                    TextOverflow
-                                        .ellipsis,
-                                style:
-                                    TextStyle(
-                                  fontSize:
-                                      isTablet
-                                          ? 17
-                                          : 16,
-                                  fontWeight:
-                                      FontWeight
-                                          .w700,
-                                ),
-                              ),
+              typeLabel:
+                  _labelForType(
+                result.type,
+              ),
+              contextLabel:
+                  _contextForResult(
+                result,
+              ),
+              onTap:
+                  result.type ==
+                          SearchResultType
+                              .lecture
+                      ? () {
+                          unawaited(
+                            _openResult(
+                              result,
                             ),
+                          );
+                        }
+                      : null,
+            );
+          },
+        ),
+      ),
+    );
+  }
 
-                            const SizedBox(
-                              width:
-                                  8,
-                            ),
+  // ===========================================================================
+  // LOADING
+  // ===========================================================================
 
-                            Container(
-                              padding:
-                                  const EdgeInsets
-                                      .symmetric(
-                                horizontal:
-                                    8,
-                                vertical:
-                                    4,
-                              ),
-                              decoration:
-                                  BoxDecoration(
-                                color: theme
-                                    .colorScheme
-                                    .primary
-                                    .withValues(
-                                  alpha:
-                                      0.08,
-                                ),
-                                borderRadius:
-                                    BorderRadius
-                                        .circular(
-                                  20,
-                                ),
-                              ),
-                              child:
-                                  Text(
-                                _labelForType(
-                                  result.type,
-                                ),
-                                style:
-                                    TextStyle(
-                                  fontSize:
-                                      10,
-                                  fontWeight:
-                                      FontWeight
-                                          .w700,
-                                  color:
-                                      theme
-                                          .colorScheme
-                                          .primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(
-                          height:
-                              6,
-                        ),
-
-                        Text(
-                          _subtitleForResult(
-                            result,
-                          ),
-                          maxLines:
-                              2,
-                          overflow:
-                              TextOverflow
-                                  .ellipsis,
-                          style:
-                              TextStyle(
-                            color: theme
-                                .colorScheme
-                                .onSurface
-                                .withValues(
-                              alpha:
-                                  0.60,
-                            ),
-                            fontSize:
-                                13,
-                          ),
-                        ),
-
-                        if (result
-                                    .description !=
-                                null &&
-                            result.description!
-                                .trim()
-                                .isNotEmpty &&
-                            result.type !=
-                                SearchResultType.level) ...[
-                          const SizedBox(
-                            height:
-                                5,
-                          ),
-                          Text(
-                            result.description!
-                                .trim(),
-                            maxLines:
-                                2,
-                            overflow:
-                                TextOverflow
-                                    .ellipsis,
-                            style:
-                                TextStyle(
-                              color:
-                                  theme
-                                      .colorScheme
-                                      .onSurface
-                                      .withValues(
-                                alpha:
-                                    0.50,
-                              ),
-                              fontSize:
-                                  12,
-                            ),
-                          ),
-                        ],
-
-                        if (isLecture) ...[
-                          const SizedBox(
-                            height:
-                                8,
-                          ),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons
-                                    .open_in_new_rounded,
-                                size:
-                                    15,
-                                color:
-                                    theme
-                                        .colorScheme
-                                        .primary,
-                              ),
-                              const SizedBox(
-                                width:
-                                    5,
-                              ),
-                              Text(
-                                'Tap to open lecture',
-                                style:
-                                    TextStyle(
-                                  fontSize:
-                                      12,
-                                  fontWeight:
-                                      FontWeight
-                                          .w600,
-                                  color:
-                                      theme
-                                          .colorScheme
-                                          .primary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-
-                  if (isLecture)
-                    Padding(
-                      padding:
-                          const EdgeInsets
-                              .only(
-                        top:
-                            8,
-                      ),
-                      child:
-                          Icon(
-                        Icons
-                            .chevron_right_rounded,
-                        color:
-                            theme
-                                .colorScheme
-                                .onSurface
-                                .withValues(
-                          alpha:
-                              0.40,
-                        ),
-                      ),
-                    ),
-                ],
+  Widget _buildLoading(
+    BuildContext context,
+  ) {
+    return Center(
+      child:
+          Column(
+        mainAxisSize:
+            MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width:
+                30,
+            height:
+                30,
+            child:
+                CircularProgressIndicator(
+              strokeWidth:
+                  2.6,
+            ),
+          ),
+          const SizedBox(
+            height:
+                14,
+          ),
+          Text(
+            'Searching...',
+            style:
+                TextStyle(
+              fontSize:
+                  Responsive.bodyTextSize(
+                context,
+                base:
+                    13,
+                min:
+                    12,
+                max:
+                    16,
+              ),
+              color:
+                  Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(
+                alpha:
+                    .55,
               ),
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
-}
 
-// ============================================================================
-// INITIAL VIEW
-// ============================================================================
+  // ===========================================================================
+  // ERROR
+  // ===========================================================================
 
-class _SearchInitialView
-    extends StatelessWidget {
-  const _SearchInitialView();
-
-  @override
-  Widget build(
+  Widget _buildError(
     BuildContext context,
   ) {
-    final theme =
-        Theme.of(context);
-
     return Center(
       child:
           Padding(
         padding:
             const EdgeInsets
                 .all(
-          32,
+          24,
         ),
         child:
             Column(
@@ -782,27 +761,505 @@ class _SearchInitialView
           children: [
             Icon(
               Icons
-                  .search_rounded,
+                  .cloud_off_rounded,
               size:
-                  74,
-              color: theme
-                  .colorScheme
-                  .primary
-                  .withValues(
+                  58,
+              color:
+                  Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(
                 alpha:
-                    0.35,
+                    .28,
+              ),
+            ),
+            const SizedBox(
+              height:
+                  14,
+            ),
+            const Text(
+              'Unable to search right now.',
+              textAlign:
+                  TextAlign.center,
+              style:
+                  TextStyle(
+                fontWeight:
+                    FontWeight.w700,
+              ),
+            ),
+            const SizedBox(
+              height:
+                  14,
+            ),
+            FilledButton.icon(
+              onPressed:
+                  _query.isEmpty
+                      ? null
+                      : () {
+                          unawaited(
+                            _performSearch(
+                              _query,
+                            ),
+                          );
+                        },
+              icon:
+                  const Icon(
+                Icons
+                    .refresh_rounded,
+              ),
+              label:
+                  const Text(
+                'Try Again',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// SEARCH RESULT CARD
+// ============================================================================
+
+class _SearchResultCard
+    extends StatelessWidget {
+  final GlobalSearchResult result;
+  final IconData icon;
+  final String typeLabel;
+  final String contextLabel;
+  final VoidCallback? onTap;
+
+  const _SearchResultCard({
+    required this.result,
+    required this.icon,
+    required this.typeLabel,
+    required this.contextLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final colorScheme =
+        theme.colorScheme;
+
+    final bool isLecture =
+        result.type ==
+            SearchResultType.lecture;
+
+    final double iconBoxSize =
+        Responsive.clamped(
+      context,
+      base:
+          48,
+      min:
+          44,
+      max:
+          56,
+    );
+
+    return Card(
+      margin:
+          EdgeInsets.zero,
+      elevation:
+          0,
+      clipBehavior:
+          Clip.antiAlias,
+      child:
+          InkWell(
+        onTap:
+            onTap,
+        child:
+            Padding(
+          padding:
+              EdgeInsets.all(
+            Responsive.clamped(
+              context,
+              base:
+                  13,
+              min:
+                  11,
+              max:
+                  18,
+            ),
+          ),
+          child:
+              Row(
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
+            children: [
+              Container(
+                width:
+                    iconBoxSize,
+                height:
+                    iconBoxSize,
+                decoration:
+                    BoxDecoration(
+                  color:
+                      AppColors
+                          .primary
+                          .withValues(
+                    alpha:
+                        .10,
+                  ),
+                  borderRadius:
+                      BorderRadius.circular(
+                    13,
+                  ),
+                ),
+                child:
+                    Icon(
+                  icon,
+                  color:
+                      AppColors
+                          .primary,
+                  size:
+                      iconBoxSize *
+                          .48,
+                ),
+              ),
+
+              SizedBox(
+                width:
+                    Responsive.spacing(
+                  context,
+                  base:
+                      12,
+                  min:
+                      9,
+                  max:
+                      16,
+                ),
+              ),
+
+              Expanded(
+                child:
+                    Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
+                  children: [
+                    Row(
+                      crossAxisAlignment:
+                          CrossAxisAlignment
+                              .start,
+                      children: [
+                        Expanded(
+                          child:
+                              Text(
+                            result.title,
+                            maxLines:
+                                2,
+                            overflow:
+                                TextOverflow
+                                    .ellipsis,
+                            style:
+                                TextStyle(
+                              fontSize:
+                                  Responsive.bodyTextSize(
+                                context,
+                                base:
+                                    16,
+                                min:
+                                    14,
+                                max:
+                                    19,
+                              ),
+                              fontWeight:
+                                  FontWeight
+                                      .w700,
+                              height:
+                                  1.2,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(
+                          width:
+                              8,
+                        ),
+
+                        Container(
+                          padding:
+                              const EdgeInsets
+                                  .symmetric(
+                            horizontal:
+                                8,
+                            vertical:
+                                4,
+                          ),
+                          decoration:
+                              BoxDecoration(
+                            color:
+                                colorScheme
+                                    .primary
+                                    .withValues(
+                              alpha:
+                                  .08,
+                            ),
+                            borderRadius:
+                                BorderRadius.circular(
+                              20,
+                            ),
+                          ),
+                          child:
+                              Text(
+                            typeLabel,
+                            style:
+                                TextStyle(
+                              fontSize:
+                                  9.5,
+                              fontWeight:
+                                  FontWeight
+                                      .w700,
+                              color:
+                                  colorScheme
+                                      .primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(
+                      height:
+                          6,
+                    ),
+
+                    Text(
+                      contextLabel,
+                      maxLines:
+                          2,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style:
+                          TextStyle(
+                        fontSize:
+                            Responsive.smallTextSize(
+                          context,
+                          base:
+                              12,
+                          min:
+                              10.5,
+                          max:
+                              14,
+                        ),
+                        color:
+                            colorScheme
+                                .onSurface
+                                .withValues(
+                          alpha:
+                              .58,
+                        ),
+                      ),
+                    ),
+
+                    if (result.description !=
+                            null &&
+                        result.description!
+                            .trim()
+                            .isNotEmpty) ...[
+                      const SizedBox(
+                        height:
+                            5,
+                      ),
+                      Text(
+                        result
+                            .description!
+                            .trim(),
+                        maxLines:
+                            2,
+                        overflow:
+                            TextOverflow
+                                .ellipsis,
+                        style:
+                            TextStyle(
+                          fontSize:
+                              Responsive.smallTextSize(
+                            context,
+                            base:
+                                11.5,
+                            min:
+                                10,
+                            max:
+                                13.5,
+                          ),
+                          height:
+                              1.3,
+                          color:
+                              colorScheme
+                                  .onSurface
+                                  .withValues(
+                            alpha:
+                                .46,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    if (isLecture) ...[
+                      const SizedBox(
+                        height:
+                            8,
+                      ),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons
+                                .play_circle_outline_rounded,
+                            size:
+                                16,
+                            color:
+                                colorScheme
+                                    .primary,
+                          ),
+                          const SizedBox(
+                            width:
+                                5,
+                          ),
+                          Text(
+                            'Tap to open lecture',
+                            style:
+                                TextStyle(
+                              fontSize:
+                                  11,
+                              fontWeight:
+                                  FontWeight
+                                      .w600,
+                              color:
+                                  colorScheme
+                                      .primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              if (isLecture)
+                Padding(
+                  padding:
+                      const EdgeInsets
+                          .only(
+                    left:
+                        4,
+                    top:
+                        8,
+                  ),
+                  child:
+                      Icon(
+                    Icons
+                        .chevron_right_rounded,
+                    color:
+                        colorScheme
+                            .onSurface
+                            .withValues(
+                      alpha:
+                          .35,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// INITIAL SEARCH VIEW
+// ============================================================================
+
+class _SearchEmptyState
+    extends StatelessWidget {
+  const _SearchEmptyState();
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final colorScheme =
+        theme.colorScheme;
+
+    return Center(
+      child:
+          SingleChildScrollView(
+        padding:
+            const EdgeInsets
+                .all(
+          28,
+        ),
+        child:
+            Column(
+          mainAxisSize:
+              MainAxisSize.min,
+          children: [
+            Container(
+              width:
+                  82,
+              height:
+                  82,
+              decoration:
+                  BoxDecoration(
+                color:
+                    colorScheme
+                        .primary
+                        .withValues(
+                  alpha:
+                      .08,
+                ),
+                shape:
+                    BoxShape.circle,
+              ),
+              child:
+                  Icon(
+                Icons
+                    .search_rounded,
+                size:
+                    42,
+                color:
+                    colorScheme
+                        .primary
+                        .withValues(
+                  alpha:
+                      .65,
+                ),
               ),
             ),
             const SizedBox(
               height:
                   18,
             ),
-            const Text(
+            Text(
               'Search MediData',
+              textAlign:
+                  TextAlign.center,
               style:
                   TextStyle(
                 fontSize:
-                    20,
+                    Responsive.titleSize(
+                  context,
+                  base:
+                      21,
+                  min:
+                      18,
+                  max:
+                      27,
+                ),
                 fontWeight:
                     FontWeight.w800,
               ),
@@ -812,18 +1269,30 @@ class _SearchInitialView
                   8,
             ),
             Text(
-              'Find academic levels, modules and lectures.',
+              'Find academic levels, modules and lectures quickly.',
               textAlign:
                   TextAlign.center,
               style:
                   TextStyle(
-                color: theme
-                    .colorScheme
-                    .onSurface
-                    .withValues(
-                  alpha:
-                      0.60,
+                fontSize:
+                    Responsive.bodyTextSize(
+                  context,
+                  base:
+                      13,
+                  min:
+                      12,
+                  max:
+                      16,
                 ),
+                color:
+                    colorScheme
+                        .onSurface
+                        .withValues(
+                  alpha:
+                      .55,
+                ),
+                height:
+                    1.45,
               ),
             ),
           ],
@@ -837,11 +1306,11 @@ class _SearchInitialView
 // NO RESULTS
 // ============================================================================
 
-class _NoResultsView
+class _SearchNoResultsState
     extends StatelessWidget {
   final String query;
 
-  const _NoResultsView({
+  const _SearchNoResultsState({
     required this.query,
   });
 
@@ -852,13 +1321,16 @@ class _NoResultsView
     final theme =
         Theme.of(context);
 
+    final colorScheme =
+        theme.colorScheme;
+
     return Center(
       child:
           Padding(
         padding:
             const EdgeInsets
                 .all(
-          32,
+          28,
         ),
         child:
             Column(
@@ -869,139 +1341,46 @@ class _NoResultsView
               Icons
                   .search_off_rounded,
               size:
-                  68,
+                  60,
               color:
-                  theme
-                      .colorScheme
+                  colorScheme
                       .onSurface
                       .withValues(
                 alpha:
-                    0.30,
+                    .25,
               ),
             ),
             const SizedBox(
               height:
-                  16,
+                  14,
             ),
-            Text(
+            const Text(
               'No results found',
               style:
-                  const TextStyle(
+                  TextStyle(
                 fontSize:
                     19,
                 fontWeight:
-                    FontWeight.w700,
+                    FontWeight.w800,
               ),
             ),
             const SizedBox(
               height:
-                  8,
+                  7,
             ),
             Text(
-              'Nothing matched "$query".',
+              'Nothing matched “$query”.',
               textAlign:
                   TextAlign.center,
               style:
                   TextStyle(
-                color: theme
-                    .colorScheme
-                    .onSurface
-                    .withValues(
+                color:
+                    colorScheme
+                        .onSurface
+                        .withValues(
                   alpha:
-                      0.60,
+                      .55,
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================================
-// ERROR
-// ============================================================================
-
-class _ErrorState
-    extends StatelessWidget {
-  final String message;
-
-  final VoidCallback onRetry;
-
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
-
-    return Center(
-      child:
-          Padding(
-        padding:
-            const EdgeInsets
-                .all(
-          32,
-        ),
-        child:
-            Column(
-          mainAxisSize:
-              MainAxisSize.min,
-          children: [
-            Icon(
-              Icons
-                  .cloud_off_rounded,
-              size:
-                  60,
-              color:
-                  theme
-                      .colorScheme
-                      .error,
-            ),
-            const SizedBox(
-              height:
-                  16,
-            ),
-            const Text(
-              'Search failed',
-              style:
-                  TextStyle(
-                fontSize:
-                    18,
-                fontWeight:
-                    FontWeight.w700,
-              ),
-            ),
-            const SizedBox(
-              height:
-                  8,
-            ),
-            Text(
-              message,
-              textAlign:
-                  TextAlign.center,
-            ),
-            const SizedBox(
-              height:
-                  16,
-            ),
-            FilledButton.icon(
-              onPressed:
-                  onRetry,
-              icon:
-                  const Icon(
-                Icons
-                    .refresh_rounded,
-              ),
-              label:
-                  const Text(
-                'Try Again',
               ),
             ),
           ],
