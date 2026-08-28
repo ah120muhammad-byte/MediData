@@ -179,4 +179,8 @@ class AiChatHistoryService {
 
     return value.substring(0, 80);
   }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 20e1b4bef951ee96fe74a820baba05f962fc9341
