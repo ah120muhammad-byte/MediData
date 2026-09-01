@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/responsive/responsive.dart';
 import '../../models/exam_models.dart';
 import 'exam_result_screen.dart';
@@ -10,11 +12,6 @@ class ExamScreen extends StatefulWidget {
   final String examTitle;
   final int durationMinutes;
   final int passingScore;
-
-  /// If provided, resume this exact attempt.
-  ///
-  /// If null, the screen first looks for the latest
-  /// in-progress attempt for this exam.
   final String? attemptId;
 
   const ExamScreen({
@@ -32,135 +29,67 @@ class ExamScreen extends StatefulWidget {
 
 class _ExamScreenState extends State<ExamScreen>
     with WidgetsBindingObserver {
-  final SupabaseClient _supabase =
-      Supabase.instance.client;
-
-  // ==========================================================================
-  // QUESTIONS
-  // ==========================================================================
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   late Future<List<ExamQuestion>> _questionsFuture;
 
-  // ==========================================================================
-  // ANSWERS
-  // ==========================================================================
-
-  final Map<String, String> _selectedAnswers = {};
-
-  // Tracks answer-save operations that have not completed yet.
-  final Map<String, Future<void>> _answerSaveOperations = {};
-
-  // ==========================================================================
-  // ATTEMPT
-  // ==========================================================================
-
-  String? _attemptId;
-
-  // ==========================================================================
-  // TIMER
-  // ==========================================================================
+  final Map<String, String> _selectedAnswers = <String, String>{};
+  final Map<String, Future<void>> _answerSaveOperations =
+      <String, Future<void>>{};
 
   Timer? _timer;
   Timer? _saveStateTimer;
 
+  String? _attemptId;
   int _remainingSeconds = 0;
-
-  // ==========================================================================
-  // POSITION
-  // ==========================================================================
-
   int _currentQuestionIndex = 0;
-
-  // ==========================================================================
-  // STATE
-  // ==========================================================================
 
   bool _isLoadingAttempt = true;
   bool _isSubmitting = false;
-  bool _isSavingState = false;
   bool _isInitialized = false;
-  bool _ignoreBackOnce = false;
-
-  // ==========================================================================
-  // INIT
-  // ==========================================================================
+  bool _lifecyclePaused = false;
+  bool _lifecycleTransition = false;
+  bool _leaving = false;
 
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addObserver(this);
-
-    _remainingSeconds =
-        widget.durationMinutes * 60;
-
-    _questionsFuture =
-        _loadExamAndPrepareAttempt();
+    _remainingSeconds = widget.durationMinutes * 60;
+    _questionsFuture = _initializeExam();
   }
 
-  // ==========================================================================
-  // APP LIFECYCLE
-  // ==========================================================================
-
   @override
-  void didChangeAppLifecycleState(
-    AppLifecycleState state,
-  ) {
-    if (_attemptId == null ||
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_isInitialized ||
+        _attemptId == null ||
         _isSubmitting ||
-        !_isInitialized) {
+        _leaving) {
       return;
     }
 
     switch (state) {
       case AppLifecycleState.inactive:
-      case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
       case AppLifecycleState.detached:
-        unawaited(
-          _saveAttemptState(
-            isPaused: false,
-          ),
-        );
+        unawaited(_pauseForLifecycle());
         break;
-
       case AppLifecycleState.resumed:
-        unawaited(
-          _syncTimeFromServer(),
-        );
+        unawaited(_resumeFromLifecycle());
         break;
     }
   }
-
-  // ==========================================================================
-  // DISPOSE
-  // ==========================================================================
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-
     _timer?.cancel();
     _saveStateTimer?.cancel();
-
-    if (_attemptId != null &&
-        !_isSubmitting &&
-        _isInitialized) {
-      unawaited(
-        _saveAttemptState(
-          isPaused: false,
-        ),
-      );
-    }
-
     super.dispose();
   }
 
-  // ==========================================================================
-  // LOAD EXAM + PREPARE ATTEMPT
-  // ==========================================================================
-
-  Future<List<ExamQuestion>> _loadExamAndPrepareAttempt() async {
+  Future<List<ExamQuestion>> _initializeExam() async {
     final questions = await _loadExam();
 
     if (questions.isEmpty) {
@@ -169,1836 +98,601 @@ class _ExamScreenState extends State<ExamScreen>
           _isLoadingAttempt = false;
         });
       }
-
       return questions;
     }
 
-    await _prepareAttempt(questions);
-
+    await _startOrRestoreAttempt(questionCount: questions.length);
     return questions;
   }
 
-  // ==========================================================================
-  // LOAD QUESTIONS
-  // ==========================================================================
-
   Future<List<ExamQuestion>> _loadExam() async {
-    final questionsResponse = await _supabase
+    final rawQuestions = await _supabase
         .from('questions')
-        .select(
-          '''
-          id,
-          exam_id,
-          question_text,
-          explanation,
-          display_order
-          ''',
-        )
-        .eq(
-          'exam_id',
-          widget.examId,
-        )
-        .order(
-          'display_order',
-          ascending: true,
-        );
+        .select('id, exam_id, question_text, explanation, display_order')
+        .eq('exam_id', widget.examId)
+        .order('display_order', ascending: true);
 
-    final questions =
-        (questionsResponse as List)
-            .map(
-              (item) {
-                final map =
-                    Map<String, dynamic>.from(item);
+    final questions = (rawQuestions as List).map((raw) {
+      final map = Map<String, dynamic>.from(raw);
+      return ExamQuestion(
+        id: map['id'].toString(),
+        examId: map['exam_id'].toString(),
+        questionText: map['question_text']?.toString() ?? '',
+        explanation: map['explanation']?.toString(),
+        displayOrder: (map['display_order'] as num?)?.toInt() ?? 0,
+        options: const <ExamOption>[],
+      );
+    }).toList();
 
-                return ExamQuestion(
-                  id: map['id'].toString(),
-                  examId: map['exam_id'].toString(),
-                  questionText:
-                      map['question_text']?.toString() ?? '',
-                  explanation:
-                      map['explanation']?.toString(),
-                  displayOrder:
-                      (map['display_order'] as num?)?.toInt() ?? 0,
-                  options: const [],
-                );
-              },
-            )
-            .toList();
+    if (questions.isEmpty) return questions;
 
-    if (questions.isEmpty) {
-      return [];
-    }
+    final questionIds = questions.map((q) => q.id).toList();
 
-    final questionIds = questions
-        .map(
-          (question) => question.id,
-        )
-        .toList();
-
-    final optionsResponse = await _supabase
+    final rawOptions = await _supabase
         .from('question_options')
-        .select(
-          '''
-          id,
-          question_id,
-          option_text,
-          display_order
-          ''',
-        )
-        .inFilter(
-          'question_id',
-          questionIds,
-        )
-        .order(
-          'display_order',
-          ascending: true,
-        );
+        .select('id, question_id, option_text, display_order')
+        .inFilter('question_id', questionIds)
+        .order('display_order', ascending: true);
 
-    final options =
-        (optionsResponse as List)
-            .map(
-              (item) {
-                final map =
-                    Map<String, dynamic>.from(item);
+    final optionsByQuestion = <String, List<ExamOption>>{};
 
-                return ExamOption(
-                  id: map['id'].toString(),
-                  questionId:
-                      map['question_id'].toString(),
-                  optionText:
-                      map['option_text']?.toString() ?? '',
-                  displayOrder:
-                      (map['display_order'] as num?)?.toInt() ?? 0,
-                );
-              },
-            )
-            .toList();
-
-    final Map<String, List<ExamOption>> optionsByQuestion = {};
-
-    for (final option in options) {
-      optionsByQuestion
-          .putIfAbsent(
-            option.questionId,
-            () => [],
-          )
-          .add(option);
-    }
-
-    return questions.map(
-      (question) {
-        return question.copyWith(
-          options:
-              optionsByQuestion[question.id] ?? [],
-        );
-      },
-    ).toList();
-  }
-
-  // ==========================================================================
-  // PREPARE ATTEMPT
-  // ==========================================================================
-
-  Future<void> _prepareAttempt(
-    List<ExamQuestion> questions,
-  ) async {
-    final user = _supabase.auth.currentUser;
-
-    if (user == null) {
-      if (mounted) {
-        setState(() {
-          _isLoadingAttempt = false;
-        });
-      }
-
-      return;
-    }
-
-    // ------------------------------------------------------------------------
-    // EXPLICIT ATTEMPT
-    // ------------------------------------------------------------------------
-
-    if (widget.attemptId != null &&
-        widget.attemptId!.trim().isNotEmpty) {
-      final restored = await _restoreSpecificAttempt(
-        widget.attemptId!,
-        questions,
+    for (final raw in rawOptions as List) {
+      final map = Map<String, dynamic>.from(raw);
+      final option = ExamOption(
+        id: map['id'].toString(),
+        questionId: map['question_id'].toString(),
+        optionText: map['option_text']?.toString() ?? '',
+        displayOrder: (map['display_order'] as num?)?.toInt() ?? 0,
       );
-
-      if (restored) {
-        return;
-      }
+      optionsByQuestion.putIfAbsent(option.questionId, () => <ExamOption>[]).add(option);
     }
 
-    // ------------------------------------------------------------------------
-    // FIND LATEST ACTIVE ATTEMPT
-    // ------------------------------------------------------------------------
-
-    final existing = await _supabase
-        .from('exam_attempts')
-        .select(
-          '''
-          id,
-          exam_id,
-          remaining_seconds,
-          is_paused,
-          active_started_at,
-          current_question_index,
-          status
-          ''',
-        )
-        .eq(
-          'user_id',
-          user.id,
-        )
-        .eq(
-          'exam_id',
-          widget.examId,
-        )
-        .eq(
-          'status',
-          'in_progress',
-        )
-        .order(
-          'created_at',
-          ascending: false,
-        )
-        .limit(1)
-        .maybeSingle();
-
-    if (existing != null) {
-      final restored = await _restoreAttemptRow(
-        Map<String, dynamic>.from(existing),
-        questions,
+    return questions.map((question) {
+      return question.copyWith(
+        options: optionsByQuestion[question.id] ?? const <ExamOption>[],
       );
-
-      if (restored) {
-        return;
-      }
-    }
-
-    // ------------------------------------------------------------------------
-    // CREATE NEW ATTEMPT
-    // ------------------------------------------------------------------------
-
-    await _createNewAttempt();
+    }).toList();
   }
 
-  // ==========================================================================
-  // RESTORE SPECIFIC ATTEMPT
-  // ==========================================================================
-
-  Future<bool> _restoreSpecificAttempt(
-    String attemptId,
-    List<ExamQuestion> questions,
-  ) async {
+  Future<void> _startOrRestoreAttempt({required int questionCount}) async {
     final user = _supabase.auth.currentUser;
-
     if (user == null) {
-      return false;
+      throw Exception('Your session has expired. Please log in again.');
     }
 
-    final response = await _supabase
-        .from('exam_attempts')
-        .select(
-          '''
-          id,
-          exam_id,
-          remaining_seconds,
-          is_paused,
-          active_started_at,
-          current_question_index,
-          status
-          ''',
-        )
-        .eq(
-          'id',
-          attemptId,
-        )
-        .eq(
-          'user_id',
-          user.id,
-        )
-        .eq(
-          'exam_id',
-          widget.examId,
-        )
-        .maybeSingle();
-
-    if (response == null) {
-      return false;
-    }
-
-    return _restoreAttemptRow(
-      Map<String, dynamic>.from(response),
-      questions,
-    );
-  }
-
-  // ==========================================================================
-  // RESTORE ATTEMPT ROW
-  // ==========================================================================
-
-  Future<bool> _restoreAttemptRow(
-    Map<String, dynamic> row,
-    List<ExamQuestion> questions,
-  ) async {
-    if (row['status']?.toString() != 'in_progress') {
-      return false;
-    }
-
-    final id = row['id']?.toString();
-
-    if (id == null || id.isEmpty) {
-      return false;
-    }
-
-    _attemptId = id;
-
-    // ------------------------------------------------------------------------
-    // QUESTION INDEX
-    // ------------------------------------------------------------------------
-
-    final savedIndex =
-        (row['current_question_index'] as num?)?.toInt() ?? 0;
-
-    _currentQuestionIndex = savedIndex.clamp(
-      0,
-      questions.length - 1,
+    final raw = await _supabase.rpc(
+      'start_exam',
+      params: <String, dynamic>{'p_exam_id': widget.examId},
     );
 
-    // ------------------------------------------------------------------------
-    // STORED TIME
-    // ------------------------------------------------------------------------
+    final data = _asMap(raw);
+    _attemptId = _stringValue(data['attempt_id']);
 
-    final storedSeconds =
-        (row['remaining_seconds'] as num?)?.toInt() ??
-            widget.durationMinutes * 60;
-
-    _remainingSeconds = storedSeconds.clamp(
-      0,
-      widget.durationMinutes * 60,
-    );
-
-    // ------------------------------------------------------------------------
-    // REAL ELAPSED TIME
-    // ------------------------------------------------------------------------
-
-    final isPaused =
-        row['is_paused'] as bool? ?? false;
-
-    final activeStartedAt = DateTime.tryParse(
-      row['active_started_at']?.toString() ?? '',
-    );
-
-    if (!isPaused && activeStartedAt != null) {
-      final elapsed = DateTime.now()
-          .toUtc()
-          .difference(activeStartedAt)
-          .inSeconds;
-
-      if (elapsed > 0) {
-        _remainingSeconds = (_remainingSeconds - elapsed).clamp(
-          0,
-          widget.durationMinutes * 60,
-        );
-      }
+    if (_attemptId == null || _attemptId!.isEmpty) {
+      throw Exception('Unable to create or restore the exam attempt.');
     }
 
-    // ------------------------------------------------------------------------
-    // LOAD SAVED ANSWERS
-    // ------------------------------------------------------------------------
+    _remainingSeconds = _clampRemaining(
+      _intValue(data['remaining_seconds']),
+    );
+    _currentQuestionIndex = _clampQuestionIndex(
+      _intValue(data['current_question_index']),
+      questionCount,
+    );
+    _lifecyclePaused = data['is_paused'] == true;
 
     await _loadSavedAnswers();
 
-    _isInitialized = true;
-
-    if (!mounted) {
-      return true;
+    if (_lifecyclePaused) {
+      await _resumeAttemptFromServer();
+      _lifecyclePaused = false;
     }
+
+    if (!mounted) return;
 
     setState(() {
       _isLoadingAttempt = false;
+      _isInitialized = true;
     });
-
-    // ------------------------------------------------------------------------
-    // TIME EXPIRED WHILE OUTSIDE THE APP
-    // ------------------------------------------------------------------------
 
     if (_remainingSeconds <= 0) {
-      unawaited(
-        _submitExam(
-          autoSubmit: true,
-        ),
-      );
-
-      return true;
+      unawaited(_finishExam(autoSubmit: true));
+      return;
     }
 
     _startTimer();
     _startStateSaver();
-
-    return true;
   }
-
-  // ==========================================================================
-  // CREATE NEW ATTEMPT
-  // ==========================================================================
-
-  Future<void> _createNewAttempt() async {
-    final user = _supabase.auth.currentUser;
-
-    if (user == null) {
-      if (mounted) {
-        setState(() {
-          _isLoadingAttempt = false;
-        });
-      }
-
-      return;
-    }
-
-    final now = DateTime.now().toUtc();
-    final totalSeconds = widget.durationMinutes * 60;
-
-    final response = await _supabase
-        .from('exam_attempts')
-        .insert({
-          'user_id': user.id,
-          'exam_id': widget.examId,
-          'score': 0,
-          'total_questions': 0,
-          'correct_answers': 0,
-          'started_at': now.toIso8601String(),
-          'completed_at': null,
-          'status': 'in_progress',
-          'remaining_seconds': totalSeconds,
-          'is_paused': false,
-          'active_started_at': now.toIso8601String(),
-          'current_question_index': 0,
-        })
-        .select('id')
-        .single();
-
-    _attemptId = response['id'].toString();
-
-    _remainingSeconds = totalSeconds;
-    _currentQuestionIndex = 0;
-    _isInitialized = true;
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isLoadingAttempt = false;
-    });
-
-    _startTimer();
-    _startStateSaver();
-  }
-
-  // ==========================================================================
-  // LOAD SAVED ANSWERS
-  // ==========================================================================
 
   Future<void> _loadSavedAnswers() async {
     final attemptId = _attemptId;
+    if (attemptId == null || attemptId.isEmpty) return;
 
-    if (attemptId == null) {
-      return;
-    }
-
-    final response = await _supabase
+    final rawAnswers = await _supabase
         .from('exam_answers')
-        .select(
-          '''
-          question_id,
-          selected_option_id
-          ''',
-        )
-        .eq(
-          'attempt_id',
-          attemptId,
-        );
+        .select('question_id, selected_option_id')
+        .eq('attempt_id', attemptId);
 
     _selectedAnswers.clear();
 
-    for (final rawItem in response as List) {
-      final item =
-          Map<String, dynamic>.from(rawItem);
+    for (final raw in rawAnswers as List) {
+      final map = Map<String, dynamic>.from(raw);
+      final questionId = _stringValue(map['question_id']);
+      final optionId = _stringValue(map['selected_option_id']);
 
-      final questionId =
-          item['question_id']?.toString();
-
-      final optionId =
-          item['selected_option_id']?.toString();
-
-      if (questionId == null ||
-          questionId.isEmpty ||
-          optionId == null ||
-          optionId.isEmpty) {
-        continue;
+      if (questionId != null &&
+          questionId.isNotEmpty &&
+          optionId != null &&
+          optionId.isNotEmpty) {
+        _selectedAnswers[questionId] = optionId;
       }
-
-      _selectedAnswers[questionId] = optionId;
     }
   }
-
-  // ==========================================================================
-  // TIMER
-  // ==========================================================================
 
   void _startTimer() {
     _timer?.cancel();
 
-    _timer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) {
-        if (!mounted ||
-            _isSubmitting ||
-            !_isInitialized) {
-          return;
-        }
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted ||
+          !_isInitialized ||
+          _isSubmitting ||
+          _lifecyclePaused ||
+          _lifecycleTransition) {
+        return;
+      }
 
-        if (_remainingSeconds <= 1) {
-          _timer?.cancel();
+      if (_remainingSeconds <= 1) {
+        setState(() => _remainingSeconds = 0);
+        _timer?.cancel();
+        _saveStateTimer?.cancel();
+        unawaited(_finishExam(autoSubmit: true));
+        return;
+      }
 
-          setState(() {
-            _remainingSeconds = 0;
-          });
-
-          unawaited(
-            _submitExam(
-              autoSubmit: true,
-            ),
-          );
-
-          return;
-        }
-
-        setState(() {
-          _remainingSeconds--;
-        });
-      },
-    );
+      setState(() => _remainingSeconds--);
+    });
   }
-
-  // ==========================================================================
-  // PERIODIC SAVE
-  // ==========================================================================
 
   void _startStateSaver() {
     _saveStateTimer?.cancel();
-
-    _saveStateTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) {
-        unawaited(
-          _saveAttemptState(
-            isPaused: false,
-          ),
-        );
-      },
-    );
-  }
-
-  // ==========================================================================
-  // SAVE ATTEMPT STATE
-  // ==========================================================================
-
-  Future<void> _saveAttemptState({
-    required bool isPaused,
-  }) async {
-    final attemptId = _attemptId;
-
-    if (attemptId == null ||
-        _isSavingState ||
-        _isSubmitting ||
-        !_isInitialized) {
-      return;
-    }
-
-    _isSavingState = true;
-
-    try {
-      final now = DateTime.now().toUtc();
-
-      await _supabase
-          .from('exam_attempts')
-          .update({
-            'remaining_seconds':
-                _remainingSeconds.clamp(
-              0,
-              widget.durationMinutes * 60,
-            ),
-            'current_question_index':
-                _currentQuestionIndex,
-            'is_paused': isPaused,
-            'active_started_at':
-                now.toIso8601String(),
-          })
-          .eq(
-            'id',
-            attemptId,
-          )
-          .eq(
-            'status',
-            'in_progress',
-          );
-    } catch (e) {
-      debugPrint(
-        'Save exam state error: $e',
-      );
-    } finally {
-      _isSavingState = false;
-    }
-  }
-
-  // ==========================================================================
-  // SERVER TIME SYNC
-  // ==========================================================================
-
-  Future<void> _syncTimeFromServer() async {
-    final attemptId = _attemptId;
-
-    if (attemptId == null ||
-        _isSubmitting ||
-        !_isInitialized) {
-      return;
-    }
-
-    try {
-      final response = await _supabase
-          .from('exam_attempts')
-          .select(
-            '''
-            remaining_seconds,
-            is_paused,
-            active_started_at,
-            status
-            ''',
-          )
-          .eq(
-            'id',
-            attemptId,
-          )
-          .maybeSingle();
-
-      if (response == null) {
+    _saveStateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!_isInitialized ||
+          _isSubmitting ||
+          _lifecyclePaused ||
+          _lifecycleTransition) {
         return;
       }
-
-      final row =
-          Map<String, dynamic>.from(response);
-
-      if (row['status']?.toString() !=
-          'in_progress') {
-        return;
-      }
-
-      final storedSeconds =
-          (row['remaining_seconds'] as num?)?.toInt() ??
-              _remainingSeconds;
-
-      final isPaused =
-          row['is_paused'] as bool? ?? false;
-
-      final activeStartedAt = DateTime.tryParse(
-        row['active_started_at']?.toString() ?? '',
-      );
-
-      var remaining = storedSeconds;
-
-      if (!isPaused && activeStartedAt != null) {
-        final elapsed = DateTime.now()
-            .toUtc()
-            .difference(activeStartedAt)
-            .inSeconds;
-
-        remaining = (storedSeconds - elapsed).clamp(
-          0,
-          widget.durationMinutes * 60,
-        );
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _remainingSeconds = remaining;
-      });
-
-      if (_remainingSeconds <= 0) {
-        unawaited(
-          _submitExam(
-            autoSubmit: true,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint(
-        'Sync exam time error: $e',
-      );
-    }
-  }
-
-  // ==========================================================================
-  // SELECT ANSWER
-  // ==========================================================================
-
-  void _selectAnswer(
-    ExamQuestion question,
-    ExamOption option,
-  ) {
-    if (_isSubmitting) {
-      return;
-    }
-
-    setState(() {
-      _selectedAnswers[question.id] = option.id;
+      unawaited(_saveProgress());
     });
-
-    final saveFuture = _saveAnswer(
-      question.id,
-      option.id,
-    );
-
-    _answerSaveOperations[question.id] =
-        saveFuture;
-
-    unawaited(
-      saveFuture.whenComplete(
-        () {
-          if (_answerSaveOperations[question.id] ==
-              saveFuture) {
-            _answerSaveOperations.remove(
-              question.id,
-            );
-          }
-        },
-      ),
-    );
-
-    unawaited(
-      _saveAttemptState(
-        isPaused: false,
-      ),
-    );
   }
 
-  // ==========================================================================
-  // SAVE ANSWER
-  // ==========================================================================
+  Future<void> _saveProgress() async {
+    final attemptId = _attemptId;
+    if (attemptId == null ||
+        attemptId.isEmpty ||
+        _isSubmitting ||
+        _lifecyclePaused) {
+      return;
+    }
 
-  Future<void> _saveAnswer(
+    final pendingOk = await _waitForPendingAnswers();
+    if (!pendingOk || !mounted || _isSubmitting || _lifecyclePaused) {
+      return;
+    }
+
+    try {
+      final raw = await _supabase.rpc(
+        'save_exam_progress',
+        params: <String, dynamic>{
+          'p_attempt_id': attemptId,
+          'p_current_question_index': _currentQuestionIndex,
+        },
+      );
+
+      final data = _asMap(raw);
+      final serverRemaining = _clampRemaining(
+        _intValue(data['remaining_seconds']),
+      );
+
+      if (serverRemaining < _remainingSeconds) {
+        setState(() => _remainingSeconds = serverRemaining);
+      }
+
+      if (data['status']?.toString() == 'completed' && mounted) {
+        _timer?.cancel();
+        _saveStateTimer?.cancel();
+        unawaited(_finishExam(autoSubmit: true));
+      }
+    } catch (_) {
+      // The next answer/save cycle will retry. The timer remains local while active.
+    }
+  }
+
+  Future<void> _onAnswerSelected(
     String questionId,
     String optionId,
   ) async {
-    final attemptId = _attemptId;
-
-    if (attemptId == null) {
-      return;
-    }
-
-    try {
-      final now = DateTime.now()
-          .toUtc()
-          .toIso8601String();
-
-      final existing = await _supabase
-          .from('exam_answers')
-          .select('id')
-          .eq(
-            'attempt_id',
-            attemptId,
-          )
-          .eq(
-            'question_id',
-            questionId,
-          )
-          .maybeSingle();
-
-      if (existing != null) {
-        await _supabase
-            .from('exam_answers')
-            .update({
-              'selected_option_id':
-                  optionId,
-              'answered_at':
-                  now,
-            })
-            .eq(
-              'id',
-              existing['id'],
-            );
-
-        return;
-      }
-
-      await _supabase
-          .from('exam_answers')
-          .insert({
-            'attempt_id':
-                attemptId,
-            'question_id':
-                questionId,
-            'selected_option_id':
-                optionId,
-            'answered_at':
-                now,
-          });
-    } catch (e) {
-      debugPrint(
-        'Save exam answer error: $e',
-      );
-    }
-  }
-
-  // ==========================================================================
-  // WAIT FOR PENDING ANSWERS
-  // ==========================================================================
-
-  Future<void> _waitForPendingAnswers() async {
-    final futures =
-        _answerSaveOperations.values.toList();
-
-    if (futures.isEmpty) {
-      return;
-    }
-
-    try {
-      await Future.wait(futures);
-    } catch (e) {
-      debugPrint(
-        'Pending answer wait error: $e',
-      );
-    }
-  }
-
-  // ==========================================================================
-  // NEXT
-  // ==========================================================================
-
-  void _nextQuestion(
-    List<ExamQuestion> questions,
-  ) {
-    if (_currentQuestionIndex >=
-        questions.length - 1) {
-      unawaited(
-        _showSubmitDialog(),
-      );
-
-      return;
-    }
-
-    setState(() {
-      _currentQuestionIndex++;
-    });
-
-    unawaited(
-      _saveAttemptState(
-        isPaused: false,
-      ),
-    );
-  }
-
-  // ==========================================================================
-  // PREVIOUS
-  // ==========================================================================
-
-  void _previousQuestion() {
-    if (_currentQuestionIndex <= 0) {
-      return;
-    }
-
-    setState(() {
-      _currentQuestionIndex--;
-    });
-
-    unawaited(
-      _saveAttemptState(
-        isPaused: false,
-      ),
-    );
-  }
-
-  // ==========================================================================
-  // EXIT DIALOG
-  // ==========================================================================
-
-  Future<bool?> _showExitDialog() {
-    return showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title:
-              const Text('Leave Exam?'),
-          content:
-              const Text(
-            'Your answers and progress will be saved. You can resume this exam later.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(false);
-              },
-              child:
-                  const Text('Stay'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(true);
-              },
-              child:
-                  const Text('Leave'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // ==========================================================================
-  // HANDLE BACK
-  // ==========================================================================
-
-  Future<void> _handleBack() async {
-    if (_ignoreBackOnce ||
-        _isSubmitting) {
-      return;
-    }
-
-    final shouldExit =
-        await _showExitDialog();
-
-    if (shouldExit != true) {
-      return;
-    }
-
-    await _waitForPendingAnswers();
-
-    await _saveAttemptState(
-      isPaused: false,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    _ignoreBackOnce = true;
-
-    Navigator.of(context).pop();
-  }
-
-  // ==========================================================================
-  // SUBMIT DIALOG
-  // ==========================================================================
-
-  Future<void> _showSubmitDialog() async {
-    if (_isSubmitting) {
-      return;
-    }
-
-    final shouldSubmit =
-        await showDialog<bool>(
-      context: context,
-      builder:
-          (dialogContext) {
-        return AlertDialog(
-          title:
-              const Text('Submit Exam?'),
-          content:
-              const Text(
-            'Are you sure you want to submit your answers?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(false);
-              },
-              child:
-                  const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(true);
-              },
-              child:
-                  const Text('Submit'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldSubmit != true) {
-      return;
-    }
-
-    await _submitExam();
-  }
-
-  // ==========================================================================
-  // SUBMIT
-  // ==========================================================================
-
-  Future<void> _submitExam({
-    bool autoSubmit = false,
-  }) async {
     if (_isSubmitting ||
-        _attemptId == null) {
+        _lifecyclePaused ||
+        _lifecycleTransition) {
       return;
     }
 
-    _isSubmitting = true;
+    setState(() {
+      _selectedAnswers[questionId] = optionId;
+    });
 
+    final future = _saveAnswer(questionId, optionId);
+    _answerSaveOperations[questionId] = future;
+
+    try {
+      await future;
+    } catch (e) {
+      if (mounted && _selectedAnswers[questionId] == optionId) {
+        setState(() => _selectedAnswers.remove(questionId));
+        _showError(_cleanError(e));
+      }
+    } finally {
+      if (identical(_answerSaveOperations[questionId], future)) {
+        _answerSaveOperations.remove(questionId);
+      }
+    }
+  }
+
+  Future<void> _saveAnswer(String questionId, String optionId) async {
+    final attemptId = _attemptId;
+    if (attemptId == null || attemptId.isEmpty) {
+      throw Exception('Exam attempt is not available.');
+    }
+
+    final raw = await _supabase.rpc(
+      'submit_exam_answer',
+      params: <String, dynamic>{
+        'p_attempt_id': attemptId,
+        'p_question_id': questionId,
+        'p_selected_option_id': optionId,
+      },
+    );
+
+    final data = _asMap(raw);
+    final serverRemaining = _clampRemaining(
+      _intValue(data['remaining_seconds']),
+    );
+
+    if (mounted && serverRemaining < _remainingSeconds) {
+      setState(() => _remainingSeconds = serverRemaining);
+    }
+
+    if (serverRemaining <= 0) {
+      _timer?.cancel();
+      _saveStateTimer?.cancel();
+    }
+  }
+
+  Future<bool> _waitForPendingAnswers() async {
+    final pending = List<Future<void>>.from(_answerSaveOperations.values);
+    if (pending.isEmpty) return true;
+
+    var success = true;
+    for (final future in pending) {
+      try {
+        await future;
+      } catch (e) {
+        final text = e.toString().toLowerCase();
+        if (!text.contains('expired') && !text.contains('time has ended')) {
+          success = false;
+        }
+      }
+    }
+    return success;
+  }
+
+  Future<void> _pauseForLifecycle() async {
+    if (_lifecyclePaused ||
+        _lifecycleTransition ||
+        _isSubmitting ||
+        _leaving) {
+      return;
+    }
+
+    final attemptId = _attemptId;
+    if (attemptId == null || attemptId.isEmpty) return;
+
+    _lifecycleTransition = true;
+    _lifecyclePaused = true;
     _timer?.cancel();
     _saveStateTimer?.cancel();
 
-    if (mounted) {
-      setState(() {});
-    }
-
     try {
-      // Make sure the most recent answer reaches
-      // the database before final calculation.
       await _waitForPendingAnswers();
 
-      final questions =
-          await _questionsFuture;
-
-      final questionIds = questions
-          .map(
-            (question) => question.id,
-          )
-          .toList();
-
-      if (questionIds.isEmpty) {
-        throw Exception(
-          'No questions found.',
-        );
-      }
-
-      // ----------------------------------------------------------------------
-      // CORRECT ANSWERS
-      // ----------------------------------------------------------------------
-
-      final correctResponse =
-          await _supabase
-              .from(
-                'question_correct_answers',
-              )
-              .select(
-                'question_id, correct_option_id',
-              )
-              .inFilter(
-                'question_id',
-                questionIds,
-              );
-
-      final Map<String, String>
-          correctAnswers = {};
-
-      for (final rawItem
-          in correctResponse as List) {
-        final item =
-            Map<String, dynamic>.from(rawItem);
-
-        final questionId =
-            item['question_id']?.toString();
-
-        final correctOptionId =
-            item['correct_option_id']?.toString();
-
-        if (questionId == null ||
-            correctOptionId == null) {
-          continue;
-        }
-
-        correctAnswers[questionId] =
-            correctOptionId;
-      }
-
-      // ----------------------------------------------------------------------
-      // CALCULATE RESULT
-      // ----------------------------------------------------------------------
-
-      int correctCount = 0;
-
-      for (final question in questions) {
-        final selected =
-            _selectedAnswers[question.id];
-
-        final correct =
-            correctAnswers[question.id];
-
-        if (selected != null &&
-            correct != null &&
-            selected == correct) {
-          correctCount++;
-        }
-      }
-
-      final totalQuestions =
-          questions.length;
-
-      final score = totalQuestions == 0
-          ? 0
-          : ((correctCount /
-                          totalQuestions) *
-                      100)
-                  .round();
-
-      final passed =
-          score >= widget.passingScore;
-
-      // ----------------------------------------------------------------------
-      // SAVE ANSWER CORRECTNESS
-      // ----------------------------------------------------------------------
-
-      await _saveAnswerResults(
-        questions,
-        correctAnswers,
+      final raw = await _supabase.rpc(
+        'pause_exam',
+        params: <String, dynamic>{
+          'p_attempt_id': attemptId,
+          'p_current_question_index': _currentQuestionIndex,
+        },
       );
 
-      // ----------------------------------------------------------------------
-      // FINALIZE ATTEMPT
-      // ----------------------------------------------------------------------
+      final data = _asMap(raw);
+      final serverRemaining = _clampRemaining(
+        _intValue(data['remaining_seconds']),
+      );
 
-      await _supabase
-          .from('exam_attempts')
-          .update({
-            'score':
-                score,
-            'total_questions':
-                totalQuestions,
-            'correct_answers':
-                correctCount,
-            'completed_at':
-                DateTime.now()
-                    .toUtc()
-                    .toIso8601String(),
-            'status':
-                'completed',
-            'remaining_seconds':
-                0,
-            'is_paused':
-                false,
-            'current_question_index':
-                _currentQuestionIndex,
-          })
-          .eq(
-            'id',
-            _attemptId!,
-          )
-          .eq(
-            'status',
-            'in_progress',
-          );
-
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _remainingSeconds = serverRemaining;
+          _currentQuestionIndex = _intValue(data['current_question_index']);
+          _lifecyclePaused = data['status']?.toString() != 'completed';
+        });
       }
 
-      Navigator.of(context)
-          .pushReplacement(
+      if (data['status']?.toString() == 'completed' && mounted) {
+        unawaited(_finishExam(autoSubmit: true));
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError(_cleanError(e));
+      }
+    } finally {
+      _lifecycleTransition = false;
+    }
+  }
+
+  Future<void> _resumeFromLifecycle() async {
+    if (!_lifecyclePaused ||
+        _lifecycleTransition ||
+        _isSubmitting ||
+        _leaving) {
+      return;
+    }
+
+    final attemptId = _attemptId;
+    if (attemptId == null || attemptId.isEmpty) return;
+
+    _lifecycleTransition = true;
+
+    try {
+      await _resumeAttemptFromServer();
+      if (!mounted) return;
+      setState(() => _lifecyclePaused = false);
+      _startTimer();
+      _startStateSaver();
+    } catch (e) {
+      final text = e.toString().toLowerCase();
+      if (text.contains('expired') || text.contains('time has expired')) {
+        if (mounted) {
+          setState(() {
+            _remainingSeconds = 0;
+            _lifecyclePaused = false;
+          });
+        }
+        unawaited(_finishExam(autoSubmit: true));
+      } else if (mounted) {
+        _showError(_cleanError(e));
+      }
+    } finally {
+      _lifecycleTransition = false;
+    }
+  }
+
+  Future<void> _resumeAttemptFromServer() async {
+    final attemptId = _attemptId;
+    if (attemptId == null || attemptId.isEmpty) {
+      throw Exception('Exam attempt is not available.');
+    }
+
+    final raw = await _supabase.rpc(
+      'resume_exam',
+      params: <String, dynamic>{'p_attempt_id': attemptId},
+    );
+
+    final data = _asMap(raw);
+    final remaining = _clampRemaining(_intValue(data['remaining_seconds']));
+
+    if (remaining <= 0) {
+      throw Exception('Exam time has expired.');
+    }
+
+    _remainingSeconds = remaining;
+    _currentQuestionIndex = _intValue(data['current_question_index']);
+  }
+
+  Future<void> _finishExam({required bool autoSubmit}) async {
+    if (_isSubmitting || _attemptId == null || _leaving && !autoSubmit) {
+      return;
+    }
+
+    final attemptId = _attemptId!;
+
+    setState(() => _isSubmitting = true);
+    _timer?.cancel();
+    _saveStateTimer?.cancel();
+
+    try {
+      await _waitForPendingAnswers();
+
+      final raw = await _supabase.rpc(
+        'finish_exam',
+        params: <String, dynamic>{'p_attempt_id': attemptId},
+      );
+
+      final data = _asMap(raw);
+      final score = _intValue(data['score']);
+      final correctAnswers = _intValue(data['correct_answers']);
+      final totalQuestions = _intValue(data['total_questions']);
+      final serverAutoSubmitted = data['auto_submitted'] == true;
+
+      if (!mounted) return;
+
+      setState(() => _isSubmitting = false);
+
+      await Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) =>
-              ExamResultScreen(
-            examId:
-                widget.examId,
-            attemptId:
-                _attemptId!,
-            examTitle:
-                widget.examTitle,
-            durationMinutes:
-                widget.durationMinutes,
-            score:
-                score,
-            correctAnswers:
-                correctCount,
-            totalQuestions:
-                totalQuestions,
-            passingScore:
-                widget.passingScore,
-            passed:
-                passed,
-            autoSubmitted:
-                autoSubmit,
+          builder: (_) => ExamResultScreen(
+            examId: widget.examId,
+            attemptId: attemptId,
+            examTitle: widget.examTitle,
+            durationMinutes: widget.durationMinutes,
+            score: score,
+            correctAnswers: correctAnswers,
+            totalQuestions: totalQuestions,
+            passingScore: widget.passingScore,
+            passed: score >= widget.passingScore,
+            autoSubmitted: serverAutoSubmitted || autoSubmit,
           ),
         ),
       );
     } catch (e) {
-      debugPrint(
-        'Submit exam error: $e',
-      );
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
 
-      _isSubmitting = false;
+      _showError(_cleanError(e));
 
-      if (!mounted) {
-        return;
+      if (!_lifecyclePaused && !_leaving && _remainingSeconds > 0) {
+        _startTimer();
+        _startStateSaver();
       }
-
-      setState(() {});
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        const SnackBar(
-          content:
-              Text(
-            'Unable to submit the exam. Please try again.',
-          ),
-        ),
-      );
-
-      _startTimer();
-      _startStateSaver();
     }
   }
 
-  // ==========================================================================
-  // SAVE ANSWER RESULTS
-  // ==========================================================================
+  Future<void> _confirmSubmit() async {
+    if (_isSubmitting || _lifecyclePaused) return;
 
-  Future<void> _saveAnswerResults(
-    List<ExamQuestion> questions,
-    Map<String, String>
-        correctAnswers,
-  ) async {
-    for (final question in questions) {
-      final selected =
-          _selectedAnswers[question.id];
-
-      if (selected == null) {
-        continue;
-      }
-
-      final correct =
-          correctAnswers[question.id];
-
-      await _upsertAnswerResult(
-        questionId:
-            question.id,
-        selectedOptionId:
-            selected,
-        isCorrect:
-            correct != null &&
-                selected == correct,
-      );
-    }
-  }
-
-  Future<void> _upsertAnswerResult({
-    required String questionId,
-    required String selectedOptionId,
-    required bool isCorrect,
-  }) async {
-    final attemptId =
-        _attemptId;
-
-    if (attemptId == null) {
-      return;
-    }
-
-    final existing =
-        await _supabase
-            .from('exam_answers')
-            .select('id')
-            .eq(
-              'attempt_id',
-              attemptId,
-            )
-            .eq(
-              'question_id',
-              questionId,
-            )
-            .maybeSingle();
-
-    final now =
-        DateTime.now()
-            .toUtc()
-            .toIso8601String();
-
-    if (existing == null) {
-      await _supabase
-          .from('exam_answers')
-          .insert({
-            'attempt_id':
-                attemptId,
-            'question_id':
-                questionId,
-            'selected_option_id':
-                selectedOptionId,
-            'is_correct':
-                isCorrect,
-            'answered_at':
-                now,
-          });
-
-      return;
-    }
-
-    await _supabase
-        .from('exam_answers')
-        .update({
-      'selected_option_id':
-          selectedOptionId,
-      'is_correct':
-          isCorrect,
-      'answered_at':
-          now,
-    }).eq(
-      'id',
-      existing['id'],
-    );
-  }
-
-  // ==========================================================================
-  // FORMAT TIME
-  // ==========================================================================
-
-  String _formatTime(
-    int seconds,
-  ) {
-    final minutes =
-        seconds ~/ 60;
-
-    final remaining =
-        seconds % 60;
-
-    return '${minutes.toString().padLeft(2, '0')}:'
-        '${remaining.toString().padLeft(2, '0')}';
-  }
-
-  // ==========================================================================
-  // BUILD
-  // ==========================================================================
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
-
-    final horizontalPadding =
-        Responsive.horizontalPadding(
-      context,
-    );
-
-    final contentMaxWidth =
-        Responsive.width(context) >= 900
-            ? 900.0
-            : 760.0;
-
-    final timerColor =
-        _remainingSeconds <= 60
-            ? theme.colorScheme.error
-            : theme.colorScheme.onSurface;
-
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (
-        didPop,
-        result,
-      ) {
-        if (didPop ||
-            _ignoreBackOnce ||
-            _isSubmitting) {
-          return;
-        }
-
-        unawaited(
-          _handleBack(),
-        );
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            widget.examTitle,
-            maxLines: 1,
-            overflow:
-                TextOverflow.ellipsis,
-          ),
-          leading: IconButton(
-            onPressed:
-                _handleBack,
-            icon:
-                const Icon(
-              Icons.arrow_back_rounded,
-            ),
+    final shouldSubmit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Submit Exam?'),
+          content: const Text(
+            'Your saved answers will be submitted and the result will be calculated. This action cannot be undone.',
           ),
           actions: [
-            Padding(
-              padding:
-                  EdgeInsets.only(
-                right: Responsive.spacing(
-                  context,
-                  base: 12,
-                  min: 8,
-                  max: 20,
-                ),
-              ),
-              child: Center(
-                child: Container(
-                  padding:
-                      EdgeInsets.symmetric(
-                    horizontal:
-                        Responsive.spacing(
-                      context,
-                      base: 10,
-                      min: 7,
-                      max: 14,
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Continue'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Submit'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldSubmit == true) {
+      await _finishExam(autoSubmit: false);
+    }
+  }
+
+  Future<bool> _confirmExit() async {
+    if (_isSubmitting || _attemptId == null || !_isInitialized) {
+      return true;
+    }
+
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Leave Exam?'),
+          content: const Text(
+            'The exam will be paused and your answers will be saved. You can continue later with the remaining time.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Stay'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Leave'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (leave != true) return false;
+
+    _leaving = true;
+    await _pauseForLifecycle();
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop || _leaving) return;
+        final shouldLeave = await _confirmExit();
+        if (shouldLeave && mounted) {
+          Navigator.of(context).pop();
+        } else {
+          _leaving = false;
+        }
+      },
+      child: Scaffold(
+        appBar: _buildAppBar(context),
+        body: FutureBuilder<List<ExamQuestion>>(
+          future: _questionsFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting ||
+                _isLoadingAttempt) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return _ErrorView(
+                message: _cleanError(snapshot.error!),
+                onRetry: () {
+                  setState(() {
+                    _isLoadingAttempt = true;
+                    _questionsFuture = _initializeExam();
+                  });
+                },
+              );
+            }
+
+            final questions = snapshot.data ?? const <ExamQuestion>[];
+            if (questions.isEmpty) {
+              return const Center(child: Text('No questions found for this exam.'));
+            }
+
+            final safeIndex = _clampQuestionIndex(
+              _currentQuestionIndex,
+              questions.length,
+            );
+            final question = questions[safeIndex];
+            final selectedOptionId = _selectedAnswers[question.id];
+
+            return Column(
+              children: [
+                _buildTopInfo(context, questions.length),
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      Responsive.horizontalPadding(context),
+                      8,
+                      Responsive.horizontalPadding(context),
+                      24,
                     ),
-                    vertical:
-                        Responsive.spacing(
-                      context,
-                      base: 6,
-                      min: 4,
-                      max: 8,
-                    ),
-                  ),
-                  decoration:
-                      BoxDecoration(
-                    borderRadius:
-                        BorderRadius.circular(20),
-                    color:
-                        timerColor.withValues(
-                      alpha:
-                          _remainingSeconds <= 60
-                              ? 0.10
-                              : 0.06,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize:
-                        MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.timer_outlined,
-                        size:
-                            Responsive.iconSize(
-                          context,
-                          base: 19,
-                          min: 17,
-                          max: 24,
-                        ),
-                        color:
-                            timerColor,
-                      ),
-                      const SizedBox(
-                        width: 6,
-                      ),
-                      Text(
-                        _formatTime(
-                          _remainingSeconds,
-                        ),
-                        style:
-                            TextStyle(
-                          fontSize:
-                              Responsive.bodyTextSize(
-                            context,
-                            base: 14,
-                            min: 12,
-                            max: 17,
-                          ),
-                          fontWeight:
-                              FontWeight.w800,
-                          color:
-                              timerColor,
-                        ),
+                      _QuestionCard(
+                        index: safeIndex,
+                        total: questions.length,
+                        question: question,
+                        selectedOptionId: selectedOptionId,
+                        disabled: _isSubmitting || _lifecyclePaused,
+                        onOptionSelected: (optionId) {
+                          unawaited(_onAnswerSelected(question.id, optionId));
+                        },
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-          ],
-        ),
-        body: FutureBuilder<List<ExamQuestion>>(
-          future:
-              _questionsFuture,
-          builder: (
-            context,
-            snapshot,
-          ) {
-            if (_isLoadingAttempt ||
-                snapshot.connectionState ==
-                    ConnectionState.waiting) {
-              return const Center(
-                child:
-                    CircularProgressIndicator(),
-              );
-            }
-
-            if (snapshot.hasError) {
-              debugPrint(
-                'Exam error: ${snapshot.error}',
-              );
-
-              return const _ErrorView(
-                message:
-                    'Unable to load exam questions.',
-              );
-            }
-
-            final questions =
-                snapshot.data ?? [];
-
-            if (questions.isEmpty) {
-              return const _ErrorView(
-                message:
-                    'This exam has no questions yet.',
-              );
-            }
-
-            if (_currentQuestionIndex < 0) {
-              _currentQuestionIndex = 0;
-            }
-
-            if (_currentQuestionIndex >=
-                questions.length) {
-              _currentQuestionIndex =
-                  questions.length - 1;
-            }
-
-            final question =
-                questions[_currentQuestionIndex];
-
-            final selectedOptionId =
-                _selectedAnswers[question.id];
-
-            final answeredCount =
-                _selectedAnswers.values
-                    .where(
-                      (optionId) =>
-                          optionId.isNotEmpty,
-                    )
-                    .length;
-
-            return Column(
-              children: [
-                // =============================================================
-                // PROGRESS
-                // =============================================================
-
-                Center(
-                  child:
-                      ConstrainedBox(
-                    constraints:
-                        BoxConstraints(
-                      maxWidth:
-                          contentMaxWidth,
-                    ),
-                    child:
-                        Padding(
-                      padding:
-                          EdgeInsets.fromLTRB(
-                        horizontalPadding,
-                        Responsive.spacing(
-                          context,
-                          base: 16,
-                          min: 10,
-                          max: 24,
-                        ),
-                        horizontalPadding,
-                        Responsive.spacing(
-                          context,
-                          base: 8,
-                          min: 6,
-                          max: 12,
-                        ),
-                      ),
-                      child:
-                          Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child:
-                                    Text(
-                                  'Question ${_currentQuestionIndex + 1}',
-                                  style:
-                                      TextStyle(
-                                    fontSize:
-                                        Responsive.bodyTextSize(
-                                      context,
-                                      base: 15,
-                                      min: 13,
-                                      max: 18,
-                                    ),
-                                    fontWeight:
-                                        FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                '$answeredCount/${questions.length} answered',
-                                style:
-                                    TextStyle(
-                                  fontSize:
-                                      Responsive.smallTextSize(
-                                    context,
-                                    base: 11,
-                                    min: 10,
-                                    max: 14,
-                                  ),
-                                  color:
-                                      theme.colorScheme.onSurface
-                                          .withValues(
-                                    alpha: 0.55,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(
-                            height: 8,
-                          ),
-                          ClipRRect(
-                            borderRadius:
-                                BorderRadius.circular(20),
-                            child:
-                                LinearProgressIndicator(
-                              value:
-                                  (_currentQuestionIndex + 1) /
-                                      questions.length,
-                              minHeight:
-                                  Responsive.clamped(
-                                context,
-                                base: 7,
-                                min: 5,
-                                max: 10,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // =============================================================
-                // QUESTION
-                // =============================================================
-
-                Expanded(
-                  child:
-                      SingleChildScrollView(
-                    physics:
-                        const BouncingScrollPhysics(),
-                    padding:
-                        EdgeInsets.fromLTRB(
-                      horizontalPadding,
-                      Responsive.spacing(
-                        context,
-                        base: 20,
-                        min: 14,
-                        max: 30,
-                      ),
-                      horizontalPadding,
-                      Responsive.spacing(
-                        context,
-                        base: 20,
-                        min: 14,
-                        max: 28,
-                      ),
-                    ),
-                    child:
-                        Center(
-                      child:
-                          ConstrainedBox(
-                        constraints:
-                            BoxConstraints(
-                          maxWidth:
-                              contentMaxWidth,
-                        ),
-                        child:
-                            Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
-                          children: [
-                            Text(
-                              question.questionText,
-                              style:
-                                  TextStyle(
-                                fontSize:
-                                    Responsive.clamped(
-                                  context,
-                                  base: 21,
-                                  min: 18,
-                                  max: 30,
-                                ),
-                                fontWeight:
-                                    FontWeight.w700,
-                                height: 1.35,
-                              ),
-                            ),
-
-                            SizedBox(
-                              height:
-                                  Responsive.spacing(
-                                context,
-                                base: 24,
-                                min: 16,
-                                max: 32,
-                              ),
-                            ),
-
-                            // =================================================
-                            // OPTIONS
-                            // =================================================
-
-                            ...question.options.map(
-                              (option) {
-                                final selected =
-                                    selectedOptionId ==
-                                        option.id;
-
-                                return Padding(
-                                  padding:
-                                      EdgeInsets.only(
-                                    bottom:
-                                        Responsive.spacing(
-                                      context,
-                                      base: 12,
-                                      min: 8,
-                                      max: 16,
-                                    ),
-                                  ),
-                                  child:
-                                      _ExamOptionCard(
-                                    option:
-                                        option,
-                                    selected:
-                                        selected,
-                                    onTap:
-                                        _isSubmitting
-                                            ? null
-                                            : () {
-                                                _selectAnswer(
-                                                  question,
-                                                  option,
-                                                );
-                                              },
-                                  ),
-                                );
-                              },
-                            ),
-
-                            const SizedBox(
-                              height: 8,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // =============================================================
-                // NAVIGATION
-                // =============================================================
-
-                SafeArea(
-                  top: false,
-                  child:
-                      Center(
-                    child:
-                        ConstrainedBox(
-                      constraints:
-                          BoxConstraints(
-                        maxWidth:
-                            contentMaxWidth,
-                      ),
-                      child:
-                          Padding(
-                        padding:
-                            EdgeInsets.fromLTRB(
-                          horizontalPadding,
-                          8,
-                          horizontalPadding,
-                          Responsive.spacing(
-                            context,
-                            base: 14,
-                            min: 10,
-                            max: 20,
-                          ),
-                        ),
-                        child:
-                            Row(
-                          children: [
-                            if (_currentQuestionIndex >
-                                0)
-                              Expanded(
-                                child:
-                                    OutlinedButton.icon(
-                                  onPressed:
-                                      _isSubmitting
-                                          ? null
-                                          : _previousQuestion,
-                                  icon:
-                                      const Icon(
-                                    Icons.arrow_back_rounded,
-                                  ),
-                                  label:
-                                      const Text(
-                                    'Previous',
-                                  ),
-                                ),
-                              ),
-
-                            if (_currentQuestionIndex >
-                                0)
-                              const SizedBox(
-                                width: 12,
-                              ),
-
-                            Expanded(
-                              child:
-                                  FilledButton.icon(
-                                onPressed:
-                                    _isSubmitting
-                                        ? null
-                                        : () {
-                                            _nextQuestion(
-                                              questions,
-                                            );
-                                          },
-                                icon:
-                                    Icon(
-                                  _currentQuestionIndex ==
-                                          questions.length - 1
-                                      ? Icons.check_rounded
-                                      : Icons.arrow_forward_rounded,
-                                ),
-                                label:
-                                    Text(
-                                  _currentQuestionIndex ==
-                                          questions.length - 1
-                                      ? 'Submit'
-                                      : 'Next',
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                _buildBottomBar(context, questions),
               ],
             );
           },
@@ -2006,139 +700,317 @@ class _ExamScreenState extends State<ExamScreen>
       ),
     );
   }
+
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AppBar(
+      centerTitle: true,
+      title: Text(
+        widget.examTitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      leading: IconButton(
+        tooltip: 'Leave exam',
+        onPressed: _isSubmitting ? null : () async {
+          final shouldLeave = await _confirmExit();
+          if (shouldLeave && mounted) {
+            Navigator.of(context).pop();
+          } else {
+            _leaving = false;
+          }
+        },
+        icon: const Icon(Icons.arrow_back_rounded),
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Center(
+            child: _TimerPill(
+              remainingSeconds: _remainingSeconds,
+              isPaused: _lifecyclePaused,
+              color: scheme.primary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopInfo(BuildContext context, int totalQuestions) {
+    final scheme = Theme.of(context).colorScheme;
+    final answeredCount = _selectedAnswers.length;
+    final progress = totalQuestions == 0 ? 0.0 : answeredCount / totalQuestions;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        Responsive.horizontalPadding(context),
+        14,
+        Responsive.horizontalPadding(context),
+        4,
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$answeredCount of $totalQuestions answered',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (_lifecyclePaused)
+                Text(
+                  'Paused',
+                  style: TextStyle(
+                    color: scheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(
+    BuildContext context,
+    List<ExamQuestion> questions,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final index = _clampQuestionIndex(_currentQuestionIndex, questions.length);
+    final isFirst = index == 0;
+    final isLast = index == questions.length - 1;
+
+    return SafeArea(
+      top: false,
+      child: Material(
+        color: scheme.surface,
+        elevation: 8,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            Responsive.horizontalPadding(context),
+            10,
+            Responsive.horizontalPadding(context),
+            10,
+          ),
+          child: Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: isFirst || _isSubmitting || _lifecyclePaused
+                    ? null
+                    : () {
+                        setState(() => _currentQuestionIndex = index - 1);
+                        unawaited(_saveProgress());
+                      },
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Previous'),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: isLast
+                    ? FilledButton.icon(
+                        onPressed: _isSubmitting || _lifecyclePaused
+                            ? null
+                            : _confirmSubmit,
+                        icon: const Icon(Icons.check_rounded),
+                        label: const Text('Submit Exam'),
+                      )
+                    : FilledButton.icon(
+                        onPressed: _isSubmitting || _lifecyclePaused
+                            ? null
+                            : () {
+                                setState(() => _currentQuestionIndex = index + 1);
+                                unawaited(_saveProgress());
+                              },
+                        icon: const Icon(Icons.arrow_forward_rounded),
+                        label: const Text('Next'),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  int _clampRemaining(int value) {
+    final max = widget.durationMinutes * 60;
+    if (value < 0) return 0;
+    if (value > max) return max;
+    return value;
+  }
+
+  int _clampQuestionIndex(int value, int length) {
+    if (length <= 0) return 0;
+    if (value < 0) return 0;
+    if (value >= length) return length - 1;
+    return value;
+  }
+
+  Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    throw Exception('Invalid response from exam service.');
+  }
+
+  String? _stringValue(dynamic value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  int _intValue(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  String _cleanError(Object error) {
+    final text = error.toString().trim();
+    if (text.startsWith('Exception:')) {
+      return text.substring('Exception:'.length).trim();
+    }
+    return text.isEmpty ? 'Unable to process the exam.' : text;
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
 }
 
-// ============================================================================
-// EXAM OPTION CARD
-// ============================================================================
+class _QuestionCard extends StatelessWidget {
+  final int index;
+  final int total;
+  final ExamQuestion question;
+  final String? selectedOptionId;
+  final bool disabled;
+  final ValueChanged<String> onOptionSelected;
 
-class _ExamOptionCard
-    extends StatelessWidget {
+  const _QuestionCard({
+    required this.index,
+    required this.total,
+    required this.question,
+    required this.selectedOptionId,
+    required this.disabled,
+    required this.onOptionSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Card(
+      margin: const EdgeInsets.only(top: 8),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.all(Responsive.cardPadding(context)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Question ${index + 1} of $total',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: scheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              question.questionText,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ...question.options.map((option) {
+              final selected = option.id == selectedOptionId;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _OptionCard(
+                  option: option,
+                  selected: selected,
+                  disabled: disabled,
+                  onTap: () => onOptionSelected(option.id),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OptionCard extends StatelessWidget {
   final ExamOption option;
   final bool selected;
-  final VoidCallback? onTap;
+  final bool disabled;
+  final VoidCallback onTap;
 
-  const _ExamOptionCard({
+  const _OptionCard({
     required this.option,
     required this.selected,
+    required this.disabled,
     required this.onTap,
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
-
-    final borderColor =
-        selected
-            ? theme.colorScheme.primary
-            : theme.colorScheme.outline
-                .withValues(
-              alpha: 0.35,
-            );
-
-    final backgroundColor =
-        selected
-            ? theme.colorScheme.primary
-                .withValues(
-              alpha: 0.08,
-            )
-            : theme.colorScheme.surface;
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
 
     return Material(
-      color: Colors.transparent,
-      child:
-          InkWell(
-        borderRadius:
-            BorderRadius.circular(
-          Responsive.smallRadius(context),
+      color: selected
+          ? scheme.primary.withValues(alpha: 0.10)
+          : scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: selected ? scheme.primary : scheme.outlineVariant,
+          width: selected ? 1.5 : 1,
         ),
-        onTap: onTap,
-        child:
-            AnimatedContainer(
-          duration:
-              const Duration(
-            milliseconds: 180,
-          ),
-          width:
-              double.infinity,
-          padding:
-              EdgeInsets.all(
-            Responsive.cardPadding(context),
-          ),
-          decoration:
-              BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(
-              Responsive.smallRadius(context),
-            ),
-            color:
-                backgroundColor,
-            border:
-                Border.all(
-              color:
-                  borderColor,
-              width:
-                  selected ? 2 : 1,
-            ),
-          ),
-          child:
-              Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: disabled ? null : onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AnimatedSwitcher(
-                duration:
-                    const Duration(
-                  milliseconds: 180,
-                ),
-                child:
-                    Icon(
-                  selected
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_off,
-                  key:
-                      ValueKey<bool>(selected),
-                  size:
-                      Responsive.iconSize(
-                    context,
-                    base: 24,
-                    min: 21,
-                    max: 30,
-                  ),
-                  color:
-                      selected
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme
-                              .onSurface
-                              .withValues(
-                            alpha: 0.40,
-                          ),
-                ),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
               ),
-              const SizedBox(
-                width: 12,
-              ),
+              const SizedBox(width: 12),
               Expanded(
-                child:
-                    Text(
+                child: Text(
                   option.optionText,
-                  style:
-                      TextStyle(
-                    fontSize:
-                        Responsive.bodyTextSize(
-                      context,
-                      base: 16,
-                      min: 14,
-                      max: 20,
-                    ),
-                    height: 1.35,
-                    fontWeight:
-                        selected
-                            ? FontWeight.w600
-                            : FontWeight.w400,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    height: 1.45,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
               ),
@@ -2150,77 +1022,82 @@ class _ExamOptionCard
   }
 }
 
-// ============================================================================
-// ERROR VIEW
-// ============================================================================
+class _TimerPill extends StatelessWidget {
+  final int remainingSeconds;
+  final bool isPaused;
+  final Color color;
 
-class _ErrorView
-    extends StatelessWidget {
-  final String message;
-
-  const _ErrorView({
-    required this.message,
+  const _TimerPill({
+    required this.remainingSeconds,
+    required this.isPaused,
+    required this.color,
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
+  Widget build(BuildContext context) {
+    final minutes = remainingSeconds ~/ 60;
+    final seconds = remainingSeconds % 60;
+    final text = '$minutes:${seconds.toString().padLeft(2, '0')}';
 
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isPaused ? Icons.pause_rounded : Icons.timer_outlined,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorView({
+    required this.message,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Center(
-      child:
-          Padding(
-        padding:
-            EdgeInsets.all(
-          Responsive.cardPadding(context),
-        ),
-        child:
-            ConstrainedBox(
-          constraints:
-              const BoxConstraints(
-            maxWidth: 560,
-          ),
-          child:
-              Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.error_outline_rounded,
-                size:
-                    Responsive.clamped(
-                  context,
-                  base: 60,
-                  min: 50,
-                  max: 76,
-                ),
-                color:
-                    theme.colorScheme.error,
-              ),
-              const SizedBox(
-                height: 16,
-              ),
-              Text(
-                message,
-                textAlign:
-                    TextAlign.center,
-                style:
-                    TextStyle(
-                  fontSize:
-                      Responsive.titleSize(
-                    context,
-                    base: 18,
-                    min: 16,
-                    max: 24,
-                  ),
-                  fontWeight:
-                      FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 48),
+            const SizedBox(height: 14),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
         ),
       ),
     );
