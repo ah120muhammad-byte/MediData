@@ -12,8 +12,7 @@ class ProfileScreen extends StatefulWidget {
     required String moduleId,
     required String moduleName,
     required String lectureId,
-  })?
-  onOpenLecture;
+  })? onOpenLecture;
 
   final void Function(StudentExamAttempt attempt)? onExamAttemptTap;
   final VoidCallback? onOpenExamHistory;
@@ -31,7 +30,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final StudentProfileService _service = StudentProfileService.instance;
-
   late Future<_ProfilePageData> _future;
 
   @override
@@ -55,15 +53,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _refresh() async {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
+    final future = _loadData();
+    setState(() => _future = future);
+    await future;
+  }
 
-    setState(() {
-      _future = _loadData();
-    });
-
-    await _future;
+  void _openSupport() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ContactSupportScreen()),
+    );
   }
 
   @override
@@ -75,16 +74,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (snapshot.hasError) {
+        if (snapshot.hasError || snapshot.data == null) {
           return _ErrorView(onRetry: _refresh);
         }
 
-        final data = snapshot.data;
-
-        if (data == null) {
-          return _ErrorView(onRetry: _refresh);
-        }
-
+        final data = snapshot.data!;
         final horizontalPadding = Responsive.horizontalPadding(context);
 
         return Padding(
@@ -113,27 +107,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       profile: data.profile,
                       onEdit: () => _showEditProfile(data.profile),
                     ),
-                    SizedBox(height: Responsive.spacing(context, base: 10, min: 7, max: 16)),
+                    _Gap(),
                     _OverviewGrid(analytics: data.analytics),
-                    SizedBox(height: Responsive.spacing(context, base: 12, min: 9, max: 18)),
+                    _Gap(),
                     _SectionCard(
                       title: 'Learning Progress',
                       icon: Icons.school_rounded,
                       child: _LearningProgress(modules: data.moduleProgress),
                     ),
-                    SizedBox(height: Responsive.spacing(context, base: 12, min: 9, max: 18)),
+                    _Gap(),
                     _SectionCard(
                       title: 'Study Activity',
                       icon: Icons.insights_rounded,
-                      child: _StudyActivityChart(activity: data.analytics.dailyActivity),
+                      child: _StudyActivityChart(
+                        activity: data.analytics.dailyActivity,
+                      ),
                     ),
-                    SizedBox(height: Responsive.spacing(context, base: 12, min: 9, max: 18)),
+                    _Gap(),
                     _SectionCard(
                       title: 'Exam Performance',
                       icon: Icons.analytics_rounded,
                       child: _ExamChart(attempts: data.analytics.attempts),
                     ),
-                    SizedBox(height: Responsive.spacing(context, base: 12, min: 9, max: 18)),
+                    _Gap(),
                     _SectionCard(
                       title: 'Exam Attempts',
                       icon: Icons.history_rounded,
@@ -148,7 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onAttemptTap: widget.onExamAttemptTap,
                       ),
                     ),
-                    SizedBox(height: Responsive.spacing(context, base: 12, min: 9, max: 18)),
+                    _Gap(),
                     _SectionCard(
                       title: 'Lecture Activity',
                       icon: Icons.menu_book_rounded,
@@ -157,22 +153,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onOpenLecture: widget.onOpenLecture,
                       ),
                     ),
-                    SizedBox(height: Responsive.spacing(context, base: 12, min: 9, max: 18)),
+                    _Gap(),
                     _SectionCard(
                       title: 'Settings',
                       icon: Icons.settings_rounded,
                       child: const _StudentSettings(),
                     ),
-                    SizedBox(height: Responsive.spacing(context, base: 12, min: 9, max: 18)),
+                    _Gap(),
                     _AccountActions(
                       onPassword: _showChangePassword,
-                      onSupport: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ContactSupportScreen(),
-                          ),
-                        );
-                      },
+                      onSupport: _openSupport,
                       onLogout: _showLogoutDialog,
                     ),
                   ],
@@ -210,7 +200,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         prefixIcon: Icon(Icons.person_outline_rounded),
                       ),
                     ),
-                    SizedBox(height: Responsive.spacing(dialogContext, base: 14, min: 10, max: 18)),
+                    const SizedBox(height: 14),
                     TextField(
                       controller: phoneController,
                       keyboardType: TextInputType.phone,
@@ -219,7 +209,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         prefixIcon: Icon(Icons.phone_outlined),
                       ),
                     ),
-                    SizedBox(height: Responsive.spacing(dialogContext, base: 14, min: 10, max: 18)),
+                    const SizedBox(height: 14),
                     TextField(
                       readOnly: true,
                       controller: emailController,
@@ -233,7 +223,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
@@ -242,20 +234,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : () async {
                           final name = nameController.text.trim();
                           if (name.isEmpty) return;
+
                           setDialogState(() => saving = true);
                           try {
                             await _service.updateProfile(
                               fullName: name,
                               phone: phoneController.text,
                             );
+
                             if (!dialogContext.mounted) return;
                             Navigator.of(dialogContext).pop();
-                          } catch (e) {
-                            debugPrint('Update profile error: $e');
+                          } catch (_) {
                             if (!dialogContext.mounted) return;
                             setDialogState(() => saving = false);
                             ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              const SnackBar(content: Text('Unable to update profile.')),
+                              const SnackBar(
+                                content: Text('Unable to update profile.'),
+                              ),
                             );
                           }
                         },
@@ -263,7 +258,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Text('Save'),
                 ),
@@ -274,12 +269,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       },
     );
 
-    emailController.dispose();
     nameController.dispose();
     phoneController.dispose();
+    emailController.dispose();
 
-    if (!mounted) return;
-    await _refresh();
+    if (mounted) await _refresh();
   }
 
   Future<void> _showChangePassword() async {
@@ -294,33 +288,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
           builder: (dialogContext, setDialogState) {
             return AlertDialog(
               title: const Text('Change Password'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'New Password',
-                        prefixIcon: Icon(Icons.lock_outline_rounded),
-                      ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'New Password',
+                      prefixIcon: Icon(Icons.lock_outline_rounded),
                     ),
-                    SizedBox(height: Responsive.spacing(dialogContext, base: 14, min: 10, max: 18)),
-                    TextField(
-                      controller: confirmController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Confirm Password',
-                        prefixIcon: Icon(Icons.lock_outline_rounded),
-                      ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: confirmController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Confirm Password',
+                      prefixIcon: Icon(Icons.lock_outline_rounded),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
               actions: [
                 TextButton(
-                  onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
@@ -329,28 +323,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : () async {
                           final password = passwordController.text;
                           final confirmation = confirmController.text;
+
                           if (password.length < 6 || password != confirmation) {
-                            if (!dialogContext.mounted) return;
                             ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              const SnackBar(content: Text('Check your passwords.')),
+                              const SnackBar(
+                                content: Text('Check your passwords.'),
+                              ),
                             );
                             return;
                           }
+
                           setDialogState(() => saving = true);
                           try {
                             await _service.updatePassword(password);
                             if (!dialogContext.mounted) return;
                             Navigator.of(dialogContext).pop();
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Password updated successfully.')),
-                            );
-                          } catch (e) {
-                            debugPrint('Update password error: $e');
+                          } catch (_) {
                             if (!dialogContext.mounted) return;
                             setDialogState(() => saving = false);
                             ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              const SnackBar(content: Text('Unable to change password.')),
+                              const SnackBar(
+                                content: Text('Unable to change password.'),
+                              ),
                             );
                           }
                         },
@@ -358,7 +352,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Text('Update'),
                 ),
@@ -376,27 +370,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _showLogoutDialog() async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Sign Out?'),
-          content: const Text('You will need to sign in again to access your account.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Sign Out'),
-            ),
-          ],
-        );
-      },
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sign Out?'),
+        content: const Text(
+          'You will need to sign in again to access your account.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
     );
 
-    if (result != true) return;
-    await _service.signOut();
+    if (result == true) await _service.signOut();
   }
+}
+
+class _Gap extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: Responsive.spacing(context, base: 12, min: 9, max: 18),
+      );
 }
 
 class _ProfilePageData {
@@ -421,16 +421,15 @@ class _ProfileHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final padding = Responsive.cardPadding(context);
-    final avatarRadius = Responsive.clamped(context, base: 34, min: 28, max: 46);
+    final radius = Responsive.clamped(context, base: 34, min: 28, max: 46);
 
     return Card(
       elevation: 0,
       child: Padding(
         padding: EdgeInsets.all(padding),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            _Avatar(profile: profile, radius: avatarRadius),
+            _Avatar(profile: profile, radius: radius),
             SizedBox(width: Responsive.spacing(context, base: 14, min: 10, max: 20)),
             Expanded(
               child: Column(
@@ -445,22 +444,20 @@ class _ProfileHeader extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  SizedBox(height: Responsive.spacing(context, base: 4, min: 3, max: 7)),
+                  const SizedBox(height: 4),
                   Text(
                     profile.email,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: Responsive.bodyTextSize(context, base: 14, min: 12, max: 17),
                       color: theme.colorScheme.onSurface.withValues(alpha: .60),
                     ),
                   ),
                   if (profile.phone != null && profile.phone!.isNotEmpty) ...[
-                    SizedBox(height: Responsive.spacing(context, base: 3, min: 2, max: 6)),
+                    const SizedBox(height: 3),
                     Text(
                       profile.phone!,
                       style: TextStyle(
-                        fontSize: Responsive.smallTextSize(context, base: 12, min: 10, max: 15),
                         color: theme.colorScheme.onSurface.withValues(alpha: .50),
                       ),
                     ),
@@ -468,7 +465,11 @@ class _ProfileHeader extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(onPressed: onEdit, tooltip: 'Edit profile', icon: const Icon(Icons.edit_outlined)),
+            IconButton(
+              onPressed: onEdit,
+              tooltip: 'Edit profile',
+              icon: const Icon(Icons.edit_outlined),
+            ),
           ],
         ),
       ),
@@ -488,8 +489,10 @@ class _Avatar extends StatelessWidget {
     if (url != null && url.isNotEmpty) {
       return CircleAvatar(radius: radius, backgroundImage: NetworkImage(url));
     }
+
     final name = profile.fullName.trim();
     final initial = name.isEmpty ? '?' : name[0].toUpperCase();
+
     return CircleAvatar(
       radius: radius,
       backgroundColor: AppColors.primary.withValues(alpha: .12),
@@ -513,36 +516,31 @@ class _OverviewGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = Responsive.width(context);
-    final horizontalPadding = Responsive.horizontalPadding(context);
-    final availableWidth = width - (horizontalPadding * 2);
-    final int columns;
-
-    if (availableWidth >= 960) {
-      columns = 4;
-    } else if (availableWidth >= 600) {
-      columns = 3;
-    } else if (availableWidth >= 420) {
-      columns = 2;
-    } else {
-      columns = 1;
-    }
-
+    final padding = Responsive.horizontalPadding(context);
+    final available = width - (padding * 2);
+    final columns = available >= 960
+        ? 4
+        : available >= 600
+            ? 3
+            : available >= 420
+                ? 2
+                : 1;
     final spacing = Responsive.spacing(context, base: 8, min: 6, max: 12);
-    final itemWidth = (availableWidth - (spacing * (columns - 1))) / columns;
+    final itemWidth = (available - spacing * (columns - 1)) / columns;
     final itemHeight = columns == 1
-        ? Responsive.clamped(context, base: 70, min: 64, max: 78)
+        ? 70.0
         : Responsive.clamped(context, base: 90, min: 80, max: 102);
 
     final cards = <Widget>[
-      _StatCard(title: 'Lectures Opened', value: analytics.lecturesOpened, icon: Icons.menu_book_rounded),
-      _StatCard(title: 'Audio Completed', value: analytics.audioCompleted, icon: Icons.audio_file_rounded),
-      _StatCard(title: 'Video Completed', value: analytics.videoCompleted, icon: Icons.video_file_rounded),
-      _StatCard(title: 'Exam Attempts', value: analytics.examAttempts, icon: Icons.quiz_rounded),
-      _StatCard(title: 'Average Score', value: '${analytics.averageScore.toStringAsFixed(0)}%', icon: Icons.analytics_rounded),
-      _StatCard(title: 'Best Score', value: '${analytics.bestScore.toStringAsFixed(0)}%', icon: Icons.emoji_events_rounded),
-      _StatCard(title: 'Passed Exams', value: analytics.passedExams, icon: Icons.check_circle_rounded),
-      _StatCard(title: 'Success Rate', value: '${analytics.successRate.toStringAsFixed(0)}%', icon: Icons.trending_up_rounded),
-      _StatCard(title: 'Study Time', value: analytics.formattedStudyTime, icon: Icons.timer_outlined),
+      _StatCard('Lectures Opened', analytics.lecturesOpened, Icons.menu_book_rounded),
+      _StatCard('Audio Completed', analytics.audioCompleted, Icons.audio_file_rounded),
+      _StatCard('Video Completed', analytics.videoCompleted, Icons.video_file_rounded),
+      _StatCard('Exam Attempts', analytics.examAttempts, Icons.quiz_rounded),
+      _StatCard('Average Score', '${analytics.averageScore.toStringAsFixed(0)}%', Icons.analytics_rounded),
+      _StatCard('Best Score', '${analytics.bestScore.toStringAsFixed(0)}%', Icons.emoji_events_rounded),
+      _StatCard('Passed Exams', analytics.passedExams, Icons.check_circle_rounded),
+      _StatCard('Success Rate', '${analytics.successRate.toStringAsFixed(0)}%', Icons.trending_up_rounded),
+      _StatCard('Study Time', analytics.formattedStudyTime, Icons.timer_outlined),
     ];
 
     return Wrap(
@@ -560,40 +558,30 @@ class _StatCard extends StatelessWidget {
   final dynamic value;
   final IconData icon;
 
-  const _StatCard({required this.title, required this.value, required this.icon});
+  const _StatCard(this.title, this.value, this.icon);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final horizontalPadding = Responsive.spacing(context, base: 9, min: 7, max: 13);
-    final verticalPadding = Responsive.spacing(context, base: 6, min: 5, max: 8);
-    final iconBoxSize = Responsive.clamped(context, base: 36, min: 32, max: 42);
-
     return Card(
       elevation: 0,
       margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         child: Row(
           children: [
             Container(
-              width: iconBoxSize,
-              height: iconBoxSize,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(Responsive.smallRadius(context)),
+                color: theme.colorScheme.primary.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(
-                icon,
-                color: theme.colorScheme.primary,
-                size: Responsive.iconSize(context, base: 19, min: 17, max: 24),
-              ),
+              child: Icon(icon, color: theme.colorScheme.primary, size: 19),
             ),
-            SizedBox(width: Responsive.spacing(context, base: 7, min: 5, max: 10)),
+            const SizedBox(width: 7),
             Expanded(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -602,19 +590,16 @@ class _StatCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: Responsive.smallTextSize(context, base: 9.5, min: 8.5, max: 12),
-                      height: 1.05,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                      fontSize: 10,
+                      color: theme.colorScheme.onSurface.withValues(alpha: .55),
                     ),
                   ),
-                  const SizedBox(height: 1),
                   Text(
                     value.toString(),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: Responsive.clamped(context, base: 16, min: 14, max: 21),
-                      height: 1.0,
+                    style: const TextStyle(
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -634,12 +619,16 @@ class _SectionCard extends StatelessWidget {
   final Widget child;
   final Widget? trailing;
 
-  const _SectionCard({required this.title, required this.icon, required this.child, this.trailing});
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Card(
       elevation: 0,
       child: Padding(
@@ -649,8 +638,8 @@ class _SectionCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, size: Responsive.iconSize(context, base: 20, min: 17, max: 26), color: theme.colorScheme.primary),
-                SizedBox(width: Responsive.spacing(context, base: 7, min: 5, max: 12)),
+                Icon(icon, color: theme.colorScheme.primary, size: 20),
+                const SizedBox(width: 7),
                 Expanded(
                   child: Text(
                     title,
@@ -660,10 +649,10 @@ class _SectionCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                ?trailing,
+                if (trailing != null) trailing!,
               ],
             ),
-            SizedBox(height: Responsive.spacing(context, base: 9, min: 7, max: 14)),
+            const SizedBox(height: 9),
             child,
           ],
         ),
@@ -674,57 +663,50 @@ class _SectionCard extends StatelessWidget {
 
 class _LearningProgress extends StatelessWidget {
   final List<StudentModuleProgress> modules;
-
   const _LearningProgress({required this.modules});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (modules.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8),
-        child: Text('Learning progress will appear here once lectures are available.'),
-      );
+    final active = modules.where((m) => m.totalLectures > 0).toList();
+    if (active.isEmpty) {
+      return const Text('Learning progress will appear here once lectures are available.');
     }
 
-    final modulesWithLectures = modules.where((module) => module.totalLectures > 0).toList();
-    final totalLectures = modulesWithLectures.fold<int>(0, (sum, module) => sum + module.totalLectures);
-    final completedLectures = modulesWithLectures.fold<int>(0, (sum, module) => sum + module.completedLectures);
-    final overallProgress = totalLectures == 0 ? 0 : ((completedLectures / totalLectures) * 100).round();
+    final total = active.fold<int>(0, (sum, m) => sum + m.totalLectures);
+    final done = active.fold<int>(0, (sum, m) => sum + m.completedLectures);
+    final overall = total == 0 ? 0 : ((done / total) * 100).round();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Overall Progress', style: TextStyle(fontSize: Responsive.bodyTextSize(context, base: 13, min: 12, max: 16), fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 3),
-                  Text(
-                    '$completedLectures of $totalLectures lectures completed',
-                    style: TextStyle(fontSize: Responsive.smallTextSize(context, base: 11, min: 10, max: 14), color: theme.colorScheme.onSurface.withValues(alpha: .55)),
-                  ),
-                ],
+              child: Text(
+                '$done of $total lectures completed',
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withValues(alpha: .55),
+                ),
               ),
             ),
-            Text('$overallProgress%', style: TextStyle(fontSize: Responsive.titleSize(context, base: 22, min: 19, max: 28), fontWeight: FontWeight.w900, color: theme.colorScheme.primary)),
+            Text(
+              '$overall%',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 22,
+                color: theme.colorScheme.primary,
+              ),
+            ),
           ],
         ),
-        SizedBox(height: Responsive.spacing(context, base: 8, min: 6, max: 12)),
+        const SizedBox(height: 8),
         ClipRRect(
-          borderRadius: BorderRadius.circular(Responsive.smallRadius(context)),
-          child: LinearProgressIndicator(value: overallProgress / 100, minHeight: Responsive.clamped(context, base: 8, min: 7, max: 10)),
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(value: overall / 100, minHeight: 8),
         ),
-        if (modulesWithLectures.isNotEmpty) ...[
-          SizedBox(height: Responsive.spacing(context, base: 16, min: 12, max: 22)),
-          Text('Modules', style: TextStyle(fontSize: Responsive.bodyTextSize(context, base: 13, min: 12, max: 16), fontWeight: FontWeight.w800)),
-          SizedBox(height: Responsive.spacing(context, base: 8, min: 6, max: 12)),
-          ...modulesWithLectures.map((module) => _ModuleProgressTile(module: module)),
-        ],
+        const SizedBox(height: 16),
+        ...active.map((module) => _ModuleProgressTile(module: module)),
       ],
     );
   }
@@ -732,17 +714,14 @@ class _LearningProgress extends StatelessWidget {
 
 class _ModuleProgressTile extends StatelessWidget {
   final StudentModuleProgress module;
-
   const _ModuleProgressTile({required this.module});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final progress = module.progressPercent / 100;
-    final isComplete = module.progressPercent >= 100;
-
     return Padding(
-      padding: EdgeInsets.only(bottom: Responsive.spacing(context, base: 11, min: 8, max: 15)),
+      padding: const EdgeInsets.only(bottom: 11),
       child: Column(
         children: [
           Row(
@@ -752,19 +731,27 @@ class _ModuleProgressTile extends StatelessWidget {
                   module.moduleName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: Responsive.bodyTextSize(context, base: 12.5, min: 11, max: 15), fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
-              SizedBox(width: Responsive.spacing(context, base: 8, min: 6, max: 12)),
-              Text('${module.completedLectures}/${module.totalLectures}', style: TextStyle(fontSize: Responsive.smallTextSize(context, base: 10.5, min: 9, max: 13), color: theme.colorScheme.onSurface.withValues(alpha: .50))),
-              SizedBox(width: Responsive.spacing(context, base: 7, min: 5, max: 10)),
-              Text('${module.progressPercent}%', style: TextStyle(fontSize: Responsive.smallTextSize(context, base: 11, min: 10, max: 14), fontWeight: FontWeight.w800, color: isComplete ? theme.colorScheme.primary : theme.colorScheme.onSurface)),
+              const SizedBox(width: 8),
+              Text('${module.completedLectures}/${module.totalLectures}'),
+              const SizedBox(width: 7),
+              Text(
+                '${module.progressPercent}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: module.progressPercent >= 100
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface,
+                ),
+              ),
             ],
           ),
-          SizedBox(height: Responsive.spacing(context, base: 5, min: 4, max: 8)),
+          const SizedBox(height: 5),
           ClipRRect(
-            borderRadius: BorderRadius.circular(Responsive.smallRadius(context)),
-            child: LinearProgressIndicator(value: progress, minHeight: Responsive.clamped(context, base: 6, min: 5, max: 8)),
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(value: progress, minHeight: 6),
           ),
         ],
       ),
@@ -772,217 +759,195 @@ class _ModuleProgressTile extends StatelessWidget {
   }
 }
 
-class _StudyActivityChart extends StatefulWidget {
+class _StudyActivityChart extends StatelessWidget {
   final List<DailyStudyActivity> activity;
   const _StudyActivityChart({required this.activity});
-  @override
-  State<_StudyActivityChart> createState() => _StudyActivityChartState();
-}
-
-class _StudyActivityChartState extends State<_StudyActivityChart> {
-  int? _touchedIndex;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (widget.activity.isEmpty) {
-      return _ChartEmptyState(icon: Icons.insights_outlined, text: 'Study activity will appear here once you start studying.');
+    if (activity.isEmpty) {
+      return const _ChartEmptyState(
+        icon: Icons.insights_outlined,
+        text: 'Study activity will appear here once you start studying.',
+      );
     }
 
-    final spots = List.generate(widget.activity.length, (index) => FlSpot(index.toDouble(), widget.activity[index].studyMinutes.toDouble()));
-    final maxValue = widget.activity.map((item) => item.studyMinutes.toDouble()).fold<double>(0, (current, value) => current > value ? current : value);
-    final chartMaxY = maxValue <= 5 ? 10.0 : (((maxValue * 1.20) / 5).ceil() * 5).toDouble();
-    final chartHeight = Responsive.clamped(context, base: 220, min: 185, max: 270);
+    final spots = List.generate(
+      activity.length,
+      (index) => FlSpot(index.toDouble(), activity[index].studyMinutes.toDouble()),
+    );
+    final maxValue = activity.fold<double>(
+      0,
+      (current, item) => current > item.studyMinutes ? current : item.studyMinutes.toDouble(),
+    );
+    final maxY = maxValue <= 5 ? 10.0 : ((maxValue * 1.2) / 5).ceil() * 5.0;
 
-    return Column(
-      children: [
-        SizedBox(
-          height: chartHeight,
-          child: LineChart(
-            LineChartData(
-              minY: 0,
-              maxY: chartMaxY,
-              minX: 0,
-              maxX: (widget.activity.length - 1).toDouble(),
-              clipData: const FlClipData.none(),
-              lineTouchData: LineTouchData(
-                enabled: true,
-                handleBuiltInTouches: true,
-                touchSpotThreshold: 22,
-                getTouchedSpotIndicator: (barData, spotIndexes) => spotIndexes.map((index) => TouchedSpotIndicatorData(FlLine(color: theme.colorScheme.primary.withValues(alpha: .25), strokeWidth: 1.2, dashArray: [5, 5]), FlDotData(show: true, getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(radius: 5.5, color: theme.colorScheme.primary, strokeWidth: 2.5, strokeColor: theme.colorScheme.surface)))).toList(),
-                touchTooltipData: LineTouchTooltipData(
-                  tooltipPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  getTooltipItems: (touchedSpots) => touchedSpots.map((touchedSpot) {
-                    final index = touchedSpot.x.round();
-                    if (index < 0 || index >= widget.activity.length) return null;
-                    final item = widget.activity[index];
-                    return LineTooltipItem('${item.studyMinutes.toStringAsFixed(0)} min', TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.w800));
-                  }).toList(),
+    return SizedBox(
+      height: 220,
+      child: LineChart(
+        LineChartData(
+          minY: 0,
+          maxY: maxY,
+          minX: 0,
+          maxX: (activity.length - 1).toDouble(),
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: maxY / 5,
+          ),
+          borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 32,
+                interval: maxY / 5,
+                getTitlesWidget: (value, meta) => Text(
+                  value.toInt().toString(),
+                  style: const TextStyle(fontSize: 9),
                 ),
-                touchCallback: (event, response) {
-                  if (response == null || !event.isInterestedForInteractions) {
-                    if (_touchedIndex != null) setState(() => _touchedIndex = null);
-                    return;
+              ),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                interval: activity.length > 7 ? 2 : 1,
+                reservedSize: 28,
+                getTitlesWidget: (value, meta) {
+                  final index = value.round();
+                  if (index < 0 || index >= activity.length) {
+                    return const SizedBox.shrink();
                   }
-                  final firstSpot = response.lineBarSpots?.isNotEmpty == true ? response.lineBarSpots!.first : null;
-                  final nextIndex = firstSpot?.x.round();
-                  if (_touchedIndex != nextIndex) setState(() => _touchedIndex = nextIndex);
+                  final day = activity[index].day;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text('${day.day}/${day.month}', style: const TextStyle(fontSize: 9)),
+                  );
                 },
               ),
-              gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: chartMaxY <= 10 ? 2 : chartMaxY / 5, getDrawingHorizontalLine: (value) => FlLine(color: theme.colorScheme.onSurface.withValues(alpha: .06), strokeWidth: 1)),
-              borderData: FlBorderData(show: false),
-              titlesData: FlTitlesData(
-                leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32, interval: chartMaxY / 5, getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: TextStyle(fontSize: Responsive.smallTextSize(context, base: 9, min: 8, max: 12), color: theme.colorScheme.onSurface.withValues(alpha: .45)))),
-                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, interval: widget.activity.length > 7 ? 2 : 1, reservedSize: 28, getTitlesWidget: (value, meta) {
-                  final index = value.round();
-                  if (index < 0 || index >= widget.activity.length) return const SizedBox.shrink();
-                  final day = widget.activity[index].day;
-                  return Padding(padding: const EdgeInsets.only(top: 6), child: Text('${day.day}/${day.month}', style: TextStyle(fontSize: Responsive.smallTextSize(context, base: 9, min: 8, max: 12), color: theme.colorScheme.onSurface.withValues(alpha: .50))));
-                })),
-              ),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  curveSmoothness: .28,
-                  barWidth: 3,
-                  color: theme.colorScheme.primary,
-                  isStrokeCapRound: true,
-                  isStrokeJoinRound: true,
-                  dotData: FlDotData(show: true, checkToShowDot: (spot, barData) => _touchedIndex == spot.x.round() || spots.length <= 7 || spot.x == 0 || spot.x == spots.length - 1, getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: _touchedIndex == index ? 5 : 2.8, color: theme.colorScheme.primary, strokeWidth: 2, strokeColor: theme.colorScheme.surface)),
-                  belowBarData: BarAreaData(show: true, gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [theme.colorScheme.primary.withValues(alpha: .14), theme.colorScheme.primary.withValues(alpha: .01)])),
-                ),
-              ],
             ),
           ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              barWidth: 3,
+              color: theme.colorScheme.primary,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    theme.colorScheme.primary.withValues(alpha: .14),
+                    theme.colorScheme.primary.withValues(alpha: .01),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 5),
-        Align(alignment: Alignment.centerLeft, child: Text('Study time per day (minutes)', style: TextStyle(fontSize: Responsive.smallTextSize(context, base: 10.5, min: 9, max: 13), color: theme.colorScheme.onSurface.withValues(alpha: .48)))),
-      ],
+      ),
     );
   }
 }
 
-class _ExamChart extends StatefulWidget {
+class _ExamChart extends StatelessWidget {
   final List<StudentExamAttempt> attempts;
   const _ExamChart({required this.attempts});
-  @override
-  State<_ExamChart> createState() => _ExamChartState();
-}
-
-class _ExamChartState extends State<_ExamChart> {
-  int? _touchedIndex;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final completed = widget.attempts.where((item) => item.isCompleted).take(12).toList().reversed.toList();
-    if (completed.isEmpty) return _ChartEmptyState(icon: Icons.analytics_outlined, text: 'Completed exam scores will appear here.');
+    final completed = attempts.where((a) => a.isCompleted).take(12).toList().reversed.toList();
+    if (completed.isEmpty) {
+      return const _ChartEmptyState(
+        icon: Icons.analytics_outlined,
+        text: 'Completed exam scores will appear here.',
+      );
+    }
 
-    final spots = List.generate(completed.length, (index) => FlSpot(index.toDouble(), completed[index].score.toDouble()));
-    final commonPassingScore = _resolveCommonPassingScore(completed);
-    final chartHeight = Responsive.clamped(context, base: 220, min: 185, max: 270);
+    final spots = List.generate(
+      completed.length,
+      (index) => FlSpot(index.toDouble(), completed[index].score.toDouble()),
+    );
 
-    return Column(
-      children: [
-        SizedBox(
-          height: chartHeight,
-          child: LineChart(
-            LineChartData(
-              minY: 0,
-              maxY: 100,
-              minX: 0,
-              maxX: (completed.length - 1).toDouble(),
-              lineTouchData: LineTouchData(
-                enabled: true,
-                touchSpotThreshold: 22,
-                getTouchedSpotIndicator: (barData, spotIndexes) => spotIndexes.map((index) => TouchedSpotIndicatorData(FlLine(color: theme.colorScheme.primary.withValues(alpha: .25), strokeWidth: 1.2, dashArray: [5, 5]), FlDotData(show: true, getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(radius: 5.5, color: theme.colorScheme.primary, strokeWidth: 2.5, strokeColor: theme.colorScheme.surface)))).toList(),
-                touchTooltipData: LineTouchTooltipData(
-                  tooltipPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  getTooltipItems: (touchedSpots) => touchedSpots.map((touchedSpot) {
-                    final index = touchedSpot.x.round();
-                    if (index < 0 || index >= completed.length) return null;
-                    final attempt = completed[index];
-                    return LineTooltipItem('${attempt.score}%\n${attempt.examTitle}', TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.w800));
-                  }).toList(),
-                ),
-                touchCallback: (event, response) {
-                  if (response == null || !event.isInterestedForInteractions) {
-                    if (_touchedIndex != null) setState(() => _touchedIndex = null);
-                    return;
+    return SizedBox(
+      height: 220,
+      child: LineChart(
+        LineChartData(
+          minY: 0,
+          maxY: 100,
+          minX: 0,
+          maxX: (completed.length - 1).toDouble(),
+          gridData: const FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: 20,
+          ),
+          borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(
+            leftTitles: const AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 34,
+                interval: 20,
+              ),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                interval: completed.length > 7 ? 2 : 1,
+                reservedSize: 27,
+                getTitlesWidget: (value, meta) {
+                  final index = value.round();
+                  if (index < 0 || index >= completed.length) {
+                    return const SizedBox.shrink();
                   }
-                  final firstSpot = response.lineBarSpots?.isNotEmpty == true ? response.lineBarSpots!.first : null;
-                  final nextIndex = firstSpot?.x.round();
-                  if (_touchedIndex != nextIndex) setState(() => _touchedIndex = nextIndex);
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text('#${index + 1}', style: const TextStyle(fontSize: 9)),
+                  );
                 },
               ),
-              gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 20, getDrawingHorizontalLine: (value) => FlLine(color: theme.colorScheme.onSurface.withValues(alpha: .06), strokeWidth: 1)),
-              borderData: FlBorderData(show: false),
-              titlesData: FlTitlesData(
-                leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 34, interval: 20, getTitlesWidget: (value, meta) => Text('${value.toInt()}%', style: TextStyle(fontSize: Responsive.smallTextSize(context, base: 9, min: 8, max: 12), color: theme.colorScheme.onSurface.withValues(alpha: .45)))),
-                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, interval: completed.length > 7 ? 2 : 1, reservedSize: 27, getTitlesWidget: (value, meta) {
-                  final index = value.round();
-                  if (index < 0 || index >= completed.length) return const SizedBox.shrink();
-                  return Padding(padding: const EdgeInsets.only(top: 6), child: Text('#${index + 1}', style: TextStyle(fontSize: Responsive.smallTextSize(context, base: 9, min: 8, max: 12), color: theme.colorScheme.onSurface.withValues(alpha: .50))));
-                })),
-              ),
-              extraLinesData: commonPassingScore != null ? ExtraLinesData(horizontalLines: [HorizontalLine(y: commonPassingScore.toDouble(), color: theme.colorScheme.error.withValues(alpha: .40), strokeWidth: 1.5, dashArray: [6, 5], label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: theme.colorScheme.error), labelResolver: (line) => 'Pass $commonPassingScore%') )]) : const ExtraLinesData(),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  curveSmoothness: .22,
-                  barWidth: 3,
-                  color: theme.colorScheme.primary,
-                  isStrokeCapRound: true,
-                  isStrokeJoinRound: true,
-                  dotData: FlDotData(show: true, checkToShowDot: (spot, barData) => completed.length <= 7 || spot.x == 0 || spot.x == completed.length - 1 || _touchedIndex == spot.x.round(), getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: _touchedIndex == index ? 5 : 2.8, color: theme.colorScheme.primary, strokeWidth: 2, strokeColor: theme.colorScheme.surface)),
-                  belowBarData: BarAreaData(show: true, gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [theme.colorScheme.primary.withValues(alpha: .14), theme.colorScheme.primary.withValues(alpha: .01)])),
-                ),
-              ],
             ),
           ),
-        ),
-        const SizedBox(height: 7),
-        Row(
-          children: [
-            _ChartLegendDot(color: theme.colorScheme.primary, label: 'Score'),
-            const Spacer(),
-            if (commonPassingScore != null)
-              _ChartLegendDot(color: theme.colorScheme.error, label: 'Passing score')
-            else
-              Text('Passing score varies by exam', style: TextStyle(fontSize: Responsive.smallTextSize(context, base: 10, min: 9, max: 13), color: theme.colorScheme.onSurface.withValues(alpha: .45))),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              barWidth: 3,
+              color: theme.colorScheme.primary,
+              dotData: const FlDotData(show: true),
+              belowBarData: BarAreaData(
+                show: true,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    theme.colorScheme.primary.withValues(alpha: .14),
+                    theme.colorScheme.primary.withValues(alpha: .01),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
-      ],
-    );
-  }
-
-  int? _resolveCommonPassingScore(List<StudentExamAttempt> attempts) {
-    if (attempts.isEmpty) return null;
-    final scores = attempts.map((attempt) => attempt.passingScore).where((score) => score > 0 && score <= 100).toSet();
-    if (scores.length != 1) return null;
-    return scores.first;
-  }
-}
-
-class _ChartLegendDot extends StatelessWidget {
-  final Color color;
-  final String label;
-  const _ChartLegendDot({required this.color, required this.label});
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 5),
-        Text(label, style: TextStyle(fontSize: Responsive.smallTextSize(context, base: 10.5, min: 9, max: 14))),
-      ],
+      ),
     );
   }
 }
@@ -991,22 +956,24 @@ class _ChartEmptyState extends StatelessWidget {
   final IconData icon;
   final String text;
   const _ChartEmptyState({required this.icon, required this.text});
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SizedBox(
-      height: Responsive.clamped(context, base: 170, min: 145, max: 210),
+      height: 170,
       child: Center(
-        child: Padding(
-          padding: EdgeInsets.all(Responsive.clamped(context, base: 14, min: 10, max: 20)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: Responsive.clamped(context, base: 46, min: 40, max: 58), color: theme.colorScheme.onSurface.withValues(alpha: .22)),
-              const SizedBox(height: 10),
-              Text(text, textAlign: TextAlign.center, style: TextStyle(fontSize: Responsive.bodyTextSize(context, base: 12, min: 11, max: 15), height: 1.35, color: theme.colorScheme.onSurface.withValues(alpha: .58))),
-            ],
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 46, color: theme.colorScheme.onSurface.withValues(alpha: .22)),
+            const SizedBox(height: 10),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: .58)),
+            ),
+          ],
         ),
       ),
     );
@@ -1020,11 +987,16 @@ class _ExamAttemptsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (attempts.isEmpty) {
-      return const Padding(padding: EdgeInsets.all(10), child: Text('No exam attempts yet.'));
-    }
+    if (attempts.isEmpty) return const Text('No exam attempts yet.');
     return Column(
-      children: attempts.map((attempt) => _ExamAttemptTile(attempt: attempt, onTap: onAttemptTap == null ? null : () => onAttemptTap!(attempt))).toList(),
+      children: attempts
+          .map(
+            (attempt) => _ExamAttemptTile(
+              attempt: attempt,
+              onTap: onAttemptTap == null ? null : () => onAttemptTap!(attempt),
+            ),
+          )
+          .toList(),
     );
   }
 }
@@ -1037,8 +1009,9 @@ class _ExamAttemptTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    late final Color statusColor;
-    late final String statusLabel;
+    final Color statusColor;
+    final String statusLabel;
+
     if (attempt.isCompleted) {
       statusColor = attempt.passed ? Colors.green : theme.colorScheme.error;
       statusLabel = attempt.passed ? 'Passed' : 'Failed';
@@ -1053,9 +1026,26 @@ class _ExamAttemptTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
-      leading: CircleAvatar(backgroundColor: statusColor.withValues(alpha: .10), child: Icon(attempt.isInProgress ? Icons.play_arrow_rounded : attempt.passed ? Icons.check_rounded : Icons.close_rounded, color: statusColor)),
-      title: Text(attempt.examTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: Text(attempt.isCompleted ? '${attempt.score}% • $statusLabel' : statusLabel),
+      leading: CircleAvatar(
+        backgroundColor: statusColor.withValues(alpha: .10),
+        child: Icon(
+          attempt.isInProgress
+              ? Icons.play_arrow_rounded
+              : attempt.passed
+                  ? Icons.check_rounded
+                  : Icons.close_rounded,
+          color: statusColor,
+        ),
+      ),
+      title: Text(
+        attempt.examTitle,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      subtitle: Text(
+        attempt.isCompleted ? '${attempt.score}% • $statusLabel' : statusLabel,
+      ),
       trailing: onTap == null ? null : const Icon(Icons.chevron_right_rounded),
       onTap: onTap,
     );
@@ -1064,34 +1054,67 @@ class _ExamAttemptTile extends StatelessWidget {
 
 class _LectureActivityList extends StatelessWidget {
   final List<StudentLectureActivity> activities;
-  final void Function({required String moduleId, required String moduleName, required String lectureId})? onOpenLecture;
-  const _LectureActivityList({required this.activities, required this.onOpenLecture});
+  final void Function({
+    required String moduleId,
+    required String moduleName,
+    required String lectureId,
+  })? onOpenLecture;
+
+  const _LectureActivityList({
+    required this.activities,
+    required this.onOpenLecture,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (activities.isEmpty) return const Padding(padding: EdgeInsets.all(10), child: Text('No lecture activity yet.'));
+    if (activities.isEmpty) return const Text('No lecture activity yet.');
+
     return Column(
-      children: activities.map((activity) => ListTile(
-        contentPadding: EdgeInsets.zero,
-        dense: true,
-        leading: CircleAvatar(backgroundColor: AppColors.primary.withValues(alpha: .10), child: Icon(Icons.menu_book_rounded, color: AppColors.primary)),
-        title: Text(activity.lectureTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text('${activity.moduleName} • ${activity.progressPercent}% progress'),
-        trailing: onOpenLecture == null ? null : const Icon(Icons.chevron_right_rounded),
-        onTap: onOpenLecture == null ? null : () => onOpenLecture!(moduleId: activity.moduleId, moduleName: activity.moduleName, lectureId: activity.lectureId),
-      )).toList(),
+      children: activities
+          .map(
+            (activity) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primary.withValues(alpha: .10),
+                child: const Icon(Icons.menu_book_rounded, color: AppColors.primary),
+              ),
+              title: Text(
+                activity.lectureTitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                '${activity.moduleName} • ${activity.progressPercent}% progress',
+              ),
+              trailing: onOpenLecture == null
+                  ? null
+                  : const Icon(Icons.chevron_right_rounded),
+              onTap: onOpenLecture == null
+                  ? null
+                  : () => onOpenLecture!(
+                        moduleId: activity.moduleId,
+                        moduleName: activity.moduleName,
+                        lectureId: activity.lectureId,
+                      ),
+            ),
+          )
+          .toList(),
     );
   }
 }
 
 class _StudentSettings extends StatefulWidget {
   const _StudentSettings();
+
   @override
   State<_StudentSettings> createState() => _StudentSettingsState();
 }
 
 class _StudentSettingsState extends State<_StudentSettings> {
   final StudentPreferencesService _preferences = StudentPreferencesService.instance;
+
   bool _loading = true;
   bool _notifications = true;
   bool _autoPlay = true;
@@ -1110,6 +1133,7 @@ class _StudentSettingsState extends State<_StudentSettings> {
       final autoPlay = await _preferences.getAutoPlayEnabled();
       final wifiOnly = await _preferences.getWifiOnlyDownloads();
       final speed = await _preferences.getDefaultPlaybackSpeed();
+
       if (!mounted) return;
       setState(() {
         _notifications = notifications;
@@ -1118,8 +1142,7 @@ class _StudentSettingsState extends State<_StudentSettings> {
         _defaultSpeed = speed;
         _loading = false;
       });
-    } catch (e) {
-      debugPrint('Load student settings error: $e');
+    } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
     }
@@ -1128,7 +1151,7 @@ class _StudentSettingsState extends State<_StudentSettings> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Padding(padding: EdgeInsets.all(18), child: Center(child: CircularProgressIndicator()));
+      return const Center(child: CircularProgressIndicator());
     }
 
     return Column(
@@ -1214,7 +1237,7 @@ class _AccountActions extends StatelessWidget {
         children: [
           ListTile(
             dense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: Responsive.spacing(context, base: 4, min: 2, max: 8)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 6),
             leading: const Icon(Icons.lock_outline_rounded),
             title: const Text('Change Password'),
             trailing: const Icon(Icons.chevron_right_rounded),
@@ -1223,8 +1246,11 @@ class _AccountActions extends StatelessWidget {
           const Divider(height: 1),
           ListTile(
             dense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: Responsive.spacing(context, base: 4, min: 2, max: 8)),
-            leading: Icon(Icons.support_agent_rounded, color: theme.colorScheme.primary),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 6),
+            leading: Icon(
+              Icons.support_agent_rounded,
+              color: theme.colorScheme.primary,
+            ),
             title: const Text('Contact Support'),
             subtitle: const Text('Send a message to the support team.'),
             trailing: const Icon(Icons.chevron_right_rounded),
@@ -1233,9 +1259,15 @@ class _AccountActions extends StatelessWidget {
           const Divider(height: 1),
           ListTile(
             dense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: Responsive.spacing(context, base: 4, min: 2, max: 8)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 6),
             leading: Icon(Icons.logout_rounded, color: theme.colorScheme.error),
-            title: Text('Sign Out', style: TextStyle(color: theme.colorScheme.error, fontWeight: FontWeight.w700)),
+            title: Text(
+              'Sign Out',
+              style: TextStyle(
+                color: theme.colorScheme.error,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             onTap: onLogout,
           ),
         ],
@@ -1251,25 +1283,22 @@ class _ErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: EdgeInsets.all(Responsive.cardPadding(context)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off_rounded, size: Responsive.clamped(context, base: 56, min: 48, max: 72)),
-            const SizedBox(height: 12),
-            Text(
-              'Unable to load profile data.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: Responsive.titleSize(context, base: 18, min: 16, max: 24), fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              height: Responsive.buttonHeight(context),
-              child: FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh_rounded), label: const Text('Try Again')),
-            ),
-          ],
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.cloud_off_rounded, size: 56),
+          const SizedBox(height: 12),
+          const Text(
+            'Unable to load profile data.',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Try Again'),
+          ),
+        ],
       ),
     );
   }
