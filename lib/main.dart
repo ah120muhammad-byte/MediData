@@ -5,6 +5,7 @@ import 'core/theme/app_theme.dart';
 import 'services/audio_player_service.dart';
 import 'services/remote_app_settings_service.dart';
 import 'screens/authentication/auth_gate_v2.dart';
+import 'screens/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +36,7 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
-      home: AuthGateV2(settings: settings),
+      home: SplashScreen(settings: settings),
     );
   }
 }
