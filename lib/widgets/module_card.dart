@@ -20,12 +20,10 @@ class ModuleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.sizeOf(context);
     final isTablet = size.shortestSide >= 600;
-    final radius = isTablet ? 22.0 : 19.0;
-    final imageWidth = isTablet ? 150.0 : 116.0;
-    final imageHeight = isTablet ? 154.0 : 124.0;
+    final radius = isTablet ? 24.0 : 20.0;
+    final height = isTablet ? 235.0 : 205.0;
     final hasImage = imageUrl != null && imageUrl!.trim().isNotEmpty;
 
     return Semantics(
@@ -37,153 +35,197 @@ class ModuleCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: AppColors.primary.withValues(alpha: 0.08),
-          highlightColor: AppColors.primary.withValues(alpha: 0.04),
+          splashColor: Colors.white.withValues(alpha: 0.10),
+          highlightColor: Colors.white.withValues(alpha: 0.05),
           child: Container(
             width: double.infinity,
+            height: height,
             decoration: BoxDecoration(
               color: scheme.surface,
               borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.black.withValues(alpha: 0.055),
-              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.075),
-                  blurRadius: 18,
-                  offset: const Offset(0, 7),
+                  color: Colors.black.withValues(
+                    alpha: theme.brightness == Brightness.dark ? 0.28 : 0.12,
+                  ),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
-            child: Row(
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                SizedBox(
-                  width: imageWidth,
-                  height: imageHeight,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      hasImage
-                          ? Image.network(
-                              imageUrl!.trim(),
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
-                                  const _ModulePlaceholder(),
-                              loadingBuilder: (context, child, progress) {
-                                if (progress == null) return child;
-                                return const _ModulePlaceholder(loading: true);
-                              },
-                            )
-                          : const _ModulePlaceholder(),
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.02),
-                                Colors.black.withValues(alpha: 0.16),
-                              ],
-                            ),
-                          ),
-                        ),
+                // The image now occupies the entire card instead of a small
+                // left-side thumbnail.
+                hasImage
+                    ? Image.network(
+                        imageUrl!.trim(),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            const _ModulePlaceholder(),
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          return const _ModulePlaceholder(loading: true);
+                        },
+                      )
+                    : const _ModulePlaceholder(),
+
+                // Dark gradient keeps the text readable while preserving the
+                // image underneath.
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.42, 1.0],
+                        colors: [
+                          Colors.black.withValues(alpha: 0.04),
+                          Colors.black.withValues(alpha: 0.08),
+                          Colors.black.withValues(alpha: 0.82),
+                        ],
                       ),
-                      Positioned(
-                        left: 10,
-                        top: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 9,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.38),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Icon(
-                            Icons.menu_book_rounded,
-                            color: Colors.white,
-                            size: 17,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      isTablet ? 19 : 15,
-                      isTablet ? 17 : 14,
-                      isTablet ? 17 : 13,
-                      isTablet ? 17 : 14,
+
+                // Module badge.
+                Positioned(
+                  top: isTablet ? 14 : 12,
+                  left: isTablet ? 14 : 12,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? 11 : 9,
+                      vertical: isTablet ? 7 : 6,
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.42),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.16),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: isTablet ? 18.5 : 16.5,
-                            fontWeight: FontWeight.w800,
-                            height: 1.15,
-                            letterSpacing: -0.15,
-                            color: scheme.onSurface,
-                          ),
+                        Icon(
+                          Icons.menu_book_rounded,
+                          color: Colors.white,
+                          size: isTablet ? 17 : 15,
                         ),
-                        if (description != null &&
-                            description!.trim().isNotEmpty) ...[
-                          SizedBox(height: isTablet ? 8 : 6),
-                          Text(
-                            description!.trim(),
-                            maxLines: isTablet ? 3 : 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: isTablet ? 13 : 12,
-                              height: 1.38,
-                              color: scheme.onSurface.withValues(alpha: 0.58),
-                            ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'MODULE',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: isTablet ? 10.5 : 9.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.7,
                           ),
-                        ],
-                        SizedBox(height: isTablet ? 13 : 10),
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Open Module',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: isTablet ? 13 : 11.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Container(
-                              width: isTablet ? 27 : 24,
-                              height: isTablet ? 27 : 24,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.10),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.arrow_forward_rounded,
-                                size: isTablet ? 16 : 14,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
                         ),
                       ],
                     ),
+                  ),
+                ),
+
+                // Open arrow.
+                Positioned(
+                  top: isTablet ? 14 : 12,
+                  right: isTablet ? 14 : 12,
+                  child: Container(
+                    width: isTablet ? 40 : 36,
+                    height: isTablet ? 40 : 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.16),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.arrow_forward_rounded,
+                      color: AppColors.primary,
+                      size: isTablet ? 21 : 19,
+                    ),
+                  ),
+                ),
+
+                // Text sits directly on the image at the bottom.
+                Positioned(
+                  left: isTablet ? 18 : 15,
+                  right: isTablet ? 18 : 15,
+                  bottom: isTablet ? 17 : 15,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isTablet ? 21 : 18,
+                          fontWeight: FontWeight.w800,
+                          height: 1.12,
+                          letterSpacing: -0.2,
+                          shadows: const [
+                            Shadow(
+                              color: Colors.black54,
+                              blurRadius: 8,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (description != null &&
+                          description!.trim().isNotEmpty) ...[
+                        SizedBox(height: isTablet ? 7 : 5),
+                        Text(
+                          description!.trim(),
+                          maxLines: isTablet ? 2 : 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.86),
+                            fontSize: isTablet ? 13.5 : 11.5,
+                            height: 1.35,
+                            fontWeight: FontWeight.w500,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.black54,
+                                blurRadius: 7,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      SizedBox(height: isTablet ? 10 : 8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Open Module',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: isTablet ? 12.5 : 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            color: Colors.white,
+                            size: isTablet ? 16 : 14,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -216,16 +258,16 @@ class _ModulePlaceholder extends StatelessWidget {
       child: Center(
         child: loading
             ? const SizedBox(
-                width: 24,
-                height: 24,
+                width: 28,
+                height: 28,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
+                  strokeWidth: 2.4,
                   color: Colors.white,
                 ),
               )
             : Icon(
                 Icons.menu_book_rounded,
-                size: 43,
+                size: 50,
                 color: Colors.white.withValues(alpha: 0.30),
               ),
       ),
