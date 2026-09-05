@@ -17,38 +17,23 @@ class LectureFile {
     required this.path,
   });
 
-  IconData get icon {
-    switch (type) {
-      case LectureFileType.pdf:
-        return Icons.picture_as_pdf_rounded;
-      case LectureFileType.audio:
-        return Icons.headphones_rounded;
-      case LectureFileType.video:
-        return Icons.play_circle_fill_rounded;
-    }
-  }
+  IconData get icon => switch (type) {
+        LectureFileType.pdf => Icons.picture_as_pdf_rounded,
+        LectureFileType.audio => Icons.headphones_rounded,
+        LectureFileType.video => Icons.play_circle_fill_rounded,
+      };
 
-  String get actionLabel {
-    switch (type) {
-      case LectureFileType.pdf:
-        return 'Open';
-      case LectureFileType.audio:
-        return 'Play';
-      case LectureFileType.video:
-        return 'Watch';
-    }
-  }
+  String get actionLabel => switch (type) {
+        LectureFileType.pdf => 'Open',
+        LectureFileType.audio => 'Play',
+        LectureFileType.video => 'Watch',
+      };
 
-  IconData get actionIcon {
-    switch (type) {
-      case LectureFileType.pdf:
-        return Icons.open_in_new_rounded;
-      case LectureFileType.audio:
-        return Icons.play_arrow_rounded;
-      case LectureFileType.video:
-        return Icons.play_arrow_rounded;
-    }
-  }
+  IconData get actionIcon => switch (type) {
+        LectureFileType.pdf => Icons.open_in_new_rounded,
+        LectureFileType.audio => Icons.play_arrow_rounded,
+        LectureFileType.video => Icons.play_arrow_rounded,
+      };
 }
 
 class LectureExam {
@@ -191,79 +176,78 @@ class _LectureGradientHeader extends StatelessWidget {
               isTablet ? 20 : 15,
               isTablet ? 19 : 16,
             ),
-            child: Directionality(
-              textDirection: TextDirection.rtl,
-              child: Row(
-                children: [
-                  Container(
-                    width: isTablet ? 54 : 47,
-                    height: isTablet ? 54 : 47,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(isTablet ? 16 : 14),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.22),
-                      ),
+            child: Row(
+              textDirection: TextDirection.ltr,
+              children: [
+                Container(
+                  width: isTablet ? 54 : 47,
+                  height: isTablet ? 54 : 47,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(isTablet ? 16 : 14),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.22),
                     ),
-                    child: Icon(
-                      Icons.menu_book_rounded,
-                      size: isTablet ? 28 : 24,
+                  ),
+                  child: Icon(
+                    Icons.menu_book_rounded,
+                    size: isTablet ? 28 : 24,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(width: isTablet ? 14 : 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          fontSize: isTablet ? 18 : 16,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (description != null && description!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          description!.trim(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                            fontSize: isTablet ? 13 : 11.5,
+                            height: 1.35,
+                            color: Colors.white.withValues(alpha: 0.82),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 9),
+                AnimatedRotation(
+                  turns: expanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeOut,
+                  child: Container(
+                    width: isTablet ? 40 : 36,
+                    height: isTablet ? 40 : 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
                       color: Colors.white,
                     ),
                   ),
-                  SizedBox(width: isTablet ? 14 : 11),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: isTablet ? 18 : 16,
-                            fontWeight: FontWeight.w800,
-                            height: 1.2,
-                            color: Colors.white,
-                          ),
-                        ),
-                        if (description != null &&
-                            description!.trim().isNotEmpty) ...[
-                          const SizedBox(height: 5),
-                          Text(
-                            description!.trim(),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: isTablet ? 13 : 11.5,
-                              height: 1.35,
-                              color: Colors.white.withValues(alpha: 0.82),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 9),
-                  AnimatedRotation(
-                    turns: expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 280),
-                    curve: Curves.easeOut,
-                    child: Container(
-                      width: isTablet ? 40 : 36,
-                      height: isTablet ? 40 : 36,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -298,9 +282,11 @@ class _LectureContentSection extends StatelessWidget {
     if (!hasFiles && !hasExam) {
       return Padding(
         padding: EdgeInsets.all(isTablet ? 18 : 14),
-        child: Center(
+        child: Align(
+          alignment: Alignment.centerLeft,
           child: Text(
             'No content available for this lecture.',
+            textAlign: TextAlign.left,
             style: TextStyle(
               fontSize: isTablet ? 13 : 12,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
@@ -330,9 +316,7 @@ class _LectureContentSection extends StatelessWidget {
                   file: file,
                   isTablet: isTablet,
                   onOpen: onFileOpen == null ? null : () => onFileOpen!(file),
-                  onDownload: onFileDownload == null
-                      ? null
-                      : () => onFileDownload!(file),
+                  onDownload: onFileDownload == null ? null : () => onFileDownload!(file),
                 ),
               );
             }),
@@ -366,8 +350,8 @@ class _LectureFileTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final downloads = DownloadsService.instance;
     final primary = theme.colorScheme.primary;
+    final downloads = DownloadsService.instance;
 
     return ValueListenableBuilder<Map<String, double>>(
       valueListenable: downloads.progressNotifier,
@@ -402,100 +386,94 @@ class _LectureFileTile extends StatelessWidget {
             ),
             child: Column(
               children: [
-                Directionality(
-                  textDirection: TextDirection.rtl,
-                  child: Row(
-                    children: [
-                      Container(
-                        width: isTablet ? 44 : 39,
-                        height: isTablet ? 44 : 39,
-                        decoration: BoxDecoration(
-                          color: primary.withValues(alpha: 0.09),
-                          borderRadius: BorderRadius.circular(isTablet ? 13 : 11),
-                        ),
-                        child: Icon(
-                          file.icon,
-                          size: isTablet ? 23 : 20,
-                          color: primary,
-                        ),
+                Row(
+                  textDirection: TextDirection.ltr,
+                  children: [
+                    Container(
+                      width: isTablet ? 44 : 39,
+                      height: isTablet ? 44 : 39,
+                      decoration: BoxDecoration(
+                        color: primary.withValues(alpha: 0.09),
+                        borderRadius: BorderRadius.circular(isTablet ? 13 : 11),
                       ),
-                      SizedBox(width: isTablet ? 11 : 9),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Icon(
+                        file.icon,
+                        size: isTablet ? 23 : 20,
+                        color: primary,
+                      ),
+                    ),
+                    SizedBox(width: isTablet ? 11 : 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            file.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.left,
+                            style: TextStyle(
+                              fontSize: isTablet ? 15 : 13.5,
+                              fontWeight: FontWeight.w700,
+                              height: 1.2,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            isDownloading ? 'Downloading… $percent%' : file.subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.left,
+                            style: TextStyle(
+                              fontSize: isTablet ? 11.5 : 10.5,
+                              color: theme.colorScheme.onSurface.withValues(alpha: isDownloading ? 0.68 : 0.48),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (isDownloading)
+                      SizedBox(
+                        width: isTablet ? 36 : 32,
+                        height: isTablet ? 36 : 32,
+                        child: Stack(
+                          alignment: Alignment.center,
                           children: [
-                            Text(
-                              file.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontSize: isTablet ? 15 : 13.5,
-                                fontWeight: FontWeight.w750,
-                                height: 1.2,
-                                color: theme.colorScheme.onSurface,
+                            SizedBox(
+                              width: isTablet ? 27 : 24,
+                              height: isTablet ? 27 : 24,
+                              child: CircularProgressIndicator(
+                                value: progress.clamp(0.0, 1.0),
+                                strokeWidth: 2.5,
                               ),
                             ),
-                            const SizedBox(height: 3),
                             Text(
-                              isDownloading
-                                  ? 'Downloading… $percent%'
-                                  : file.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.right,
+                              '$percent',
                               style: TextStyle(
-                                fontSize: isTablet ? 11.5 : 10.5,
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: isDownloading ? 0.68 : 0.48,
-                                ),
+                                fontSize: isTablet ? 8 : 7,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ],
                         ),
+                      )
+                    else
+                      Icon(
+                        file.icon,
+                        size: isTablet ? 21 : 19,
+                        color: primary.withValues(alpha: 0.72),
                       ),
-                      const SizedBox(width: 8),
-                      if (isDownloading)
-                        SizedBox(
-                          width: isTablet ? 36 : 32,
-                          height: isTablet ? 36 : 32,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              SizedBox(
-                                width: isTablet ? 27 : 24,
-                                height: isTablet ? 27 : 24,
-                                child: CircularProgressIndicator(
-                                  value: progress.clamp(0.0, 1.0),
-                                  strokeWidth: 2.5,
-                                ),
-                              ),
-                              Text(
-                                '$percent',
-                                style: TextStyle(
-                                  fontSize: isTablet ? 8 : 7,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        Icon(
-                          file.icon,
-                          size: isTablet ? 21 : 19,
-                          color: primary.withValues(alpha: 0.72),
-                        ),
-                      const SizedBox(width: 7),
-                      _ActionButton(
-                        label: file.actionLabel,
-                        icon: file.actionIcon,
-                        enabled: onOpen != null,
-                        onPressed: isDownloading ? null : onOpen,
-                        isTablet: isTablet,
-                      ),
-                    ],
-                  ),
+                    const SizedBox(width: 7),
+                    _ActionButton(
+                      label: file.actionLabel,
+                      icon: file.actionIcon,
+                      enabled: onOpen != null,
+                      onPressed: isDownloading ? null : onOpen,
+                      isTablet: isTablet,
+                    ),
+                  ],
                 ),
                 if (isDownloading) ...[
                   const SizedBox(height: 7),
@@ -515,29 +493,24 @@ class _LectureFileTile extends StatelessWidget {
                       onTap: onDownload,
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 3,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                         child: Row(
+                          textDirection: TextDirection.ltr,
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               Icons.download_rounded,
                               size: isTablet ? 17 : 15,
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.52,
-                              ),
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
                             ),
                             const SizedBox(width: 4),
                             Text(
                               'Download offline',
+                              textAlign: TextAlign.left,
                               style: TextStyle(
                                 fontSize: isTablet ? 10.5 : 9.5,
                                 fontWeight: FontWeight.w600,
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.52,
-                                ),
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
                               ),
                             ),
                           ],
@@ -574,26 +547,24 @@ class _ActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
+    final radius = BorderRadius.circular(isTablet ? 11 : 9);
 
     return Material(
       color: enabled ? primary : primary.withValues(alpha: 0.35),
-      borderRadius: BorderRadius.circular(isTablet ? 11 : 9),
+      borderRadius: radius,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(isTablet ? 11 : 9),
+        borderRadius: radius,
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: isTablet ? 11 : 9,
             vertical: isTablet ? 9 : 8,
           ),
           child: Row(
+            textDirection: TextDirection.ltr,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: isTablet ? 17 : 15,
-                color: theme.colorScheme.onPrimary,
-              ),
+              Icon(icon, size: isTablet ? 17 : 15, color: theme.colorScheme.onPrimary),
               const SizedBox(width: 4),
               Text(
                 label,
@@ -634,83 +605,63 @@ class _LectureExamTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(isTablet ? 16 : 14),
         border: Border.all(color: primary.withValues(alpha: 0.13)),
       ),
-      child: Directionality(
-        textDirection: TextDirection.rtl,
-        child: Row(
-          children: [
-            Container(
-              width: isTablet ? 45 : 40,
-              height: isTablet ? 45 : 40,
-              decoration: BoxDecoration(
-                color: primary,
-                borderRadius: BorderRadius.circular(isTablet ? 13 : 11),
-              ),
-              child: Icon(
-                Icons.assignment_rounded,
-                size: isTablet ? 23 : 20,
-                color: theme.colorScheme.onPrimary,
-              ),
+      child: Row(
+        textDirection: TextDirection.ltr,
+        children: [
+          Container(
+            width: isTablet ? 45 : 40,
+            height: isTablet ? 45 : 40,
+            decoration: BoxDecoration(
+              color: primary,
+              borderRadius: BorderRadius.circular(isTablet ? 13 : 11),
             ),
-            SizedBox(width: isTablet ? 11 : 9),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    exam.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: isTablet ? 15 : 13.5,
-                      fontWeight: FontWeight.w800,
-                      color: theme.colorScheme.onSurface,
-                    ),
+            child: Icon(
+              Icons.assignment_rounded,
+              size: isTablet ? 23 : 20,
+              color: theme.colorScheme.onPrimary,
+            ),
+          ),
+          SizedBox(width: isTablet ? 11 : 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  exam.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.left,
+                  style: TextStyle(
+                    fontSize: isTablet ? 15 : 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: theme.colorScheme.onSurface,
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.timer_outlined,
-                        size: isTablet ? 15 : 13,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${exam.durationMinutes} min',
-                        style: TextStyle(
-                          fontSize: isTablet ? 11 : 10,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
-                        ),
-                      ),
-                      const SizedBox(width: 9),
-                      Icon(
-                        Icons.check_circle_outline_rounded,
-                        size: isTablet ? 15 : 13,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Pass ${exam.passingScore}%',
-                        style: TextStyle(
-                          fontSize: isTablet ? 11 : 10,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  textDirection: TextDirection.ltr,
+                  children: [
+                    Icon(Icons.timer_outlined, size: isTablet ? 15 : 13, color: theme.colorScheme.onSurface.withValues(alpha: 0.52)),
+                    const SizedBox(width: 4),
+                    Text('${exam.durationMinutes} min', style: TextStyle(fontSize: isTablet ? 11 : 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.52))),
+                    const SizedBox(width: 9),
+                    Icon(Icons.check_circle_outline_rounded, size: isTablet ? 15 : 13, color: theme.colorScheme.onSurface.withValues(alpha: 0.52)),
+                    const SizedBox(width: 4),
+                    Text('Pass ${exam.passingScore}%', style: TextStyle(fontSize: isTablet ? 11 : 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.52))),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            _ActionButton(
-              label: 'Start',
-              icon: Icons.play_arrow_rounded,
-              enabled: onStartExam != null,
-              onPressed: onStartExam,
-              isTablet: isTablet,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          _ActionButton(
+            label: 'Start',
+            icon: Icons.play_arrow_rounded,
+            enabled: onStartExam != null,
+            onPressed: onStartExam,
+            isTablet: isTablet,
+          ),
+        ],
       ),
     );
   }
