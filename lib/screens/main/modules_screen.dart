@@ -173,7 +173,7 @@ class _LevelsViewState extends State<_LevelsView> {
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 24),
             itemCount: levels.length,
-            separatorBuilder: (_, __) => SizedBox(height: separator),
+            separatorBuilder: (_, _) => SizedBox(height: separator),
             itemBuilder: (context, index) {
               final level = levels[index];
               return LevelCard(name: level.name, description: level.description, imageUrl: level.imageUrl, moduleCount: level.moduleCount, onTap: () => widget.onLevelSelected(level));
@@ -257,7 +257,7 @@ class _ModulesViewState extends State<_ModulesView> {
                 physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                 padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 24),
                 itemCount: modules.length,
-                separatorBuilder: (_, __) => SizedBox(height: separator),
+                separatorBuilder: (_, _) => SizedBox(height: separator),
                 itemBuilder: (context, index) {
                   final module = modules[index];
                   return ModuleCard(name: module.name, description: module.description, imageUrl: module.imageUrl, onTap: () => widget.onModuleSelected(module));
