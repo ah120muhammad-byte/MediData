@@ -6,9 +6,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:medidata26/main.dart';
-import 'package:medidata26/services/remote_app_settings_service.dart';
+import 'package:MediData/main.dart';
+import 'package:MediData/services/remote_app_settings_service.dart';
 
 void main() {
   testWidgets('App smoke test', (WidgetTester tester) async {
