@@ -32,6 +32,7 @@ class AiChatService {
   static const String _functionName = 'ai-chat';
   static const String _supabaseProjectUrl = 'https://eoyehpqknyoksaxlvnwl.supabase.co';
   static const String _functionUrl = '$_supabaseProjectUrl/functions/v1/$_functionName';
+  static const String _publishableKeyFallback = 'sb_publishable_vkiv3hr00CNPiGJKlQosNw_oZEG81zZ';
   static const Duration _requestTimeout = Duration(seconds: 90);
   static const int maxFileBytes = 20 * 1024 * 1024;
 
@@ -50,25 +51,18 @@ class AiChatService {
     }
   }
 
-  /// Streams assistant text as it arrives from the Edge Function.
-  /// The callback receives the complete accumulated text after each chunk.
-  Future<AiChatResponse> sendMessageStreaming({
-    required List<AiChatMessage> messages,
-    required void Function(String text) onText,
-  }) async {
+  Future<AiChatResponse> sendMessageStreaming({required List<AiChatMessage> messages, required void Function(String text) onText}) async {
     _validateMessages(messages);
     final session = _requireSession();
     final request = http.Request('POST', Uri.parse(_functionUrl));
     request.headers.addAll({'Authorization': 'Bearer ${session.accessToken}', 'apikey': _publishableKey(), 'Accept': 'text/event-stream', 'Content-Type': 'application/json'});
     request.body = jsonEncode({'messages': messages.map((m) => m.toMap()).toList(), 'stream': true});
-
     try {
       final response = await request.send().timeout(_requestTimeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final body = await response.stream.bytesToString();
         throw Exception(_extractError(_decodeJsonResponse(body), fallback: 'Unable to get an AI response.'));
       }
-
       final buffer = StringBuffer();
       await for (final line in response.stream.transform(utf8.decoder).transform(const LineSplitter())) {
         final raw = line.trim();
@@ -78,17 +72,9 @@ class AiChatService {
         try {
           final decoded = jsonDecode(payload);
           final chunk = decoded is Map ? (decoded['delta'] ?? decoded['content'] ?? decoded['reply'] ?? '') : decoded.toString();
-          if (chunk.toString().isNotEmpty) {
-            buffer.write(chunk.toString());
-            onText(buffer.toString());
-          }
-        } catch (_) {
-          // Some providers may send plain text chunks.
-          buffer.write(payload);
-          onText(buffer.toString());
-        }
+          if (chunk.toString().isNotEmpty) { buffer.write(chunk.toString()); onText(buffer.toString()); }
+        } catch (_) { buffer.write(payload); onText(buffer.toString()); }
       }
-
       final reply = buffer.toString().trim();
       if (reply.isEmpty) throw Exception('AI returned an empty response.');
       return AiChatResponse(reply: reply);
@@ -103,10 +89,10 @@ class AiChatService {
 
   Future<AiChatResponse> sendMessageWithAttachment({required List<AiChatMessage> messages, required AiAttachment attachment}) async {
     _validateMessages(messages);
-    final session = _requireSession();
+    _requireSession();
     _validateAttachment(attachment);
     final request = http.MultipartRequest('POST', Uri.parse(_functionUrl));
-    request.headers.addAll({'Authorization': 'Bearer ${session.accessToken}', 'apikey': _publishableKey(), 'Accept': 'application/json'});
+    request.headers.addAll({'Authorization': 'Bearer ${_supabase.auth.currentSession!.accessToken}', 'apikey': _publishableKey(), 'Accept': 'application/json'});
     request.fields['messages'] = jsonEncode(messages.map((m) => m.toMap()).toList());
     request.fields['fileName'] = attachment.fileName;
     request.fields['mimeType'] = attachment.mimeType;
@@ -117,12 +103,8 @@ class AiChatService {
       final data = _decodeJsonResponse(response.body);
       if (response.statusCode < 200 || response.statusCode >= 300) throw Exception(_extractError(data, fallback: 'Unable to process the attachment.'));
       return _parseResponse(data);
-    } on TimeoutException {
-      throw Exception('The AI service took too long to process the file.');
-    } catch (e) {
-      if (e is Exception && e.toString().startsWith('Exception:')) rethrow;
-      throw Exception('Unable to process the attachment.');
-    }
+    } on TimeoutException { throw Exception('The AI service took too long to process the file.'); }
+    catch (e) { if (e is Exception && e.toString().startsWith('Exception:')) rethrow; throw Exception('Unable to process the attachment.'); }
   }
 
   Session _requireSession() {
@@ -149,11 +131,8 @@ class AiChatService {
     if (data == null) throw Exception('AI service returned no response.');
     Map<String, dynamic> map;
     if (data is Map) map = Map<String, dynamic>.from(data);
-    else if (data is String) {
-      final decoded = _decodeJsonResponse(data);
-      if (decoded is! Map) throw Exception('Invalid response from AI service.');
-      map = Map<String, dynamic>.from(decoded);
-    } else throw Exception('Invalid response from AI service.');
+    else if (data is String) { final decoded = _decodeJsonResponse(data); if (decoded is! Map) throw Exception('Invalid response from AI service.'); map = Map<String, dynamic>.from(decoded); }
+    else throw Exception('Invalid response from AI service.');
     final error = _extractError(map, fallback: '');
     if (error.isNotEmpty) throw Exception(error);
     final reply = (map['reply'] ?? map['response'] ?? map['message'])?.toString().trim() ?? '';
@@ -167,10 +146,7 @@ class AiChatService {
   }
 
   String _extractError(dynamic data, {required String fallback}) {
-    if (data is Map) {
-      final value = (data['error'] ?? data['message'] ?? data['detail'])?.toString().trim();
-      if (value != null && value.isNotEmpty) return value;
-    }
+    if (data is Map) { final value = (data['error'] ?? data['message'] ?? data['detail'])?.toString().trim(); if (value != null && value.isNotEmpty) return value; }
     return fallback;
   }
 
@@ -188,8 +164,8 @@ class AiChatService {
 
   String _publishableKey() {
     final key = _supabase.rest.headers['apikey'];
-    if (key == null || key.trim().isEmpty) throw Exception('Supabase publishable key is not available.');
-    return key;
+    if (key != null && key.trim().isNotEmpty) return key.trim();
+    return _publishableKeyFallback;
   }
 
   void _debugLog(String message) { print('[MediData AI] $message'); }
