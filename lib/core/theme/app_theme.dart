@@ -5,7 +5,6 @@ class AppTheme {
   AppTheme._();
 
   static ThemeData get lightTheme {
-    const outline = AppColors.outlineLight;
     return ThemeData(
       useMaterial3: true,
       fontFamily: 'Poppins',
@@ -13,10 +12,17 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,
+        onPrimary: Colors.white,
+        secondary: AppColors.gold,
+        onSecondary: Colors.white,
+        tertiary: AppColors.goldDark,
+        onTertiary: Colors.white,
         surface: AppColors.surfaceLight,
+        surfaceContainer: AppColors.surfaceLight,
+        surfaceContainerHigh: AppColors.surfaceVariantLight,
         surfaceContainerHighest: AppColors.surfaceVariantLight,
-        outline: outline,
-        outlineVariant: AppColors.outlineLight,
+        outline: AppColors.outlineLight,
+        outlineVariant: AppColors.outlineStrongLight,
         error: AppColors.error,
         brightness: Brightness.light,
       ),
@@ -24,6 +30,7 @@ class AppTheme {
         elevation: 0,
         color: AppColors.surfaceLight,
         surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.black12,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: AppColors.outlineLight),
@@ -40,6 +47,17 @@ class AppTheme {
         centerTitle: true,
         backgroundColor: Colors.transparent,
         foregroundColor: AppColors.textPrimary,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.surfaceLight,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: AppColors.primaryLight,
+        shadowColor: Colors.black12,
+        elevation: 8,
+        height: 72,
+        labelTextStyle: WidgetStatePropertyAll(
+          TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -83,10 +101,17 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,
+        onPrimary: Colors.white,
+        secondary: AppColors.gold,
+        onSecondary: Colors.black,
+        tertiary: AppColors.goldLight,
+        onTertiary: Colors.black,
         surface: AppColors.surfaceDark,
+        surfaceContainer: AppColors.surfaceDark,
+        surfaceContainerHigh: AppColors.surfaceVariantDark,
         surfaceContainerHighest: AppColors.surfaceVariantDark,
         outline: AppColors.outlineDark,
-        outlineVariant: AppColors.outlineDark,
+        outlineVariant: AppColors.outlineStrongDark,
         error: AppColors.error,
         brightness: Brightness.dark,
       ),
@@ -94,6 +119,7 @@ class AppTheme {
         elevation: 0,
         color: AppColors.surfaceDark,
         surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.black54,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: AppColors.outlineDark),
@@ -110,6 +136,17 @@ class AppTheme {
         centerTitle: true,
         backgroundColor: Colors.transparent,
         foregroundColor: AppColors.textOnDark,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.surfaceDark,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: Color(0x333B82F6),
+        shadowColor: Colors.black54,
+        elevation: 10,
+        height: 72,
+        labelTextStyle: WidgetStatePropertyAll(
+          TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondaryDark),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
