@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../core/theme/app_brand.dart';
 import '../core/theme/app_colors.dart';
@@ -88,23 +89,15 @@ class _SplashScreenState extends State<SplashScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
             Text(
-              widget.settings.appName.trim().isEmpty
-                  ? AppBrand.appName
-                  : widget.settings.appName,
+              'MediData App',
               textAlign: TextAlign.center,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.3,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Medical Education Platform',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
+              style: GoogleFonts.comicRelief(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: AppColors.gold,
+                letterSpacing: 0.2,
               ),
             ),
           ],
