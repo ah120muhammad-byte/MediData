@@ -44,6 +44,17 @@ flutter_launcher_icons:
   ios: true
   image_path: "images/icon-1.png"
 
+flutter_native_splash:
+  color: "#F3F6FA"
+  color_dark: "#0A111D"
+  image: images/icon-1.png
+  android_12:
+    color: "#F3F6FA"
+    color_dark: "#0A111D"
+    image: images/icon-1.png
+    icon_background_color: "#FFFFFF"
+    icon_background_color_dark: "#151F2E"
+
 flutter:
   uses-material-design: true
   assets:
