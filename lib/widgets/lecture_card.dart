@@ -431,7 +431,7 @@ class _LectureFileTile extends StatelessWidget {
                               textAlign: TextAlign.right,
                               style: TextStyle(
                                 fontSize: isTablet ? 15 : 13.5,
-                                fontWeight: FontWeight.w750,
+                                fontWeight: FontWeight.w700,
                                 height: 1.2,
                                 color: theme.colorScheme.onSurface,
                               ),
