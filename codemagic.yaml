@@ -19,6 +19,11 @@ workflows:
         script: |
           flutter pub get
 
+      - name: Generate native splash branding
+        script: |
+          bash tool/generate_splash_branding.sh
+          dart run flutter_native_splash:create
+
       - name: Install CocoaPods dependencies
         script: |
           find . -name "Podfile" -execdir pod install \;
