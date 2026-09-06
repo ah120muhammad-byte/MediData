@@ -130,8 +130,9 @@ class AiChatService {
   AiChatResponse _parseResponse(dynamic data) {
     if (data == null) throw Exception('AI service returned no response.');
     Map<String, dynamic> map;
-    if (data is Map) map = Map<String, dynamic>.from(data);
-    else if (data is String) { final decoded = _decodeJsonResponse(data); if (decoded is! Map) throw Exception('Invalid response from AI service.'); map = Map<String, dynamic>.from(decoded); }
+    if (data is Map) {
+      map = Map<String, dynamic>.from(data);
+    } else if (data is String) { final decoded = _decodeJsonResponse(data); if (decoded is! Map) throw Exception('Invalid response from AI service.'); map = Map<String, dynamic>.from(decoded); }
     else throw Exception('Invalid response from AI service.');
     final error = _extractError(map, fallback: '');
     if (error.isNotEmpty) throw Exception(error);

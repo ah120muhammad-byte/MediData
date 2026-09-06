@@ -180,7 +180,7 @@ class _LecturesScreenState extends State<LecturesScreen> {
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 24),
             itemCount: lectures.length,
-            separatorBuilder: (_, __) => SizedBox(height: Responsive.spacing(context, base: 10, min: 7, max: 16)),
+            separatorBuilder: (_, _) => SizedBox(height: Responsive.spacing(context, base: 10, min: 7, max: 16)),
             itemBuilder: (context, index) {
               final lecture = lectures[index];
               final isExpanded = _expandedLectureId == lecture.id;
