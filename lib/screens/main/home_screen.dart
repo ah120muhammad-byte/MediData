@@ -270,6 +270,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   max: 36,
                 );
 
+                // Keep only a small safe area below the last card.
+                // The previous 115px value made the page scroll far past
+                // the actual content and left a large empty area.
                 const bottomPadding = 24.0;
 
                 final sectionGap = Responsive.spacing(
@@ -419,7 +422,7 @@ class _LatestLectureCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final radius = Responsive.cardRadius(context);
+    final radius = Responsive.radius(context, base: 22, min: 18, max: 28);
 
     if (lecture == null) {
       return Container(
@@ -499,9 +502,9 @@ class _LatestLectureCard extends StatelessWidget {
                 children: [
                   const Icon(Icons.play_circle_fill_rounded, size: 22),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     'Open lecture',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       color: Colors.black,
                     ),
@@ -534,7 +537,7 @@ class _YourModuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final radius = Responsive.cardRadius(context);
+    final radius = Responsive.radius(context, base: 22, min: 18, max: 28);
 
     if (module == null) {
       return Container(
