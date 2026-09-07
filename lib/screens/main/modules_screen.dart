@@ -42,6 +42,37 @@ class ModulesScreenState extends State<ModulesScreen> {
     });
   }
 
+  Future<void> _markModuleAsCurrent(_Module module) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null || module.id.trim().isEmpty) return;
+
+    try {
+      final firstLecture = await _supabase
+          .from('lectures')
+          .select('id')
+          .eq('module_id', module.id)
+          .eq('is_active', true)
+          .eq('is_published', true)
+          .order('display_order', ascending: true)
+          .limit(1)
+          .maybeSingle();
+
+      final lectureId = firstLecture?['id']?.toString().trim();
+      if (lectureId == null || lectureId.isEmpty) return;
+
+      await _supabase.from('lecture_progress').upsert(
+        {
+          'user_id': user.id,
+          'lecture_id': lectureId,
+          'last_opened_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        onConflict: 'user_id,lecture_id',
+      );
+    } catch (e) {
+      debugPrint('Mark current module error: $e');
+    }
+  }
+
   Future<void> openLecture({required String moduleId, required String lectureId}) async {
     final normalizedModuleId = moduleId.trim();
     final normalizedLectureId = lectureId.trim();
@@ -96,6 +127,7 @@ class ModulesScreenState extends State<ModulesScreen> {
             _selectedModuleName = module.name;
             _pendingLectureId = null;
           });
+          _markModuleAsCurrent(module);
         },
       );
     }
