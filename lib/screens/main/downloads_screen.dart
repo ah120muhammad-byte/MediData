@@ -708,7 +708,7 @@ class _DownloadsScreenState
                       Responsive.scrollBottomPadding(
                     context,
                     base:
-                        125,
+                        24,
                   );
 
                   return RefreshIndicator(
