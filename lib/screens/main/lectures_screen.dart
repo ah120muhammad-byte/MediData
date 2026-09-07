@@ -57,6 +57,21 @@ class _LecturesScreenState extends State<LecturesScreen> {
     setState(() => _expandedLectureId = _expandedLectureId == lectureId ? null : lectureId);
   }
 
+  Future<void> _markPdfCompleted(String lectureId) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null || lectureId.trim().isEmpty) return;
+    try {
+      await _supabase.from('lecture_progress').upsert({
+        'user_id': user.id,
+        'lecture_id': lectureId.trim(),
+        'pdf_completed': true,
+        'last_opened_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id,lecture_id');
+    } catch (e) {
+      debugPrint('Mark PDF completed error: $e');
+    }
+  }
+
   Future<void> _confirmStartExam(_Lecture lecture) async {
     final exam = lecture.exam;
     if (exam == null) return;
@@ -93,7 +108,11 @@ class _LecturesScreenState extends State<LecturesScreen> {
     try {
       ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(duration: const Duration(seconds: 30), content: Row(children: [const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)), const SizedBox(width: 12), Expanded(child: Text('Opening ${file.title}...'))])));
       await downloadsService.openLectureFile(id: file.id, title: file.title, fileType: file.fileType, fileUrl: file.fileUrl);
-      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      if (file.fileType.toLowerCase().trim() == 'pdf') {
+        await _markPdfCompleted(file.lectureId);
+      }
     } catch (e) {
       debugPrint('Lecture file open error: $e');
       if (!mounted) return;
@@ -142,6 +161,9 @@ class _LecturesScreenState extends State<LecturesScreen> {
         final shouldOpen = await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(title: const Text('Already downloaded'), content: Text('"${file.title}" is already available offline.'), actions: [TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Open'))]));
         if (!mounted || shouldOpen != true) return;
         await downloadsService.open(existing);
+        if (file.fileType.toLowerCase().trim() == 'pdf') {
+          await _markPdfCompleted(file.lectureId);
+        }
         return;
       }
       final canContinue = await _confirmMobileDataDownload(file);
@@ -150,6 +172,9 @@ class _LecturesScreenState extends State<LecturesScreen> {
       final downloaded = await downloadsService.download(id: file.id, lectureId: file.lectureId, lectureTitle: lecture.title, title: file.title, fileType: file.fileType, fileUrl: file.fileUrl, onProgress: (progress) { if (mounted) debugPrint('Downloading ${file.title}: ${(progress.progress * 100).round()}%'); });
       if (!mounted) return;
       ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(content: Text('${downloaded.title} downloaded successfully.'), action: SnackBarAction(label: 'Open', onPressed: () => downloadsService.open(downloaded))));
+      if (file.fileType.toLowerCase().trim() == 'pdf') {
+        await _markPdfCompleted(file.lectureId);
+      }
     } catch (e) {
       debugPrint('Lecture file download error: $e');
       if (!mounted) return;
