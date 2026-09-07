@@ -422,7 +422,7 @@ class _LatestLectureCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final radius = Responsive.radius(context, base: 22, min: 18, max: 28);
+    final radius = Responsive.cardRadius(context);
 
     if (lecture == null) {
       return Container(
@@ -502,9 +502,9 @@ class _LatestLectureCard extends StatelessWidget {
                 children: [
                   const Icon(Icons.play_circle_fill_rounded, size: 22),
                   const SizedBox(width: 8),
-                  Text(
+                  const Text(
                     'Open lecture',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w800,
                       color: Colors.black,
                     ),
@@ -537,7 +537,7 @@ class _YourModuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final radius = Responsive.radius(context, base: 22, min: 18, max: 28);
+    final radius = Responsive.cardRadius(context);
 
     if (module == null) {
       return Container(
