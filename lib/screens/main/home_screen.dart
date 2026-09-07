@@ -55,9 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .limit(1);
 
     final latestRows = List<Map<String, dynamic>>.from(
-      (latestResponse as List).map(
-        (item) => Map<String, dynamic>.from(item),
-      ),
+      (latestResponse as List).map((item) => Map<String, dynamic>.from(item)),
     );
 
     if (latestRows.isNotEmpty) {
@@ -71,9 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
         moduleName: moduleRaw is Map
             ? moduleRaw['name']?.toString() ?? 'Module'
             : 'Module',
-        publishedAt: DateTime.tryParse(
-          row['published_at']?.toString() ?? '',
-        ),
+        publishedAt: DateTime.tryParse(row['published_at']?.toString() ?? ''),
       );
     }
 
@@ -105,18 +101,16 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       if (progressRows.isNotEmpty) {
-        final row = progressRows.first;
-        final lectureRaw = row['lectures'];
-
+        final lectureRaw = progressRows.first['lectures'];
         if (lectureRaw is Map) {
           final lecture = Map<String, dynamic>.from(lectureRaw);
           final moduleRaw = lecture['modules'];
-
           if (moduleRaw is Map) {
             final module = Map<String, dynamic>.from(moduleRaw);
             currentModule = _ModuleHomeData(
               id: module['id']?.toString() ??
-                  lecture['module_id']?.toString() ?? '',
+                  lecture['module_id']?.toString() ??
+                  '',
               name: module['name']?.toString() ?? 'Current Module',
               description: module['description']?.toString(),
             );
@@ -132,51 +126,35 @@ class _HomeScreenState extends State<HomeScreen> {
     if (currentModule != null && user != null) {
       final lecturesResponse = await _supabase
           .from('lectures')
-          .select('''
-            id,
-            title
-          ''')
+          .select('id, title')
           .eq('module_id', currentModule.id)
           .eq('is_active', true)
           .eq('is_published', true)
           .order('display_order', ascending: true);
 
       final lectures = List<Map<String, dynamic>>.from(
-        (lecturesResponse as List).map(
-          (item) => Map<String, dynamic>.from(item),
-        ),
+        (lecturesResponse as List).map((item) => Map<String, dynamic>.from(item)),
       );
 
       if (lectures.isNotEmpty) {
         final lectureIds = lectures
             .map((lecture) => lecture['id'].toString())
+            .where((id) => id.isNotEmpty)
             .toList();
 
         final filesResponse = await _supabase
             .from('lecture_files')
-            .select('''
-              id,
-              lecture_id,
-              file_type,
-              is_active
-            ''')
+            .select('id, lecture_id, file_type, is_active')
             .inFilter('lecture_id', lectureIds)
             .eq('is_active', true);
 
         final files = List<Map<String, dynamic>>.from(
-          (filesResponse as List).map(
-            (item) => Map<String, dynamic>.from(item),
-          ),
+          (filesResponse as List).map((item) => Map<String, dynamic>.from(item)),
         );
 
         final trackableLectureIds = <String>{};
         for (final file in files) {
-          final type = file['file_type']
-                  ?.toString()
-                  .toLowerCase()
-                  .trim() ??
-              '';
-
+          final type = file['file_type']?.toString().toLowerCase().trim() ?? '';
           if (type == 'audio' || type == 'video') {
             final lectureId = file['lecture_id']?.toString();
             if (lectureId != null && lectureId.isNotEmpty) {
@@ -190,27 +168,25 @@ class _HomeScreenState extends State<HomeScreen> {
         if (trackableLectureIds.isNotEmpty) {
           final progressResponse = await _supabase
               .from('lecture_progress')
-              .select('''
-                lecture_id,
-                audio_completed,
-                video_completed
-              ''')
+              .select('lecture_id, audio_completed, video_completed')
               .eq('user_id', user.id)
               .inFilter('lecture_id', trackableLectureIds.toList());
 
+          final completedLectureIds = <String>{};
           for (final item in (progressResponse as List)) {
             final map = Map<String, dynamic>.from(item);
+            final lectureId = map['lecture_id']?.toString();
             final audioCompleted = map['audio_completed'] as bool? ?? false;
             final videoCompleted = map['video_completed'] as bool? ?? false;
 
-            if (audioCompleted || videoCompleted) {
-              completedLectures++;
+            if (lectureId != null &&
+                lectureId.isNotEmpty &&
+                (audioCompleted || videoCompleted)) {
+              completedLectureIds.add(lectureId);
             }
           }
 
-          if (completedLectures > totalTrackableLectures) {
-            completedLectures = totalTrackableLectures;
-          }
+          completedLectures = completedLectureIds.length;
         }
       }
 
@@ -242,13 +218,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final contentMaxWidth = constraints.maxWidth >= 900
-            ? 900.0
-            : constraints.maxWidth;
+        final maxWidth = constraints.maxWidth >= 900 ? 900.0 : constraints.maxWidth;
 
         return Center(
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: contentMaxWidth),
+            constraints: BoxConstraints(maxWidth: maxWidth),
             child: FutureBuilder<_HomeData>(
               future: _homeFuture,
               builder: (context, snapshot) {
@@ -263,48 +237,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 final data = snapshot.data ?? const _HomeData();
                 final horizontalPadding = Responsive.horizontalPadding(context);
-                final topPadding = Responsive.spacing(
-                  context,
-                  base: 24,
-                  min: 16,
-                  max: 36,
-                );
-
-                // Keep only a small safe area below the last card.
-                // The previous 115px value made the page scroll far past
-                // the actual content and left a large empty area.
-                const bottomPadding = 24.0;
-
-                final sectionGap = Responsive.spacing(
-                  context,
-                  base: 28,
-                  min: 20,
-                  max: 40,
-                );
-                final titleGap = Responsive.spacing(
-                  context,
-                  base: 12,
-                  min: 8,
-                  max: 18,
-                );
 
                 return RefreshIndicator(
                   onRefresh: _refresh,
                   child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(
-                      parent: BouncingScrollPhysics(),
-                    ),
+                    // Clamping prevents the page from visually stretching into
+                    // a large empty area while keeping normal scrolling/refresh.
+                    physics: const ClampingScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(
                       horizontalPadding,
-                      topPadding,
+                      0,
                       horizontalPadding,
-                      bottomPadding,
+                      16,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _SectionTitle(title: "What's New"),
-                        SizedBox(height: titleGap),
+                        const _SectionTitle(title: "What's New"),
+                        const SizedBox(height: 10),
                         _LatestLectureCard(
                           lecture: data.latestLecture,
                           onTap: data.latestLecture == null
@@ -318,9 +268,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   );
                                 },
                         ),
-                        SizedBox(height: sectionGap),
-                        _SectionTitle(title: 'Your Module'),
-                        SizedBox(height: titleGap),
+                        const SizedBox(height: 24),
+                        const _SectionTitle(title: 'Your Module'),
+                        const SizedBox(height: 10),
                         _YourModuleCard(
                           module: data.currentModule,
                           progress: data.moduleProgress,
@@ -396,16 +346,16 @@ class _SectionTitle extends StatelessWidget {
     final theme = Theme.of(context);
     return Text(
       title,
-      style: TextStyle(
-        fontSize: Responsive.titleSize(
-          context,
-          base: 22,
-          min: 19,
-          max: 30,
-        ),
-        fontWeight: FontWeight.bold,
-        color: theme.colorScheme.onSurface,
-      ),
+      style: theme.textTheme.headlineSmall?.copyWith(
+            fontSize: Responsive.titleSize(context, base: 22, min: 19, max: 28),
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurface,
+          ) ??
+          TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurface,
+          ),
     );
   }
 }
@@ -422,19 +372,27 @@ class _LatestLectureCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final radius = Responsive.cardRadius(context);
+    final accent = AppColors.gold;
+    final accentOn = scheme.onSecondary;
 
     if (lecture == null) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(radius),
-        ),
-        child: Text(
-          'No new lectures available yet.',
-          style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Icon(Icons.auto_awesome_outlined, color: scheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'No new lectures available yet.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -447,41 +405,57 @@ class _LatestLectureCard extends StatelessWidget {
         child: Ink(
           width: double.infinity,
           padding: EdgeInsets.all(
-            Responsive.spacing(context, base: 20, min: 16, max: 26),
+            Responsive.spacing(context, base: 20, min: 16, max: 24),
           ),
           decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                AppColors.gold.withValues(alpha: 0.95),
-                AppColors.gold.withValues(alpha: 0.72),
+                accent,
+                Color.lerp(accent, scheme.surface, 0.22) ?? accent,
               ],
             ),
-            borderRadius: BorderRadius.circular(radius),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: 0.18),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                lecture!.moduleName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black.withValues(alpha: 0.65),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: accentOn.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: accentOn.withValues(alpha: 0.12)),
+                ),
+                child: Text(
+                  lecture!.moduleName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: accentOn.withValues(alpha: 0.82),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Text(
                 lecture!.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                style: TextStyle(
+                  color: accentOn,
+                  fontSize: Responsive.titleSize(context, base: 24, min: 21, max: 30),
+                  fontWeight: FontWeight.w800,
+                  height: 1.12,
                 ),
               ),
               if ((lecture!.description ?? '').trim().isNotEmpty) ...[
@@ -491,26 +465,38 @@ class _LatestLectureCard extends StatelessWidget {
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
+                    color: accentOn.withValues(alpha: 0.76),
                     fontSize: 14,
                     height: 1.4,
-                    color: Colors.black.withValues(alpha: 0.72),
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               Row(
                 children: [
-                  const Icon(Icons.play_circle_fill_rounded, size: 22),
-                  const SizedBox(width: 8),
-                  const Text(
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: accentOn.withValues(alpha: 0.14),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.play_arrow_rounded,
+                      color: accentOn,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
                     'Open lecture',
                     style: TextStyle(
+                      color: accentOn,
                       fontWeight: FontWeight.w800,
-                      color: Colors.black,
                     ),
                   ),
                   const Spacer(),
-                  const Icon(Icons.arrow_forward_rounded),
+                  Icon(Icons.arrow_forward_rounded, color: accentOn),
                 ],
               ),
             ],
@@ -537,91 +523,151 @@ class _YourModuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final radius = Responsive.cardRadius(context);
+    final safeProgress = progress.clamp(0.0, 1.0);
+    final percentage = (safeProgress * 100).round();
 
     if (module == null) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.5)),
-        ),
-        child: Text(
-          'Open a lecture to start tracking your module progress.',
-          style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.menu_book_rounded, color: scheme.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Open a lecture to start tracking your module progress.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    final percentage = (progress.clamp(0.0, 1.0) * 100).round();
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(
-        Responsive.spacing(context, base: 20, min: 16, max: 26),
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            module!.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          if ((module!.description ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              module!.description!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.4,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    value: progress.clamp(0.0, 1.0),
-                    minHeight: 9,
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.all(
+          Responsive.spacing(context, base: 20, min: 16, max: 24),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: scheme.secondary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(Icons.school_rounded, color: scheme.secondary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'CURRENT MODULE',
+                        style: TextStyle(
+                          color: scheme.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        module!.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
+              ],
+            ),
+            if ((module!.description ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
               Text(
-                '$percentage%',
-                style: const TextStyle(fontWeight: FontWeight.w800),
+                module!.description!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            totalTrackableLectures > 0
-                ? '$completedLectures of $totalTrackableLectures lectures completed'
-                : 'No trackable lectures yet',
-            style: TextStyle(
-              fontSize: 13,
-              color: theme.colorScheme.onSurfaceVariant,
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Text(
+                  'Progress',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '$percentage%',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: scheme.primary,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: safeProgress,
+                minHeight: 9,
+                backgroundColor: scheme.surfaceContainerHighest,
+                valueColor: AlwaysStoppedAnimation<Color>(scheme.secondary),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(
+                  Icons.menu_book_outlined,
+                  size: 17,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    totalTrackableLectures > 0
+                        ? '$completedLectures of $totalTrackableLectures lectures completed'
+                        : 'No trackable lectures yet',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -635,6 +681,8 @@ class _HomeErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -643,19 +691,20 @@ class _HomeErrorState extends StatelessWidget {
           children: [
             Icon(
               Icons.error_outline_rounded,
-              size: 42,
-              color: theme.colorScheme.error,
+              size: 44,
+              color: scheme.error,
             ),
             const SizedBox(height: 12),
             Text(
               'Something went wrong while loading Home.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+              style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
-            FilledButton(
+            FilledButton.icon(
               onPressed: onRetry,
-              child: const Text('Retry'),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
             ),
           ],
         ),
