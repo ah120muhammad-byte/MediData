@@ -33,7 +33,7 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
   final AudioPlayerService _audio = AudioPlayerService.instance;
 
   StreamSubscription<ProcessingState>? _processingSubscription;
-  StreamSubscription<PlayerState>? _playerStateSubscription;
+  StreamSubscription<bool>? _playerStateSubscription;
 
   bool _loading = true;
   bool _completed = false;
@@ -172,27 +172,27 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
       builder: (sheetContext) {
         final theme = Theme.of(sheetContext);
         return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const ListTile(title: Text('Playback speed'), subtitle: Text('Choose how fast the lecture plays')),
-                ...speeds.map(
-                  (speed) => RadioListTile<double>(
-                    value: speed,
-                    groupValue: _playbackSpeed,
-                    title: Text('${speed}x'),
-                    activeColor: theme.colorScheme.primary,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      unawaited(_setSpeed(value));
-                      Navigator.of(sheetContext).pop();
-                    },
-                  ),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(
+                title: Text('Playback speed'),
+                subtitle: Text('Choose how fast the lecture plays'),
+              ),
+              ...speeds.map(
+                (speed) => ListTile(
+                  title: Text('${speed}x'),
+                  trailing: speed == _playbackSpeed
+                      ? Icon(Icons.check_rounded, color: theme.colorScheme.primary)
+                      : null,
+                  onTap: () {
+                    unawaited(_setSpeed(speed));
+                    Navigator.of(sheetContext).pop();
+                  },
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 8),
+            ],
           ),
         );
       },
@@ -216,7 +216,10 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const ListTile(title: Text('Sleep timer'), subtitle: Text('Pause playback automatically')),
+              const ListTile(
+                title: Text('Sleep timer'),
+                subtitle: Text('Pause playback automatically'),
+              ),
               ...options.map(
                 (option) => ListTile(
                   title: Text(option.label),
@@ -329,7 +332,7 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(color: Colors.black.withValues(alpha: .20), borderRadius: BorderRadius.circular(999)),
-                          child: Text('AUDIO', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                          child: const Text('AUDIO', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
                         ),
                       ),
                     ],
