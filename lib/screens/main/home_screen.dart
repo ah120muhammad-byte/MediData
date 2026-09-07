@@ -133,7 +133,9 @@ class _HomeScreenState extends State<HomeScreen> {
           .order('display_order', ascending: true);
 
       final lectures = List<Map<String, dynamic>>.from(
-        (lecturesResponse as List).map((item) => Map<String, dynamic>.from(item)),
+        (lecturesResponse as List).map(
+          (item) => Map<String, dynamic>.from(item),
+        ),
       );
 
       if (lectures.isNotEmpty) {
@@ -149,7 +151,9 @@ class _HomeScreenState extends State<HomeScreen> {
             .eq('is_active', true);
 
         final files = List<Map<String, dynamic>>.from(
-          (filesResponse as List).map((item) => Map<String, dynamic>.from(item)),
+          (filesResponse as List).map(
+            (item) => Map<String, dynamic>.from(item),
+          ),
         );
 
         final trackableLectureIds = <String>{};
@@ -206,12 +210,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refresh() async {
     if (!mounted) return;
-
-    setState(() {
-      _homeFuture = _loadHomeData();
-    });
-
-    await _homeFuture;
+    final future = _loadHomeData();
+    setState(() => _homeFuture = future);
+    await future;
   }
 
   @override
@@ -227,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
               future: _homeFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const _HomeLoadingState();
                 }
 
                 if (snapshot.hasError) {
@@ -240,45 +241,48 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 return RefreshIndicator(
                   onRefresh: _refresh,
-                  child: SingleChildScrollView(
-                    // Clamping prevents the page from visually stretching into
-                    // a large empty area while keeping normal scrolling/refresh.
-                    physics: const ClampingScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(
-                      horizontalPadding,
-                      0,
-                      horizontalPadding,
-                      16,
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: ClampingScrollPhysics(),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _SectionTitle(title: "What's New"),
-                        const SizedBox(height: 10),
-                        _LatestLectureCard(
-                          lecture: data.latestLecture,
-                          onTap: data.latestLecture == null
-                              ? null
-                              : () {
-                                  final lecture = data.latestLecture!;
-                                  widget.onOpenLecture(
-                                    moduleId: lecture.moduleId,
-                                    moduleName: lecture.moduleName,
-                                    lectureId: lecture.id,
-                                  );
-                                },
+                    slivers: [
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontalPadding,
+                          0,
+                          horizontalPadding,
+                          16,
                         ),
-                        const SizedBox(height: 24),
-                        const _SectionTitle(title: 'Your Module'),
-                        const SizedBox(height: 10),
-                        _YourModuleCard(
-                          module: data.currentModule,
-                          progress: data.moduleProgress,
-                          completedLectures: data.completedLectures,
-                          totalTrackableLectures: data.totalTrackableLectures,
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            _SectionTitle(title: "What's New", icon: Icons.auto_awesome_rounded),
+                            const SizedBox(height: 10),
+                            _LatestLectureCard(
+                              lecture: data.latestLecture,
+                              onTap: data.latestLecture == null
+                                  ? null
+                                  : () {
+                                      final lecture = data.latestLecture!;
+                                      widget.onOpenLecture(
+                                        moduleId: lecture.moduleId,
+                                        moduleName: lecture.moduleName,
+                                        lectureId: lecture.id,
+                                      );
+                                    },
+                            ),
+                            const SizedBox(height: 22),
+                            _SectionTitle(title: 'Your Module', icon: Icons.menu_book_rounded),
+                            const SizedBox(height: 10),
+                            _YourModuleCard(
+                              module: data.currentModule,
+                              progress: data.moduleProgress,
+                              completedLectures: data.completedLectures,
+                              totalTrackableLectures: data.totalTrackableLectures,
+                            ),
+                          ]),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 );
               },
@@ -338,24 +342,36 @@ class _ModuleHomeData {
 
 class _SectionTitle extends StatelessWidget {
   final String title;
+  final IconData icon;
 
-  const _SectionTitle({required this.title});
+  const _SectionTitle({required this.title, required this.icon});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Text(
-      title,
-      style: theme.textTheme.headlineSmall?.copyWith(
-            fontSize: Responsive.titleSize(context, base: 22, min: 19, max: 28),
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onSurface,
-          ) ??
-          TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onSurface,
+    final scheme = theme.colorScheme;
+
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: scheme.primaryContainer,
+            borderRadius: BorderRadius.circular(11),
           ),
+          child: Icon(icon, size: 18, color: scheme.onPrimaryContainer),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontSize: Responsive.titleSize(context, base: 21, min: 19, max: 27),
+            fontWeight: FontWeight.w800,
+            color: scheme.onSurface,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -364,18 +380,13 @@ class _LatestLectureCard extends StatelessWidget {
   final _LectureHomeData? lecture;
   final VoidCallback? onTap;
 
-  const _LatestLectureCard({
-    required this.lecture,
-    required this.onTap,
-  });
+  const _LatestLectureCard({required this.lecture, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final radius = Responsive.cardRadius(context);
-    final accent = AppColors.gold;
-    final accentOn = scheme.onSecondary;
 
     if (lecture == null) {
       return Card(
@@ -404,22 +415,17 @@ class _LatestLectureCard extends StatelessWidget {
         onTap: onTap,
         child: Ink(
           width: double.infinity,
-          padding: EdgeInsets.all(
-            Responsive.spacing(context, base: 20, min: 16, max: 24),
-          ),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                accent,
-                Color.lerp(accent, scheme.surface, 0.22) ?? accent,
-              ],
+              colors: [AppColors.gold, AppColors.goldDark],
             ),
             boxShadow: [
               BoxShadow(
-                color: accent.withValues(alpha: 0.18),
+                color: AppColors.gold.withValues(alpha: 0.18),
                 blurRadius: 18,
                 offset: const Offset(0, 8),
               ),
@@ -428,75 +434,88 @@ class _LatestLectureCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: accentOn.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: accentOn.withValues(alpha: 0.12)),
-                ),
-                child: Text(
-                  lecture!.moduleName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: accentOn.withValues(alpha: 0.82),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'LATEST LECTURE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
               const SizedBox(height: 12),
+              Text(
+                lecture!.moduleName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.78),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 5),
               Text(
                 lecture!.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: accentOn,
-                  fontSize: Responsive.titleSize(context, base: 24, min: 21, max: 30),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 23,
+                  height: 1.15,
                   fontWeight: FontWeight.w800,
-                  height: 1.12,
                 ),
               ),
               if ((lecture!.description ?? '').trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
                   lecture!.description!,
-                  maxLines: 3,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: accentOn.withValues(alpha: 0.76),
-                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.76),
+                    fontSize: 13,
                     height: 1.4,
                   ),
                 ),
               ],
-              const SizedBox(height: 18),
+              const SizedBox(height: 17),
               Row(
                 children: [
                   Container(
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: accentOn.withValues(alpha: 0.14),
+                      color: Colors.white.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.play_arrow_rounded,
-                      color: accentOn,
-                      size: 22,
+                      color: Colors.white,
+                      size: 23,
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Text(
+                  const Text(
                     'Open lecture',
                     style: TextStyle(
-                      color: accentOn,
+                      color: Colors.white,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   const Spacer(),
-                  Icon(Icons.arrow_forward_rounded, color: accentOn),
+                  const Icon(Icons.arrow_forward_rounded, color: Colors.white),
                 ],
               ),
             ],
@@ -524,8 +543,7 @@ class _YourModuleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final safeProgress = progress.clamp(0.0, 1.0);
-    final percentage = (safeProgress * 100).round();
+    final radius = Responsive.cardRadius(context);
 
     if (module == null) {
       return Card(
@@ -534,15 +552,7 @@ class _YourModuleCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: scheme.primary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(Icons.menu_book_rounded, color: scheme.primary),
-              ),
+              Icon(Icons.school_outlined, color: scheme.primary),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -556,116 +566,118 @@ class _YourModuleCard extends StatelessWidget {
       );
     }
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: EdgeInsets.all(
-          Responsive.spacing(context, base: 20, min: 16, max: 24),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: scheme.secondary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(Icons.school_rounded, color: scheme.secondary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'CURRENT MODULE',
-                        style: TextStyle(
-                          color: scheme.primary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        module!.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: scheme.onSurface,
-                        ),
-                      ),
-                    ],
+    final safeProgress = progress.clamp(0.0, 1.0);
+    final percentage = (safeProgress * 100).round();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: scheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  module!.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
                   ),
                 ),
-              ],
-            ),
-            if ((module!.description ?? '').trim().isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                module!.description!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: scheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$percentage%',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: scheme.onSecondaryContainer,
+                  ),
+                ),
               ),
             ],
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Text(
-                  'Progress',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '$percentage%',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: scheme.primary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: safeProgress,
-                minHeight: 9,
-                backgroundColor: scheme.surfaceContainerHighest,
-                valueColor: AlwaysStoppedAnimation<Color>(scheme.secondary),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(
-                  Icons.menu_book_outlined,
-                  size: 17,
-                  color: scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    totalTrackableLectures > 0
-                        ? '$completedLectures of $totalTrackableLectures lectures completed'
-                        : 'No trackable lectures yet',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
+          ),
+          if ((module!.description ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              module!.description!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
             ),
           ],
+          const SizedBox(height: 18),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: safeProgress,
+              minHeight: 9,
+              backgroundColor: scheme.surfaceContainerHighest,
+              valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(
+                Icons.check_circle_outline_rounded,
+                size: 17,
+                color: scheme.primary,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  totalTrackableLectures > 0
+                      ? '$completedLectures of $totalTrackableLectures lectures completed'
+                      : 'No trackable lectures yet',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeLoadingState extends StatelessWidget {
+  const _HomeLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: SizedBox(
+        width: 28,
+        height: 28,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.5,
+          color: scheme.primary,
         ),
       ),
     );
@@ -680,8 +692,6 @@ class _HomeErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -690,8 +700,8 @@ class _HomeErrorState extends StatelessWidget {
           children: [
             Icon(
               Icons.error_outline_rounded,
-              size: 44,
-              color: scheme.error,
+              size: 42,
+              color: theme.colorScheme.error,
             ),
             const SizedBox(height: 12),
             Text(
@@ -700,10 +710,9 @@ class _HomeErrorState extends StatelessWidget {
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
+            FilledButton(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
+              child: const Text('Retry'),
             ),
           ],
         ),
