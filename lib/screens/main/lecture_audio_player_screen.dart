@@ -54,41 +54,54 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
     _processingSubscription?.cancel();
     _playerStateSubscription?.cancel();
     _sleepTimer?.cancel();
+    // Intentionally do not pause here. AudioService owns background playback.
     super.dispose();
   }
 
   Future<void> _initializePlayer() async {
     try {
-      final downloaded = await DownloadsService.instance.findById(widget.fileId);
-      var source = widget.fileUrl;
-      var isLocal = false;
+      // Reuse the current AudioService session when returning to the same
+      // lecture. This prevents the source from being reloaded from zero and
+      // preserves the live position/background playback state.
+      final sameLectureIsLoaded =
+          _audio.currentMediaItem?.id == widget.lectureId &&
+          _audio.duration != null;
 
-      if (downloaded != null) {
-        final file = File(downloaded.localPath);
-        if (await file.exists()) {
-          source = file.path;
-          isLocal = true;
+      if (!sameLectureIsLoaded) {
+        final downloaded = await DownloadsService.instance.findById(widget.fileId);
+        var source = widget.fileUrl;
+        var isLocal = false;
+
+        if (downloaded != null) {
+          final file = File(downloaded.localPath);
+          if (await file.exists()) {
+            source = file.path;
+            isLocal = true;
+          }
         }
-      }
 
-      if (!isLocal) {
-        source = await DownloadsService.instance.createSignedUrlForLectureFile(
-          fileUrl: widget.fileUrl,
-          fileType: 'audio',
+        if (!isLocal) {
+          source = await DownloadsService.instance.createSignedUrlForLectureFile(
+            fileUrl: widget.fileUrl,
+            fileType: 'audio',
+          );
+        }
+
+        await _audio.load(
+          source: source,
+          lectureId: widget.lectureId,
+          title: widget.fileTitle,
+          lectureTitle: widget.lectureTitle,
+          isLocalFile: isLocal,
         );
-      }
 
-      await _audio.load(
-        source: source,
-        lectureId: widget.lectureId,
-        title: widget.fileTitle,
-        lectureTitle: widget.lectureTitle,
-        isLocalFile: isLocal,
-      );
+        await _audio.setSpeed(_playbackSpeed);
+        await _audio.play();
+      }
 
       _processingSubscription = _audio.processingStateStream.listen((state) {
         if (!mounted) return;
-        if (state == ProcessingState.completed && !_completed) {
+        if (state == ProcessingState.completed) {
           setState(() => _completed = true);
         }
       });
@@ -102,9 +115,6 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
         _loading = false;
         _error = null;
       });
-
-      await _audio.setSpeed(_playbackSpeed);
-      await _audio.play();
     } catch (e) {
       debugPrint('Audio player error: $e');
       if (!mounted) return;
@@ -131,6 +141,15 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
     await _audio.seek(target);
   }
 
+  Future<void> _togglePlayback() async {
+    if (_audio.isPlaying) {
+      await _audio.pause();
+    } else {
+      await _audio.play();
+    }
+    if (mounted) setState(() {});
+  }
+
   Future<void> _setSpeed(double speed) async {
     await _audio.setSpeed(speed);
     if (!mounted) return;
@@ -140,7 +159,6 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
   void _setSleepTimer(Duration? duration) {
     _sleepTimer?.cancel();
     _sleepRemaining = duration;
-
     if (duration == null) {
       if (mounted) setState(() {});
       return;
@@ -352,11 +370,7 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
                     OutlinedButton.icon(onPressed: _showSpeedSheet, icon: const Icon(Icons.speed_rounded), label: Text('${_playbackSpeed}x')),
                     OutlinedButton.icon(onPressed: _showSleepSheet, icon: Icon(_sleepRemaining == null ? Icons.bedtime_outlined : Icons.bedtime_rounded), label: Text(_sleepRemaining == null ? 'Sleep timer' : _format(_sleepRemaining!))),
                     if (_sleepRemaining != null)
-                      FilledButton.tonalIcon(
-                        onPressed: () => _setSleepTimer(null),
-                        icon: const Icon(Icons.alarm_off_rounded),
-                        label: const Text('Cancel timer'),
-                      ),
+                      FilledButton.tonalIcon(onPressed: () => _setSleepTimer(null), icon: const Icon(Icons.alarm_off_rounded), label: const Text('Cancel timer')),
                   ],
                 ),
                 if (_completed) ...[
@@ -364,18 +378,8 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: scheme.primary.withValues(alpha: .08),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: scheme.primary.withValues(alpha: .18)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.check_circle_rounded, color: scheme.primary),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text('Lecture completed', style: TextStyle(fontWeight: FontWeight.w700, color: scheme.primary))),
-                      ],
-                    ),
+                    decoration: BoxDecoration(color: scheme.primary.withValues(alpha: .08), borderRadius: BorderRadius.circular(16), border: Border.all(color: scheme.primary.withValues(alpha: .18))),
+                    child: Row(children: [Icon(Icons.check_circle_rounded, color: scheme.primary), const SizedBox(width: 10), Expanded(child: Text('Lecture completed', style: TextStyle(fontWeight: FontWeight.w700, color: scheme.primary)))]),
                   ),
                 ],
                 const SizedBox(height: 18),
@@ -445,7 +449,7 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
               width: main,
               height: main,
               child: FilledButton(
-                onPressed: () => unawaited(playing ? _audio.pause() : _audio.play()),
+                onPressed: _togglePlayback,
                 style: FilledButton.styleFrom(shape: const CircleBorder(), padding: EdgeInsets.zero),
                 child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: main * .48),
               ),
