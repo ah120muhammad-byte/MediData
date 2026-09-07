@@ -37,7 +37,6 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
 
   bool _loading = true;
   bool _completed = false;
-  bool _showAdvanced = false;
   String? _error;
   double _playbackSpeed = 1.0;
 
@@ -55,7 +54,6 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
     _processingSubscription?.cancel();
     _playerStateSubscription?.cancel();
     _sleepTimer?.cancel();
-    unawaited(_audio.pause());
     super.dispose();
   }
 
@@ -91,8 +89,7 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
       _processingSubscription = _audio.processingStateStream.listen((state) {
         if (!mounted) return;
         if (state == ProcessingState.completed && !_completed) {
-          _completed = true;
-          setState(() {});
+          setState(() => _completed = true);
         }
       });
 
@@ -354,47 +351,35 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
                   children: [
                     OutlinedButton.icon(onPressed: _showSpeedSheet, icon: const Icon(Icons.speed_rounded), label: Text('${_playbackSpeed}x')),
                     OutlinedButton.icon(onPressed: _showSleepSheet, icon: Icon(_sleepRemaining == null ? Icons.bedtime_outlined : Icons.bedtime_rounded), label: Text(_sleepRemaining == null ? 'Sleep timer' : _format(_sleepRemaining!))),
-                    OutlinedButton.icon(onPressed: () => setState(() => _showAdvanced = !_showAdvanced), icon: Icon(_showAdvanced ? Icons.expand_less_rounded : Icons.tune_rounded), label: const Text('More controls')),
-                  ],
-                ),
-                AnimatedCrossFade(
-                  duration: const Duration(milliseconds: 220),
-                  crossFadeState: _showAdvanced ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-                  firstChild: const SizedBox.shrink(),
-                  secondChild: Padding(
-                    padding: const EdgeInsets.only(top: 18),
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Quick actions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(child: FilledButton.tonalIcon(onPressed: () => unawaited(_seekRelative(const Duration(seconds: -30))), icon: const Icon(Icons.replay_rounded), label: const Text('-30s'))),
-                                const SizedBox(width: 10),
-                                Expanded(child: FilledButton.tonalIcon(onPressed: () => unawaited(_seekRelative(const Duration(seconds: 30))), icon: const Icon(Icons.forward_rounded), label: const Text('+30s'))),
-                              ],
-                            ),
-                          ],
-                        ),
+                    if (_sleepRemaining != null)
+                      FilledButton.tonalIcon(
+                        onPressed: () => _setSleepTimer(null),
+                        icon: const Icon(Icons.alarm_off_rounded),
+                        label: const Text('Cancel timer'),
                       ),
-                    ),
-                  ),
+                  ],
                 ),
                 if (_completed) ...[
                   const SizedBox(height: 18),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: scheme.primary.withValues(alpha: .08), borderRadius: BorderRadius.circular(16), border: Border.all(color: scheme.primary.withValues(alpha: .18))),
-                    child: Row(children: [Icon(Icons.check_circle_rounded, color: scheme.primary), const SizedBox(width: 10), Expanded(child: Text('Lecture completed', style: TextStyle(fontWeight: FontWeight.w700, color: scheme.primary)))]),
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(alpha: .08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: scheme.primary.withValues(alpha: .18)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: scheme.primary),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text('Lecture completed', style: TextStyle(fontWeight: FontWeight.w700, color: scheme.primary))),
+                      ],
+                    ),
                   ),
                 ],
                 const SizedBox(height: 18),
-                Text('Background playback is enabled', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+                Text('You can leave this screen and keep listening.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
           ),
