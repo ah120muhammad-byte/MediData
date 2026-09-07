@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/responsive/responsive.dart';
 import '../../services/download_service.dart';
 import '../../services/student_preferences_service.dart';
@@ -13,7 +14,15 @@ class LecturesScreen extends StatefulWidget {
   final String moduleName;
   final VoidCallback onBack;
   final String? initialLectureId;
-  const LecturesScreen({super.key, required this.moduleId, required this.moduleName, required this.onBack, this.initialLectureId});
+
+  const LecturesScreen({
+    super.key,
+    required this.moduleId,
+    required this.moduleName,
+    required this.onBack,
+    this.initialLectureId,
+  });
+
   @override
   State<LecturesScreen> createState() => _LecturesScreenState();
 }
@@ -33,7 +42,9 @@ class _LecturesScreenState extends State<LecturesScreen> {
   Future<List<_Lecture>> _loadLectures() async {
     final lecturesResponse = await _supabase
         .from('lectures')
-        .select('id,module_id,title,description,display_order,is_published,is_active,published_at,created_at')
+        .select(
+          'id,module_id,title,description,display_order,is_published,is_active,lecture_date',
+        )
         .eq('module_id', widget.moduleId)
         .eq('is_active', true)
         .eq('is_published', true)
@@ -54,7 +65,9 @@ class _LecturesScreenState extends State<LecturesScreen> {
 
     final filesResponse = await _supabase
         .from('lecture_files')
-        .select('id,lecture_id,title,file_type,file_url,display_order,is_active,created_at,updated_at')
+        .select(
+          'id,lecture_id,title,file_type,file_url,display_order,is_active,created_at,updated_at',
+        )
         .inFilter('lecture_id', lectureIds)
         .eq('is_active', true)
         .order('display_order', ascending: true);
@@ -65,7 +78,9 @@ class _LecturesScreenState extends State<LecturesScreen> {
 
     final examsResponse = await _supabase
         .from('exams')
-        .select('id,lecture_id,title,description,duration_minutes,passing_score,is_active,created_at,updated_at')
+        .select(
+          'id,lecture_id,title,description,duration_minutes,passing_score,is_active,created_at,updated_at',
+        )
         .inFilter('lecture_id', lectureIds)
         .eq('is_active', true);
 
@@ -88,16 +103,16 @@ class _LecturesScreenState extends State<LecturesScreen> {
       filesByLecture.putIfAbsent(file.lectureId, () => []).add(file);
     }
 
-    final examByLecture = <String, LectureExam>{};
+    final examsByLecture = <String, LectureExam>{};
     for (final exam in exams) {
-      examByLecture.putIfAbsent(exam.lectureId, () => exam);
+      examsByLecture.putIfAbsent(exam.lectureId, () => exam);
     }
 
     return lectures
         .map(
           (lecture) => lecture.copyWith(
-            files: filesByLecture[lecture.id] ?? [],
-            exam: examByLecture[lecture.id],
+            files: filesByLecture[lecture.id] ?? const [],
+            exam: examsByLecture[lecture.id],
           ),
         )
         .toList();
@@ -105,7 +120,9 @@ class _LecturesScreenState extends State<LecturesScreen> {
 
   Future<void> _refresh() async {
     if (!mounted) return;
-    setState(() => _lecturesFuture = _loadLectures());
+    setState(() {
+      _lecturesFuture = _loadLectures();
+    });
     await _lecturesFuture;
   }
 
@@ -143,7 +160,6 @@ class _LecturesScreenState extends State<LecturesScreen> {
       context: context,
       builder: (dialogContext) {
         final theme = Theme.of(dialogContext);
-
         return AlertDialog(
           title: const Text('Start Exam?'),
           content: SingleChildScrollView(
@@ -151,12 +167,18 @@ class _LecturesScreenState extends State<LecturesScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(exam.title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                if (exam.description != null && exam.description!.trim().isNotEmpty) ...[
+                Text(
+                  exam.title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                if (exam.description != null &&
+                    exam.description!.trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(
                     exam.description!.trim(),
-                    style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.65)),
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -165,23 +187,37 @@ class _LecturesScreenState extends State<LecturesScreen> {
                   children: [
                     Icon(Icons.timer_outlined, color: theme.colorScheme.primary),
                     const SizedBox(width: 7),
-                    Expanded(child: Text('Duration: ${exam.durationMinutes} minutes')),
+                    Expanded(
+                      child: Text(
+                        'Duration: ${exam.durationMinutes} minutes',
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.check_circle_outline_rounded, color: theme.colorScheme.primary),
+                    Icon(
+                      Icons.check_circle_outline_rounded,
+                      color: theme.colorScheme.primary,
+                    ),
                     const SizedBox(width: 7),
-                    Expanded(child: Text('Passing score: ${exam.passingScore}%')),
+                    Expanded(
+                      child: Text('Passing score: ${exam.passingScore}%'),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'Once you start the exam, the timer will begin.',
                   style: TextStyle(
-                    fontSize: Responsive.smallTextSize(context, base: 13, min: 11, max: 15),
+                    fontSize: Responsive.smallTextSize(
+                      context,
+                      base: 13,
+                      min: 11,
+                      max: 15,
+                    ),
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.60),
                   ),
                 ),
@@ -219,28 +255,30 @@ class _LecturesScreenState extends State<LecturesScreen> {
 
   Future<void> _openFile(_LectureFile file) async {
     final downloadsService = DownloadsService.instance;
-
     if (!mounted) return;
 
     try {
       ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              duration: const Duration(seconds: 30),
-              content: Row(
-                children: [
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 30),
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text('Opening ${file.title}...')),
-                ],
-              ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Opening ${file.title}...')),
+              ],
             ),
-          );
+          ),
+        );
 
       await downloadsService.openLectureFile(
         id: file.id,
@@ -250,7 +288,6 @@ class _LecturesScreenState extends State<LecturesScreen> {
       );
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
       if (file.fileType.toLowerCase().trim() == 'pdf') {
@@ -258,14 +295,13 @@ class _LecturesScreenState extends State<LecturesScreen> {
       }
     } catch (e) {
       debugPrint('Lecture file open error: $e');
-
       if (!mounted) return;
 
       ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(content: Text('Unable to open ${file.title}.')),
-          );
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Unable to open ${file.title}.')),
+        );
     }
   }
 
@@ -276,16 +312,15 @@ class _LecturesScreenState extends State<LecturesScreen> {
     if (!mounted) return false;
     if (!mobileData) return true;
 
-    final shouldWarn = await StudentPreferencesService.instance.getWifiOnlyDownloads();
+    final shouldWarn =
+        await StudentPreferencesService.instance.getWifiOnlyDownloads();
     if (!shouldWarn) return true;
 
     final theme = Theme.of(context);
-
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         final dialogTheme = Theme.of(dialogContext);
-
         return AlertDialog(
           icon: Icon(
             Icons.signal_cellular_alt_rounded,
@@ -356,7 +391,6 @@ class _LecturesScreenState extends State<LecturesScreen> {
 
     try {
       final existing = await downloadsService.findById(file.id);
-
       if (!mounted) return;
 
       if (existing != null) {
@@ -379,13 +413,11 @@ class _LecturesScreenState extends State<LecturesScreen> {
         );
 
         if (!mounted || shouldOpen != true) return;
-
         await downloadsService.open(existing);
 
         if (file.fileType.toLowerCase().trim() == 'pdf') {
           await _markPdfCompleted(file.lectureId);
         }
-
         return;
       }
 
@@ -393,23 +425,26 @@ class _LecturesScreenState extends State<LecturesScreen> {
       if (!mounted || !canContinue) return;
 
       ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              duration: const Duration(seconds: 30),
-              content: Row(
-                children: [
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 30),
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text('Downloading ${file.title}...')),
-                ],
-              ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Downloading ${file.title}...')),
+              ],
             ),
-          );
+          ),
+        );
 
       final downloaded = await downloadsService.download(
         id: file.id,
@@ -430,30 +465,29 @@ class _LecturesScreenState extends State<LecturesScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text('${downloaded.title} downloaded successfully.'),
-              action: SnackBarAction(
-                label: 'Open',
-                onPressed: () => downloadsService.open(downloaded),
-              ),
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('${downloaded.title} downloaded successfully.'),
+            action: SnackBarAction(
+              label: 'Open',
+              onPressed: () => downloadsService.open(downloaded),
             ),
-          );
+          ),
+        );
 
       if (file.fileType.toLowerCase().trim() == 'pdf') {
         await _markPdfCompleted(file.lectureId);
       }
     } catch (e) {
       debugPrint('Lecture file download error: $e');
-
       if (!mounted) return;
 
       ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(content: Text('Unable to download ${file.title}.')),
-          );
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Unable to download ${file.title}.')),
+        );
     }
   }
 
@@ -508,16 +542,16 @@ class _LecturesScreenState extends State<LecturesScreen> {
       grouped.putIfAbsent(key, () => []).add(lecture);
     }
 
-    final entries = grouped.entries.toList();
-    entries.sort((a, b) {
-      final aDate = _parseGroupKey(a.key);
-      final bDate = _parseGroupKey(b.key);
+    final entries = grouped.entries.toList()
+      ..sort((a, b) {
+        final aDate = _parseGroupKey(a.key);
+        final bDate = _parseGroupKey(b.key);
 
-      if (aDate == null && bDate == null) return 0;
-      if (aDate == null) return 1;
-      if (bDate == null) return -1;
-      return aDate.compareTo(bDate);
-    });
+        if (aDate == null && bDate == null) return 0;
+        if (aDate == null) return 1;
+        if (bDate == null) return -1;
+        return aDate.compareTo(bDate);
+      });
 
     return {
       for (final entry in entries) entry.key: List<_Lecture>.from(entry.value),
@@ -554,12 +588,12 @@ class _LecturesScreenState extends State<LecturesScreen> {
                 return _LectureErrorState(onRetry: _refresh);
               }
 
-              final lectures = snapshot.data ?? [];
+              final lectures = snapshot.data ?? const <_Lecture>[];
               if (lectures.isEmpty) return const _LectureEmptyState();
 
               final grouped = _groupLecturesByDay(lectures);
-              final horizontalPadding = Responsive.horizontalPadding(context);
               final groups = grouped.entries.toList();
+              final horizontal = Responsive.horizontalPadding(context);
 
               return RefreshIndicator(
                 onRefresh: _refresh,
@@ -568,7 +602,7 @@ class _LecturesScreenState extends State<LecturesScreen> {
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: BouncingScrollPhysics(),
                   ),
-                  padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 24),
+                  padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 24),
                   itemCount: groups.fold<int>(
                     0,
                     (total, entry) => total + 1 + entry.value.length,
@@ -590,12 +624,24 @@ class _LecturesScreenState extends State<LecturesScreen> {
                       if (index < cursor + entry.value.length) {
                         final lecture = entry.value[index - cursor];
                         final isExpanded = _expandedLectureId == lecture.id;
+                        final isLastInGroup =
+                            index == cursor + entry.value.length - 1;
 
                         return Padding(
                           padding: EdgeInsets.only(
-                            bottom: index == cursor + entry.value.length - 1
-                                ? Responsive.spacing(context, base: 18, min: 14, max: 24)
-                                : Responsive.spacing(context, base: 10, min: 7, max: 16),
+                            bottom: isLastInGroup
+                                ? Responsive.spacing(
+                                    context,
+                                    base: 18,
+                                    min: 14,
+                                    max: 24,
+                                  )
+                                : Responsive.spacing(
+                                    context,
+                                    base: 10,
+                                    min: 7,
+                                    max: 16,
+                                  ),
                           ),
                           child: LectureCard(
                             title: lecture.title,
@@ -609,7 +655,8 @@ class _LecturesScreenState extends State<LecturesScreen> {
                               final original = lecture.files.firstWhere(
                                 (item) => item.id == file.path,
                               );
-                              final type = original.fileType.toLowerCase().trim();
+                              final type =
+                                  original.fileType.toLowerCase().trim();
 
                               if (type == 'audio') {
                                 Navigator.of(context).push(
@@ -704,8 +751,7 @@ class _Lecture {
   final int displayOrder;
   final bool isPublished;
   final bool isActive;
-  final DateTime? publishedAt;
-  final DateTime? createdAt;
+  final DateTime? lectureDate;
   final List<_LectureFile> files;
   final LectureExam? exam;
 
@@ -717,13 +763,12 @@ class _Lecture {
     required this.displayOrder,
     required this.isPublished,
     required this.isActive,
-    required this.publishedAt,
-    required this.createdAt,
+    required this.lectureDate,
     this.files = const [],
     this.exam,
   });
 
-  DateTime? get scheduleDate => publishedAt ?? createdAt;
+  DateTime? get scheduleDate => lectureDate;
 
   factory _Lecture.fromMap(Map<String, dynamic> map) => _Lecture(
         id: map['id']?.toString() ?? '',
@@ -733,31 +778,28 @@ class _Lecture {
         displayOrder: (map['display_order'] as num?)?.toInt() ?? 0,
         isPublished: map['is_published'] as bool? ?? false,
         isActive: map['is_active'] as bool? ?? true,
-        publishedAt: map['published_at'] != null
-            ? DateTime.tryParse(map['published_at'].toString())
-            : null,
-        createdAt: map['created_at'] != null
-            ? DateTime.tryParse(map['created_at'].toString())
+        lectureDate: map['lecture_date'] != null
+            ? DateTime.tryParse(map['lecture_date'].toString())
             : null,
       );
 
   _Lecture copyWith({
     List<_LectureFile>? files,
     LectureExam? exam,
-  }) =>
-      _Lecture(
-        id: id,
-        moduleId: moduleId,
-        title: title,
-        description: description,
-        displayOrder: displayOrder,
-        isPublished: isPublished,
-        isActive: isActive,
-        publishedAt: publishedAt,
-        createdAt: createdAt,
-        files: files ?? this.files,
-        exam: exam ?? this.exam,
-      );
+  }) {
+    return _Lecture(
+      id: id,
+      moduleId: moduleId,
+      title: title,
+      description: description,
+      displayOrder: displayOrder,
+      isPublished: isPublished,
+      isActive: isActive,
+      lectureDate: lectureDate,
+      files: files ?? this.files,
+      exam: exam ?? this.exam,
+    );
+  }
 }
 
 class _LectureFile {
@@ -824,8 +866,7 @@ class _LectureDayHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
 
     if (date == null) {
       return Padding(
@@ -835,8 +876,8 @@ class _LectureDayHeader extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: scheme.onSurface.withValues(alpha: 0.06),
@@ -870,8 +911,8 @@ class _LectureDayHeader extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: scheme.primary.withValues(alpha: 0.10),
               shape: BoxShape.circle,
