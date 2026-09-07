@@ -171,12 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final trackableLectureIds = <String>{};
         for (final file in files) {
-          final type = file['file_type']
-                  ?.toString()
-                  .toLowerCase()
-                  .trim() ??
-              '';
-
+          final type = file['file_type']?.toString().toLowerCase().trim() ?? '';
           if (type == 'audio' || type == 'video') {
             final lectureId = file['lecture_id']?.toString();
             if (lectureId != null && lectureId.isNotEmpty) {
@@ -198,16 +193,21 @@ class _HomeScreenState extends State<HomeScreen> {
               .eq('user_id', user.id)
               .inFilter('lecture_id', trackableLectureIds.toList());
 
+          final completedLectureIds = <String>{};
           for (final item in (progressResponse as List)) {
             final map = Map<String, dynamic>.from(item);
+            final lectureId = map['lecture_id']?.toString();
             final audioCompleted = map['audio_completed'] as bool? ?? false;
             final videoCompleted = map['video_completed'] as bool? ?? false;
 
-            if (audioCompleted || videoCompleted) {
-              completedLectures++;
+            if (lectureId != null &&
+                lectureId.isNotEmpty &&
+                (audioCompleted || videoCompleted)) {
+              completedLectureIds.add(lectureId);
             }
           }
 
+          completedLectures = completedLectureIds.length;
           if (completedLectures > totalTrackableLectures) {
             completedLectures = totalTrackableLectures;
           }
@@ -230,11 +230,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refresh() async {
     if (!mounted) return;
-
     setState(() {
       _homeFuture = _loadHomeData();
     });
-
     await _homeFuture;
   }
 
@@ -265,24 +263,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 final horizontalPadding = Responsive.horizontalPadding(context);
                 final topPadding = Responsive.spacing(
                   context,
-                  base: 24,
-                  min: 16,
-                  max: 36,
+                  base: 8,
+                  min: 6,
+                  max: 12,
                 );
-
                 const bottomPadding = 24.0;
-
                 final sectionGap = Responsive.spacing(
                   context,
-                  base: 28,
-                  min: 20,
-                  max: 40,
+                  base: 24,
+                  min: 18,
+                  max: 32,
                 );
                 final titleGap = Responsive.spacing(
                   context,
-                  base: 12,
+                  base: 10,
                   min: 8,
-                  max: 18,
+                  max: 14,
                 );
 
                 return RefreshIndicator(
@@ -385,7 +381,6 @@ class _ModuleHomeData {
 
 class _SectionTitle extends StatelessWidget {
   final String title;
-
   const _SectionTitle({required this.title});
 
   @override
@@ -394,12 +389,7 @@ class _SectionTitle extends StatelessWidget {
     return Text(
       title,
       style: TextStyle(
-        fontSize: Responsive.titleSize(
-          context,
-          base: 22,
-          min: 19,
-          max: 30,
-        ),
+        fontSize: Responsive.titleSize(context, base: 22, min: 19, max: 30),
         fontWeight: FontWeight.bold,
         color: theme.colorScheme.onSurface,
       ),
@@ -410,11 +400,7 @@ class _SectionTitle extends StatelessWidget {
 class _LatestLectureCard extends StatelessWidget {
   final _LectureHomeData? lecture;
   final VoidCallback? onTap;
-
-  const _LatestLectureCard({
-    required this.lecture,
-    required this.onTap,
-  });
+  const _LatestLectureCard({required this.lecture, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -443,9 +429,7 @@ class _LatestLectureCard extends StatelessWidget {
         onTap: onTap,
         child: Ink(
           width: double.infinity,
-          padding: EdgeInsets.all(
-            Responsive.spacing(context, base: 20, min: 16, max: 26),
-          ),
+          padding: EdgeInsets.all(Responsive.spacing(context, base: 20, min: 16, max: 26)),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -460,52 +444,22 @@ class _LatestLectureCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                lecture!.moduleName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black.withValues(alpha: 0.65),
-                ),
-              ),
+              Text(lecture!.moduleName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black.withValues(alpha: 0.65))),
               const SizedBox(height: 8),
-              Text(
-                lecture!.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
+              Text(lecture!.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
               if ((lecture!.description ?? '').trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text(
-                  lecture!.description!,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.4,
-                    color: Colors.black.withValues(alpha: 0.72),
-                  ),
-                ),
+                Text(lecture!.description!, maxLines: 3, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, height: 1.4, color: Colors.black.withValues(alpha: 0.72))),
               ],
               const SizedBox(height: 16),
               Row(
                 children: [
                   const Icon(Icons.play_circle_fill_rounded, size: 22),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Open lecture',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black,
-                    ),
-                  ),
+                  const Text('Open lecture', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black)),
                   const Spacer(),
                   const Icon(Icons.arrow_forward_rounded),
                 ],
@@ -556,9 +510,7 @@ class _YourModuleCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(
-        Responsive.spacing(context, base: 20, min: 16, max: 26),
-      ),
+      padding: EdgeInsets.all(Responsive.spacing(context, base: 20, min: 16, max: 26)),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(radius),
@@ -567,27 +519,12 @@ class _YourModuleCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            module!.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(module!.name, maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           if ((module!.description ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(
-              module!.description!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.4,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
+            Text(module!.description!, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 14, height: 1.4, color: theme.colorScheme.onSurfaceVariant)),
           ],
           const SizedBox(height: 18),
           Row(
@@ -595,28 +532,27 @@ class _YourModuleCard extends StatelessWidget {
               Expanded(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    value: progress.clamp(0.0, 1.0),
-                    minHeight: 9,
-                  ),
+                  child: LinearProgressIndicator(value: progress.clamp(0.0, 1.0), minHeight: 9),
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                '$percentage%',
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
+              Text('$percentage%', style: const TextStyle(fontWeight: FontWeight.w800)),
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            totalTrackableLectures > 0
-                ? '$completedLectures of $totalTrackableLectures lectures completed'
-                : 'No trackable lectures yet',
-            style: TextStyle(
-              fontSize: 13,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+          Row(
+            children: [
+              Icon(Icons.menu_book_outlined, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  totalTrackableLectures > 0
+                      ? '$completedLectures of $totalTrackableLectures lectures completed'
+                      : 'No trackable lectures yet',
+                  style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -626,7 +562,6 @@ class _YourModuleCard extends StatelessWidget {
 
 class _HomeErrorState extends StatelessWidget {
   final Future<void> Function() onRetry;
-
   const _HomeErrorState({required this.onRetry});
 
   @override
@@ -638,22 +573,12 @@ class _HomeErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.error_outline_rounded,
-              size: 42,
-              color: theme.colorScheme.error,
-            ),
+            Icon(Icons.error_outline_rounded, size: 42, color: theme.colorScheme.error),
             const SizedBox(height: 12),
-            Text(
-              'Something went wrong while loading Home.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-            ),
+            Text('Something went wrong while loading Home.', textAlign: TextAlign.center,
+                style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
             const SizedBox(height: 16),
-            FilledButton(
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
+            FilledButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),
