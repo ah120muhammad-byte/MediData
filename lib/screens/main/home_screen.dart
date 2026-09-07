@@ -524,7 +524,6 @@ class _YourModuleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final radius = Responsive.cardRadius(context);
     final safeProgress = progress.clamp(0.0, 1.0);
     final percentage = (safeProgress * 100).round();
 
