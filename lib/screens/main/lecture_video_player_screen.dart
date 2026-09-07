@@ -171,7 +171,7 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
 
     final value = controller.value;
     if (value.hasError) {
-      if (mounted) {
+      if (mounted && _error == null) {
         setState(() => _error = 'Unable to play this video.');
       }
       return;
@@ -183,8 +183,6 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
       _completed = true;
       unawaited(_handleCompleted());
     }
-
-    if (mounted) setState(() {});
   }
 
   Future<void> _handleCompleted() async {
@@ -193,6 +191,7 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
       await _progressService.markVideoCompleted(widget.lectureId);
       _studyTracker.markVideoCompleted();
       await _studyTracker.flush();
+      if (mounted) setState(() {});
     } catch (e) {
       debugPrint('Video completion error: $e');
     }
@@ -339,9 +338,9 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.video_library_outlined, size: 64, color: Colors.white70),
+            const Icon(Icons.video_library_outlined, size: 64, color: Colors.white70),
             const SizedBox(height: 16),
-            const Text('Unable to play this video.', style: TextStyle(color: Colors.white, fontSize: 16)),
+            Text(_error ?? 'Unable to play this video.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
             const SizedBox(height: 18),
             FilledButton.icon(onPressed: _initializeVideo, icon: const Icon(Icons.refresh_rounded), label: const Text('Retry')),
           ],
@@ -351,8 +350,7 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   }
 
   Widget _buildVideo(BuildContext context, VideoPlayerController controller) {
-    final value = controller.value;
-    final aspect = value.aspectRatio > 0 ? value.aspectRatio : 16 / 9;
+    final aspect = controller.value.aspectRatio > 0 ? controller.value.aspectRatio : 16 / 9;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -362,36 +360,37 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
         final isLeft = details.localPosition.dx < width / 2;
         unawaited(_seekRelative(Duration(seconds: isLeft ? -10 : 10)));
       },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Center(child: AspectRatio(aspectRatio: aspect, child: VideoPlayer(controller))),
-          if (value.isBuffering)
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(16),
+      child: ValueListenableBuilder<VideoPlayerValue>(
+        valueListenable: controller,
+        builder: (context, value, _) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Center(child: AspectRatio(aspectRatio: aspect, child: VideoPlayer(controller))),
+              if (value.isBuffering)
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(16)),
+                    child: const CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+                  ),
                 ),
-                child: const CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+              AnimatedOpacity(
+                opacity: _showControls ? 1 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: IgnorePointer(
+                  ignoring: !_showControls,
+                  child: _buildControls(context, controller, value),
+                ),
               ),
-            ),
-          AnimatedOpacity(
-            opacity: _showControls ? 1 : 0,
-            duration: const Duration(milliseconds: 180),
-            child: IgnorePointer(
-              ignoring: !_showControls,
-              child: _buildControls(context, controller),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildControls(BuildContext context, VideoPlayerController controller) {
-    final value = controller.value;
+  Widget _buildControls(BuildContext context, VideoPlayerController controller, VideoPlayerValue value) {
     final scheme = Theme.of(context).colorScheme;
     final horizontal = Responsive.spacing(context, base: 14, min: 10, max: 24);
     final playSize = Responsive.clamped(context, base: 72, min: 60, max: 90);
@@ -412,20 +411,8 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
               padding: EdgeInsets.symmetric(horizontal: horizontal),
               child: Row(
                 children: [
-                  if (_fullscreen)
-                    IconButton(
-                      onPressed: _toggleFullscreen,
-                      color: Colors.white,
-                      icon: const Icon(Icons.arrow_back_rounded),
-                    ),
-                  Expanded(
-                    child: Text(
-                      widget.fileTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                    ),
-                  ),
+                  if (_fullscreen) IconButton(onPressed: _toggleFullscreen, color: Colors.white, icon: const Icon(Icons.arrow_back_rounded)),
+                  Expanded(child: Text(widget.fileTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))),
                   PopupMenuButton<double>(
                     icon: const Icon(Icons.speed_rounded, color: Colors.white),
                     initialValue: _playbackSpeed,
@@ -439,16 +426,8 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
                       PopupMenuItem(value: 2, child: Text('2.0x')),
                     ],
                   ),
-                  IconButton(
-                    onPressed: _toggleMute,
-                    color: Colors.white,
-                    icon: Icon(_muted ? Icons.volume_off_rounded : Icons.volume_up_rounded),
-                  ),
-                  IconButton(
-                    onPressed: _toggleFullscreen,
-                    color: Colors.white,
-                    icon: Icon(_fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded),
-                  ),
+                  IconButton(onPressed: _toggleMute, color: Colors.white, icon: Icon(_muted ? Icons.volume_off_rounded : Icons.volume_up_rounded)),
+                  IconButton(onPressed: _toggleFullscreen, color: Colors.white, icon: Icon(_fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded)),
                 ],
               ),
             ),
@@ -456,11 +435,7 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                IconButton(
-                  onPressed: () => unawaited(_seekRelative(const Duration(seconds: -10))),
-                  color: Colors.white,
-                  icon: const Icon(Icons.replay_10_rounded, size: 38),
-                ),
+                IconButton(onPressed: () => unawaited(_seekRelative(const Duration(seconds: -10))), color: Colors.white, icon: const Icon(Icons.replay_10_rounded, size: 38)),
                 SizedBox(width: Responsive.spacing(context, base: 16, min: 10, max: 26)),
                 SizedBox(
                   width: playSize,
@@ -476,11 +451,7 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
                   ),
                 ),
                 SizedBox(width: Responsive.spacing(context, base: 16, min: 10, max: 26)),
-                IconButton(
-                  onPressed: () => unawaited(_seekRelative(const Duration(seconds: 10))),
-                  color: Colors.white,
-                  icon: const Icon(Icons.forward_10_rounded, size: 38),
-                ),
+                IconButton(onPressed: () => unawaited(_seekRelative(const Duration(seconds: 10))), color: Colors.white, icon: const Icon(Icons.forward_10_rounded, size: 38)),
               ],
             ),
             const Spacer(),
@@ -492,20 +463,12 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
                   const SizedBox(width: 6),
                   Expanded(
                     child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: AppColors.gold,
-                        thumbColor: AppColors.gold,
-                        inactiveTrackColor: Colors.white30,
-                        trackHeight: 4,
-                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                      ),
+                      data: SliderTheme.of(context).copyWith(activeTrackColor: AppColors.gold, thumbColor: AppColors.gold, inactiveTrackColor: Colors.white30, trackHeight: 4),
                       child: Slider(
                         min: 0,
                         max: value.duration.inMilliseconds.toDouble() > 0 ? value.duration.inMilliseconds.toDouble() : 1,
                         value: value.position.inMilliseconds.clamp(0, value.duration.inMilliseconds).toDouble(),
-                        onChanged: value.duration > Duration.zero
-                            ? (position) => unawaited(controller.seekTo(Duration(milliseconds: position.round())))
-                            : null,
+                        onChanged: value.duration > Duration.zero ? (position) => unawaited(controller.seekTo(Duration(milliseconds: position.round()))) : null,
                       ),
                     ),
                   ),
