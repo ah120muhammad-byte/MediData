@@ -533,11 +533,13 @@ class _LecturesScreenState extends State<LecturesScreen> {
     );
   }
 
-  Map<String, List<_Lecture>> _groupLecturesByDay(List<_Lecture> lectures) {
+  Map<String, List<_Lecture>> _groupLecturesByDay(
+    List<_Lecture> lectures,
+  ) {
     final grouped = <String, List<_Lecture>>{};
 
     for (final lecture in lectures) {
-      final date = lecture.scheduleDate;
+      final date = lecture.lectureDate;
       final key = date == null ? 'undated' : _dateKey(date);
       grouped.putIfAbsent(key, () => []).add(lecture);
     }
@@ -554,7 +556,8 @@ class _LecturesScreenState extends State<LecturesScreen> {
       });
 
     return {
-      for (final entry in entries) entry.key: List<_Lecture>.from(entry.value),
+      for (final entry in entries)
+        entry.key: List<_Lecture>.from(entry.value),
     };
   }
 
@@ -592,118 +595,114 @@ class _LecturesScreenState extends State<LecturesScreen> {
               if (lectures.isEmpty) return const _LectureEmptyState();
 
               final grouped = _groupLecturesByDay(lectures);
-              final groups = grouped.entries.toList();
               final horizontal = Responsive.horizontalPadding(context);
+              final children = <Widget>[];
+
+              for (final entry in grouped.entries) {
+                final date = entry.key == 'undated'
+                    ? null
+                    : _parseGroupKey(entry.key);
+
+                children.add(
+                  _LectureDayHeader(date: date),
+                );
+
+                for (var i = 0; i < entry.value.length; i++) {
+                  final lecture = entry.value[i];
+                  final isExpanded = _expandedLectureId == lecture.id;
+                  final isLastInGroup = i == entry.value.length - 1;
+
+                  children.add(
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: isLastInGroup
+                            ? Responsive.spacing(
+                                context,
+                                base: 18,
+                                min: 14,
+                                max: 24,
+                              )
+                            : Responsive.spacing(
+                                context,
+                                base: 10,
+                                min: 7,
+                                max: 16,
+                              ),
+                      ),
+                      child: LectureCard(
+                        title: lecture.title,
+                        description: lecture.description,
+                        files: lecture.files.map(_toLectureFile).toList(),
+                        exam: lecture.exam,
+                        isTablet: Responsive.isTablet(context),
+                        expanded: isExpanded,
+                        onTap: () => _toggleLecture(lecture.id),
+                        onFileOpen: (file) {
+                          final original = lecture.files.firstWhere(
+                            (item) => item.id == file.path,
+                          );
+                          final type =
+                              original.fileType.toLowerCase().trim();
+
+                          if (type == 'audio') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => LectureAudioPlayerScreen(
+                                  lectureId: lecture.id,
+                                  lectureTitle: lecture.title,
+                                  fileId: original.id,
+                                  fileTitle: original.title,
+                                  fileUrl: original.fileUrl,
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (type == 'video') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => LectureVideoPlayerScreen(
+                                  lectureId: lecture.id,
+                                  lectureTitle: lecture.title,
+                                  fileId: original.id,
+                                  fileTitle: original.title,
+                                  fileUrl: original.fileUrl,
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          _openFile(original);
+                        },
+                        onFileDownload: (file) {
+                          final original = lecture.files.firstWhere(
+                            (item) => item.id == file.path,
+                          );
+                          _downloadFile(lecture, original);
+                        },
+                        onStartExam: () => _confirmStartExam(lecture),
+                      ),
+                    ),
+                  );
+                }
+              }
 
               return RefreshIndicator(
                 onRefresh: _refresh,
                 color: Theme.of(context).colorScheme.primary,
-                child: ListView.builder(
+                child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: BouncingScrollPhysics(),
                   ),
-                  padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 24),
-                  itemCount: groups.fold<int>(
-                    0,
-                    (total, entry) => total + 1 + entry.value.length,
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    12,
+                    horizontal,
+                    24,
                   ),
-                  itemBuilder: (context, index) {
-                    var cursor = 0;
-
-                    for (final entry in groups) {
-                      if (index == cursor) {
-                        return _LectureDayHeader(
-                          date: entry.key == 'undated'
-                              ? null
-                              : _parseGroupKey(entry.key),
-                        );
-                      }
-
-                      cursor++;
-
-                      if (index < cursor + entry.value.length) {
-                        final lecture = entry.value[index - cursor];
-                        final isExpanded = _expandedLectureId == lecture.id;
-                        final isLastInGroup =
-                            index == cursor + entry.value.length - 1;
-
-                        return Padding(
-                          padding: EdgeInsets.only(
-                            bottom: isLastInGroup
-                                ? Responsive.spacing(
-                                    context,
-                                    base: 18,
-                                    min: 14,
-                                    max: 24,
-                                  )
-                                : Responsive.spacing(
-                                    context,
-                                    base: 10,
-                                    min: 7,
-                                    max: 16,
-                                  ),
-                          ),
-                          child: LectureCard(
-                            title: lecture.title,
-                            description: lecture.description,
-                            files: lecture.files.map(_toLectureFile).toList(),
-                            exam: lecture.exam,
-                            isTablet: Responsive.isTablet(context),
-                            expanded: isExpanded,
-                            onTap: () => _toggleLecture(lecture.id),
-                            onFileOpen: (file) {
-                              final original = lecture.files.firstWhere(
-                                (item) => item.id == file.path,
-                              );
-                              final type =
-                                  original.fileType.toLowerCase().trim();
-
-                              if (type == 'audio') {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => LectureAudioPlayerScreen(
-                                      lectureId: lecture.id,
-                                      lectureTitle: lecture.title,
-                                      fileId: original.id,
-                                      fileTitle: original.title,
-                                      fileUrl: original.fileUrl,
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              if (type == 'video') {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => LectureVideoPlayerScreen(
-                                      lectureId: lecture.id,
-                                      lectureTitle: lecture.title,
-                                      fileId: original.id,
-                                      fileTitle: original.title,
-                                      fileUrl: original.fileUrl,
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              _openFile(original);
-                            },
-                            onFileDownload: (file) {
-                              final original = lecture.files.firstWhere(
-                                (item) => item.id == file.path,
-                              );
-                              _downloadFile(lecture, original);
-                            },
-                            onStartExam: () => _confirmStartExam(lecture),
-                          ),
-                        );
-                      }
-                    }
-
-                    return const SizedBox.shrink();
-                  },
+                  children: children,
                 ),
               );
             },
@@ -768,8 +767,6 @@ class _Lecture {
     this.exam,
   });
 
-  DateTime? get scheduleDate => lectureDate;
-
   factory _Lecture.fromMap(Map<String, dynamic> map) => _Lecture(
         id: map['id']?.toString() ?? '',
         moduleId: map['module_id']?.toString() ?? '',
@@ -786,20 +783,19 @@ class _Lecture {
   _Lecture copyWith({
     List<_LectureFile>? files,
     LectureExam? exam,
-  }) {
-    return _Lecture(
-      id: id,
-      moduleId: moduleId,
-      title: title,
-      description: description,
-      displayOrder: displayOrder,
-      isPublished: isPublished,
-      isActive: isActive,
-      lectureDate: lectureDate,
-      files: files ?? this.files,
-      exam: exam ?? this.exam,
-    );
-  }
+  }) =>
+      _Lecture(
+        id: id,
+        moduleId: moduleId,
+        title: title,
+        description: description,
+        displayOrder: displayOrder,
+        isPublished: isPublished,
+        isActive: isActive,
+        lectureDate: lectureDate,
+        files: files ?? this.files,
+        exam: exam ?? this.exam,
+      );
 }
 
 class _LectureFile {
@@ -845,7 +841,9 @@ class _LectureFile {
 class _LectureDayHeader extends StatelessWidget {
   final DateTime? date;
 
-  const _LectureDayHeader({required this.date});
+  const _LectureDayHeader({
+    required this.date,
+  });
 
   String _weekday(DateTime date) {
     const days = <String>[
@@ -860,35 +858,30 @@ class _LectureDayHeader extends StatelessWidget {
     return days[date.weekday - 1];
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     if (date == null) {
       return Padding(
         padding: EdgeInsets.only(
-          bottom: Responsive.spacing(context, base: 10, min: 8, max: 14),
+          top: 4,
+          bottom: Responsive.spacing(
+            context,
+            base: 10,
+            min: 8,
+            max: 14,
+          ),
         ),
         child: Row(
           children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: scheme.onSurface.withValues(alpha: 0.06),
-              ),
-              child: Icon(
-                Icons.event_busy_rounded,
-                size: 19,
-                color: scheme.onSurface.withValues(alpha: 0.55),
-              ),
+            Icon(
+              Icons.event_busy_rounded,
+              size: 20,
+              color: scheme.onSurface.withValues(alpha: 0.52),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Text(
               'Date not available',
               style: TextStyle(
@@ -902,17 +895,24 @@ class _LectureDayHeader extends StatelessWidget {
     }
 
     final localDate = date!.toLocal();
+    final dateText =
+        '${localDate.day}/${localDate.month}/${localDate.year}';
 
     return Padding(
       padding: EdgeInsets.only(
-        top: 2,
-        bottom: Responsive.spacing(context, base: 10, min: 8, max: 14),
+        top: 4,
+        bottom: Responsive.spacing(
+          context,
+          base: 10,
+          min: 8,
+          max: 14,
+        ),
       ),
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
               color: scheme.primary.withValues(alpha: 0.10),
               shape: BoxShape.circle,
@@ -943,7 +943,7 @@ class _LectureDayHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  _formatDate(localDate),
+                  dateText,
                   style: TextStyle(
                     fontSize: Responsive.titleSize(
                       context,
@@ -958,7 +958,10 @@ class _LectureDayHeader extends StatelessWidget {
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 6,
+            ),
             decoration: BoxDecoration(
               color: scheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(999),
@@ -1048,7 +1051,9 @@ class _LectureEmptyState extends StatelessWidget {
 class _LectureErrorState extends StatelessWidget {
   final Future<void> Function() onRetry;
 
-  const _LectureErrorState({required this.onRetry});
+  const _LectureErrorState({
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
