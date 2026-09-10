@@ -775,7 +775,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       : MarkdownBody(
                           data: content,
                           selectable: true,
-                          styleSheet: const MarkdownStyleSheet(
+                          styleSheet: MarkdownStyleSheet(
                             p: TextStyle(fontSize: 15, height: 1.6),
                             h1: TextStyle(
                               fontSize: 24,
