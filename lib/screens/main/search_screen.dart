@@ -7,14 +7,15 @@ import '../../core/responsive/responsive.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/global_search_service.dart';
 import '../../widgets/module_card.dart';
-import 'lectures_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   final Future<void> Function(String lectureId)? onOpenLecture;
+  final Future<void> Function(String moduleId)? onOpenModule;
 
   const SearchScreen({
     super.key,
     this.onOpenLecture,
+    this.onOpenModule,
   });
 
   @override
@@ -51,8 +52,8 @@ class _SearchScreenState extends State<SearchScreen> {
   void _onSearchChanged(String value) {
     _debounce?.cancel();
     final query = value.trim();
-
     if (!mounted) return;
+
     setState(() {
       _query = query;
       _error = null;
@@ -129,10 +130,7 @@ class _SearchScreenState extends State<SearchScreen> {
       case SearchResultType.lecture:
         final lectureId = result.lectureId?.trim();
         final callback = widget.onOpenLecture;
-
-        if (lectureId == null || lectureId.isEmpty || callback == null) {
-          return;
-        }
+        if (lectureId == null || lectureId.isEmpty || callback == null) return;
 
         await callback(lectureId);
         if (mounted) Navigator.of(context).pop();
@@ -140,38 +138,30 @@ class _SearchScreenState extends State<SearchScreen> {
 
       case SearchResultType.module:
         final moduleId = result.moduleId?.trim();
-        if (moduleId == null || moduleId.isEmpty) return;
+        final callback = widget.onOpenModule;
+        if (moduleId == null || moduleId.isEmpty || callback == null) return;
 
-        final navigator = Navigator.of(context);
-        navigator.push(
-          MaterialPageRoute(
-            builder: (_) => LecturesScreen(
-              moduleId: moduleId,
-              moduleName: result.moduleName?.trim().isNotEmpty == true
-                  ? result.moduleName!.trim()
-                  : result.title,
-              onBack: () => navigator.pop(),
-            ),
-          ),
-        );
+        await callback(moduleId);
+        if (mounted) Navigator.of(context).pop();
         return;
 
       case SearchResultType.level:
         final levelId = result.levelId?.trim();
         if (levelId == null || levelId.isEmpty) return;
 
-        final navigator = Navigator.of(context);
-        navigator.push(
+        await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => _SearchLevelModulesScreen(
               levelId: levelId,
               levelName: result.levelName?.trim().isNotEmpty == true
                   ? result.levelName!.trim()
                   : result.title,
-              onBack: () => navigator.pop(),
+              onOpenModule: widget.onOpenModule,
             ),
           ),
         );
+
+        if (mounted) Navigator.of(context).pop();
         return;
     }
   }
@@ -220,8 +210,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final isWide = Responsive.width(context) >= 700;
 
     return Scaffold(
@@ -236,9 +225,7 @@ class _SearchScreenState extends State<SearchScreen> {
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHighest.withValues(alpha: .72),
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: colorScheme.outline.withValues(alpha: .10),
-            ),
+            border: Border.all(color: colorScheme.outline.withValues(alpha: .10)),
           ),
           child: TextField(
             controller: _controller,
@@ -267,9 +254,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildBody(BuildContext context, bool isWide) {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_loading) return const Center(child: CircularProgressIndicator());
 
     if (_error != null) {
       return Center(
@@ -281,9 +266,7 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
 
-    if (_query.isEmpty) {
-      return const _SearchEmptyState();
-    }
+    if (_query.isEmpty) return const _SearchEmptyState();
 
     if (_results.isEmpty) {
       return Center(
@@ -292,12 +275,7 @@ class _SearchScreenState extends State<SearchScreen> {
           child: Text(
             'No results found for “$_query”.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: .60),
-            ),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .60)),
           ),
         ),
       );
@@ -307,15 +285,9 @@ class _SearchScreenState extends State<SearchScreen> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1100),
         child: ListView.separated(
-          keyboardDismissBehavior:
-              ScrollViewKeyboardDismissBehavior.onDrag,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
-            isWide ? 28 : 16,
-            isWide ? 24 : 16,
-            isWide ? 28 : 16,
-            24,
-          ),
+          padding: EdgeInsets.fromLTRB(isWide ? 28 : 16, isWide ? 24 : 16, isWide ? 28 : 16, 24),
           itemCount: _results.length,
           separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
@@ -361,9 +333,7 @@ class _SearchResultCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: EdgeInsets.all(
-            Responsive.clamped(context, base: 13, min: 11, max: 18),
-          ),
+          padding: EdgeInsets.all(Responsive.clamped(context, base: 13, min: 11, max: 18)),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -389,33 +359,21 @@ class _SearchResultCard extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: Responsive.bodyTextSize(
-                                context,
-                                base: 16,
-                                min: 14,
-                                max: 19,
-                              ),
+                              fontSize: Responsive.bodyTextSize(context, base: 16, min: 14, max: 19),
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: scheme.primary.withValues(alpha: .08),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             typeLabel,
-                            style: TextStyle(
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w700,
-                              color: scheme.primary,
-                            ),
+                            style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: scheme.primary),
                           ),
                         ),
                       ],
@@ -426,12 +384,7 @@ class _SearchResultCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: Responsive.smallTextSize(
-                          context,
-                          base: 12,
-                          min: 10.5,
-                          max: 14,
-                        ),
+                        fontSize: Responsive.smallTextSize(context, base: 12, min: 10.5, max: 14),
                         color: scheme.onSurface.withValues(alpha: .58),
                       ),
                     ),
@@ -442,12 +395,7 @@ class _SearchResultCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: Responsive.smallTextSize(
-                            context,
-                            base: 11.5,
-                            min: 10,
-                            max: 13.5,
-                          ),
+                          fontSize: Responsive.smallTextSize(context, base: 11.5, min: 10, max: 13.5),
                           color: scheme.onSurface.withValues(alpha: .46),
                         ),
                       ),
@@ -482,29 +430,16 @@ class _SearchEmptyState extends StatelessWidget {
             Container(
               width: 82,
               height: 82,
-              decoration: BoxDecoration(
-                color: scheme.primary.withValues(alpha: .08),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.search_rounded,
-                size: 42,
-                color: scheme.primary.withValues(alpha: .65),
-              ),
+              decoration: BoxDecoration(color: scheme.primary.withValues(alpha: .08), shape: BoxShape.circle),
+              child: Icon(Icons.search_rounded, size: 42, color: scheme.primary.withValues(alpha: .65)),
             ),
             const SizedBox(height: 18),
-            const Text(
-              'Search MediData',
-              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
-            ),
+            const Text('Search MediData', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             Text(
               'Find academic levels, modules and lectures quickly.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: scheme.onSurface.withValues(alpha: .55),
-                height: 1.45,
-              ),
+              style: TextStyle(color: scheme.onSurface.withValues(alpha: .55), height: 1.45),
             ),
           ],
         ),
@@ -516,17 +451,16 @@ class _SearchEmptyState extends StatelessWidget {
 class _SearchLevelModulesScreen extends StatefulWidget {
   final String levelId;
   final String levelName;
-  final VoidCallback onBack;
+  final Future<void> Function(String moduleId)? onOpenModule;
 
   const _SearchLevelModulesScreen({
     required this.levelId,
     required this.levelName,
-    required this.onBack,
+    required this.onOpenModule,
   });
 
   @override
-  State<_SearchLevelModulesScreen> createState() =>
-      _SearchLevelModulesScreenState();
+  State<_SearchLevelModulesScreen> createState() => _SearchLevelModulesScreenState();
 }
 
 class _SearchLevelModulesScreenState extends State<_SearchLevelModulesScreen> {
@@ -542,9 +476,7 @@ class _SearchLevelModulesScreenState extends State<_SearchLevelModulesScreen> {
   Future<List<_SearchModule>> _loadModules() async {
     final response = await _supabase
         .from('modules')
-        .select(
-          'id,academic_level_id,name,description,image_url,display_order,is_active',
-        )
+        .select('id,academic_level_id,name,description,image_url,display_order,is_active')
         .eq('academic_level_id', widget.levelId)
         .eq('is_active', true)
         .order('display_order', ascending: true);
@@ -589,15 +521,11 @@ class _SearchLevelModulesScreenState extends State<_SearchLevelModulesScreen> {
     await _markModuleCurrent(module);
     if (!mounted) return;
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => LecturesScreen(
-          moduleId: module.id,
-          moduleName: module.name,
-          onBack: widget.onBack,
-        ),
-      ),
-    );
+    final callback = widget.onOpenModule;
+    if (callback == null || module.id.trim().isEmpty) return;
+
+    await callback(module.id.trim());
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -610,7 +538,7 @@ class _SearchLevelModulesScreenState extends State<_SearchLevelModulesScreen> {
         title: Text(widget.levelName),
         leading: IconButton(
           tooltip: 'Back',
-          onPressed: widget.onBack,
+          onPressed: () => Navigator.of(context).pop(),
           icon: const Icon(Icons.arrow_back_rounded),
         ),
       ),
@@ -638,9 +566,7 @@ class _SearchLevelModulesScreenState extends State<_SearchLevelModulesScreen> {
             return Center(
               child: Text(
                 'No modules available for this level.',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: .60),
-                ),
+                style: TextStyle(color: scheme.onSurface.withValues(alpha: .60)),
               ),
             );
           }
@@ -652,9 +578,7 @@ class _SearchLevelModulesScreenState extends State<_SearchLevelModulesScreen> {
               await _future;
             },
             child: ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
-              ),
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 24),
               itemCount: modules.length,
               separatorBuilder: (_, _) => const SizedBox(height: 12),
