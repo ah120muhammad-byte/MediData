@@ -5,6 +5,7 @@ import '../../core/responsive/responsive.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/student_preferences_service.dart';
 import '../../services/student_profile_service.dart';
+import '../../services/theme_mode_service.dart';
 import 'contact_support_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -518,589 +519,42 @@ class _OverviewGrid extends StatelessWidget {
     final width = Responsive.width(context);
     final padding = Responsive.horizontalPadding(context);
     final available = width - (padding * 2);
-    final columns = available >= 960
-        ? 4
-        : available >= 600
-            ? 3
-            : available >= 420
-                ? 2
-                : 1;
-    final spacing = Responsive.spacing(context, base: 8, min: 6, max: 12);
-    final itemWidth = (available - spacing * (columns - 1)) / columns;
-    final itemHeight = columns == 1
-        ? 70.0
-        : Responsive.clamped(context, base: 90, min: 80, max: 102);
-
-    final cards = <Widget>[
-      _StatCard('Lectures Opened', analytics.lecturesOpened, Icons.menu_book_rounded),
-      _StatCard('Audio Completed', analytics.audioCompleted, Icons.audio_file_rounded),
-      _StatCard('Video Completed', analytics.videoCompleted, Icons.video_file_rounded),
-      _StatCard('Exam Attempts', analytics.examAttempts, Icons.quiz_rounded),
-      _StatCard('Average Score', '${analytics.averageScore.toStringAsFixed(0)}%', Icons.analytics_rounded),
-      _StatCard('Best Score', '${analytics.bestScore.toStringAsFixed(0)}%', Icons.emoji_events_rounded),
-      _StatCard('Passed Exams', analytics.passedExams, Icons.check_circle_rounded),
-      _StatCard('Success Rate', '${analytics.successRate.toStringAsFixed(0)}%', Icons.trending_up_rounded),
-      _StatCard('Study Time', analytics.formattedStudyTime, Icons.timer_outlined),
+    final columns = available >= 900 ? 4 : available >= 560 ? 2 : 1;
+    final spacing = Responsive.spacing(context, base: 10, min: 8, max: 14);
+    final cards = [
+      _StatCard(
+        title: 'Study Hours',
+        value: '${analytics.totalStudyHours}',
+        icon: Icons.timer_outlined,
+      ),
+      _StatCard(
+        title: 'Lectures',
+        value: '${analytics.totalLecturesCompleted}',
+        icon: Icons.menu_book_rounded,
+      ),
+      _StatCard(
+        title: 'Exams',
+        value: '${analytics.totalExamsCompleted}',
+        icon: Icons.quiz_rounded,
+      ),
+      _StatCard(
+        title: 'Average Score',
+        value: '${analytics.averageExamScore.toStringAsFixed(0)}%',
+        icon: Icons.trending_up_rounded,
+      ),
     ];
 
-    return Wrap(
-      spacing: spacing,
-      runSpacing: spacing,
-      children: cards
-          .map((card) => SizedBox(width: itemWidth, height: itemHeight, child: card))
-          .toList(),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String title;
-  final dynamic value;
-  final IconData icon;
-
-  const _StatCard(this.title, this.value, this.icon);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: .10),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: theme.colorScheme.primary, size: 19),
-            ),
-            const SizedBox(width: 7),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: theme.colorScheme.onSurface.withValues(alpha: .55),
-                    ),
-                  ),
-                  Text(
-                    value.toString(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: cards.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
+        childAspectRatio: columns == 1 ? 3.8 : 2.1,
       ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Widget child;
-  final Widget? trailing;
-
-  const _SectionCard({
-    required this.title,
-    required this.icon,
-    required this.child,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: EdgeInsets.all(Responsive.clamped(context, base: 13, min: 10, max: 18)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: theme.colorScheme.primary, size: 20),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: Responsive.titleSize(context, base: 16, min: 14, max: 21),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                ?trailing,
-              ],
-            ),
-            const SizedBox(height: 9),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LearningProgress extends StatelessWidget {
-  final List<StudentModuleProgress> modules;
-  const _LearningProgress({required this.modules});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final active = modules.where((m) => m.totalLectures > 0).toList();
-    if (active.isEmpty) {
-      return const Text('Learning progress will appear here once lectures are available.');
-    }
-
-    final total = active.fold<int>(0, (sum, m) => sum + m.totalLectures);
-    final done = active.fold<int>(0, (sum, m) => sum + m.completedLectures);
-    final overall = total == 0 ? 0 : ((done / total) * 100).round();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '$done of $total lectures completed',
-                style: TextStyle(
-                  color: theme.colorScheme.onSurface.withValues(alpha: .55),
-                ),
-              ),
-            ),
-            Text(
-              '$overall%',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 22,
-                color: theme.colorScheme.primary,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(value: overall / 100, minHeight: 8),
-        ),
-        const SizedBox(height: 16),
-        ...active.map((module) => _ModuleProgressTile(module: module)),
-      ],
-    );
-  }
-}
-
-class _ModuleProgressTile extends StatelessWidget {
-  final StudentModuleProgress module;
-  const _ModuleProgressTile({required this.module});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final progress = module.progressPercent / 100;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 11),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  module.moduleName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('${module.completedLectures}/${module.totalLectures}'),
-              const SizedBox(width: 7),
-              Text(
-                '${module.progressPercent}%',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: module.progressPercent >= 100
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(value: progress, minHeight: 6),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StudyActivityChart extends StatelessWidget {
-  final List<DailyStudyActivity> activity;
-  const _StudyActivityChart({required this.activity});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    if (activity.isEmpty) {
-      return const _ChartEmptyState(
-        icon: Icons.insights_outlined,
-        text: 'Study activity will appear here once you start studying.',
-      );
-    }
-
-    final spots = List.generate(
-      activity.length,
-      (index) => FlSpot(index.toDouble(), activity[index].studyMinutes.toDouble()),
-    );
-    final maxValue = activity.fold<double>(
-      0,
-      (current, item) => current > item.studyMinutes ? current : item.studyMinutes.toDouble(),
-    );
-    final maxY = maxValue <= 5 ? 10.0 : ((maxValue * 1.2) / 5).ceil() * 5.0;
-
-    return SizedBox(
-      height: 220,
-      child: LineChart(
-        LineChartData(
-          minY: 0,
-          maxY: maxY,
-          minX: 0,
-          maxX: (activity.length - 1).toDouble(),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            horizontalInterval: maxY / 5,
-          ),
-          borderData: FlBorderData(show: false),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 32,
-                interval: maxY / 5,
-                getTitlesWidget: (value, meta) => Text(
-                  value.toInt().toString(),
-                  style: const TextStyle(fontSize: 9),
-                ),
-              ),
-            ),
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                interval: activity.length > 7 ? 2 : 1,
-                reservedSize: 28,
-                getTitlesWidget: (value, meta) {
-                  final index = value.round();
-                  if (index < 0 || index >= activity.length) {
-                    return const SizedBox.shrink();
-                  }
-                  final day = activity[index].day;
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text('${day.day}/${day.month}', style: const TextStyle(fontSize: 9)),
-                  );
-                },
-              ),
-            ),
-          ),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              barWidth: 3,
-              color: theme.colorScheme.primary,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    theme.colorScheme.primary.withValues(alpha: .14),
-                    theme.colorScheme.primary.withValues(alpha: .01),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ExamChart extends StatelessWidget {
-  final List<StudentExamAttempt> attempts;
-  const _ExamChart({required this.attempts});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final completed = attempts.where((a) => a.isCompleted).take(12).toList().reversed.toList();
-    if (completed.isEmpty) {
-      return const _ChartEmptyState(
-        icon: Icons.analytics_outlined,
-        text: 'Completed exam scores will appear here.',
-      );
-    }
-
-    final spots = List.generate(
-      completed.length,
-      (index) => FlSpot(index.toDouble(), completed[index].score.toDouble()),
-    );
-
-    return SizedBox(
-      height: 220,
-      child: LineChart(
-        LineChartData(
-          minY: 0,
-          maxY: 100,
-          minX: 0,
-          maxX: (completed.length - 1).toDouble(),
-          gridData: const FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            horizontalInterval: 20,
-          ),
-          borderData: FlBorderData(show: false),
-          titlesData: FlTitlesData(
-            leftTitles: const AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 34,
-                interval: 20,
-              ),
-            ),
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                interval: completed.length > 7 ? 2 : 1,
-                reservedSize: 27,
-                getTitlesWidget: (value, meta) {
-                  final index = value.round();
-                  if (index < 0 || index >= completed.length) {
-                    return const SizedBox.shrink();
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text('#${index + 1}', style: const TextStyle(fontSize: 9)),
-                  );
-                },
-              ),
-            ),
-          ),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              barWidth: 3,
-              color: theme.colorScheme.primary,
-              dotData: const FlDotData(show: true),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    theme.colorScheme.primary.withValues(alpha: .14),
-                    theme.colorScheme.primary.withValues(alpha: .01),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ChartEmptyState extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _ChartEmptyState({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SizedBox(
-      height: 170,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 46, color: theme.colorScheme.onSurface.withValues(alpha: .22)),
-            const SizedBox(height: 10),
-            Text(
-              text,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: .58)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ExamAttemptsList extends StatelessWidget {
-  final List<StudentExamAttempt> attempts;
-  final void Function(StudentExamAttempt attempt)? onAttemptTap;
-  const _ExamAttemptsList({required this.attempts, required this.onAttemptTap});
-
-  @override
-  Widget build(BuildContext context) {
-    if (attempts.isEmpty) return const Text('No exam attempts yet.');
-    return Column(
-      children: attempts
-          .map(
-            (attempt) => _ExamAttemptTile(
-              attempt: attempt,
-              onTap: onAttemptTap == null ? null : () => onAttemptTap!(attempt),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class _ExamAttemptTile extends StatelessWidget {
-  final StudentExamAttempt attempt;
-  final VoidCallback? onTap;
-  const _ExamAttemptTile({required this.attempt, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final Color statusColor;
-    final String statusLabel;
-
-    if (attempt.isCompleted) {
-      statusColor = attempt.passed ? Colors.green : theme.colorScheme.error;
-      statusLabel = attempt.passed ? 'Passed' : 'Failed';
-    } else if (attempt.isInProgress) {
-      statusColor = theme.colorScheme.primary;
-      statusLabel = 'In Progress';
-    } else {
-      statusColor = Colors.orange;
-      statusLabel = 'Abandoned';
-    }
-
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      leading: CircleAvatar(
-        backgroundColor: statusColor.withValues(alpha: .10),
-        child: Icon(
-          attempt.isInProgress
-              ? Icons.play_arrow_rounded
-              : attempt.passed
-                  ? Icons.check_rounded
-                  : Icons.close_rounded,
-          color: statusColor,
-        ),
-      ),
-      title: Text(
-        attempt.examTitle,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w700),
-      ),
-      subtitle: Text(
-        attempt.isCompleted ? '${attempt.score}% • $statusLabel' : statusLabel,
-      ),
-      trailing: onTap == null ? null : const Icon(Icons.chevron_right_rounded),
-      onTap: onTap,
-    );
-  }
-}
-
-class _LectureActivityList extends StatelessWidget {
-  final List<StudentLectureActivity> activities;
-  final void Function({
-    required String moduleId,
-    required String moduleName,
-    required String lectureId,
-  })? onOpenLecture;
-
-  const _LectureActivityList({
-    required this.activities,
-    required this.onOpenLecture,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (activities.isEmpty) return const Text('No lecture activity yet.');
-
-    return Column(
-      children: activities
-          .map(
-            (activity) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              leading: CircleAvatar(
-                backgroundColor: AppColors.primary.withValues(alpha: .10),
-                child: const Icon(Icons.menu_book_rounded, color: AppColors.primary),
-              ),
-              title: Text(
-                activity.lectureTitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              subtitle: Text(
-                '${activity.moduleName} • ${activity.progressPercent}% progress',
-              ),
-              trailing: onOpenLecture == null
-                  ? null
-                  : const Icon(Icons.chevron_right_rounded),
-              onTap: onOpenLecture == null
-                  ? null
-                  : () => onOpenLecture!(
-                        moduleId: activity.moduleId,
-                        moduleName: activity.moduleName,
-                        lectureId: activity.lectureId,
-                      ),
-            ),
-          )
-          .toList(),
+      itemBuilder: (_, index) => cards[index],
     );
   }
 }
@@ -1114,6 +568,7 @@ class _StudentSettings extends StatefulWidget {
 
 class _StudentSettingsState extends State<_StudentSettings> {
   final StudentPreferencesService _preferences = StudentPreferencesService.instance;
+  final ThemeModeService _themeService = ThemeModeService.instance;
 
   bool _loading = true;
   bool _notifications = true;
@@ -1121,10 +576,25 @@ class _StudentSettingsState extends State<_StudentSettings> {
   bool _wifiOnlyDownloads = true;
   double _defaultSpeed = 1.0;
 
+  ThemeMode _themeMode = ThemeMode.system;
+
   @override
   void initState() {
     super.initState();
+    _themeMode = _themeService.themeMode;
+    _themeService.addListener(_onThemeChanged);
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _themeService.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (!mounted) return;
+    setState(() => _themeMode = _themeService.themeMode);
   }
 
   Future<void> _loadSettings() async {
@@ -1140,6 +610,7 @@ class _StudentSettingsState extends State<_StudentSettings> {
         _autoPlay = autoPlay;
         _wifiOnlyDownloads = wifiOnly;
         _defaultSpeed = speed;
+        _themeMode = _themeService.themeMode;
         _loading = false;
       });
     } catch (_) {
@@ -1156,6 +627,36 @@ class _StudentSettingsState extends State<_StudentSettings> {
 
     return Column(
       children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          leading: const Icon(Icons.brightness_6_rounded),
+          title: const Text('App Theme'),
+          subtitle: Text(_themeService.label),
+          trailing: DropdownButton<ThemeMode>(
+            value: _themeMode,
+            underline: const SizedBox.shrink(),
+            items: const [
+              DropdownMenuItem(
+                value: ThemeMode.light,
+                child: Text('Light'),
+              ),
+              DropdownMenuItem(
+                value: ThemeMode.dark,
+                child: Text('Dark'),
+              ),
+              DropdownMenuItem(
+                value: ThemeMode.system,
+                child: Text('Device'),
+              ),
+            ],
+            onChanged: (mode) {
+              if (mode == null) return;
+              unawaited(_themeService.setThemeMode(mode));
+            },
+          ),
+        ),
+        const Divider(height: 1),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
