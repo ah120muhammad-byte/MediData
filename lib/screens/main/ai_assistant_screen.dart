@@ -114,8 +114,6 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           final scheme = Theme.of(sheetContext).colorScheme;
           return StatefulBuilder(
             builder: (sheetContext, sheetSetState) {
-              final visibleSessions = List<AiChatSession>.from(sessions);
-
               return SafeArea(
                 child: SizedBox(
                   height: MediaQuery.sizeOf(sheetContext).height * .82,
@@ -144,14 +142,14 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       ),
                       const Divider(height: 1),
                       Expanded(
-                        child: visibleSessions.isEmpty
+                        child: sessions.isEmpty
                             ? const Center(child: Text('No saved conversations yet.'))
                             : ListView.separated(
                                 padding: const EdgeInsets.all(12),
-                                itemCount: visibleSessions.length,
+                                itemCount: sessions.length,
                                 separatorBuilder: (_, _) => const SizedBox(height: 3),
                                 itemBuilder: (context, index) {
-                                  final session = visibleSessions[index];
+                                  final session = sessions[index];
                                   final selected = session.id == selectedId;
                                   return ListTile(
                                     selected: selected,
