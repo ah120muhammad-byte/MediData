@@ -95,7 +95,7 @@ class AiChatHistoryService {
     await prefs.setString(_currentSessionKey, sessionId);
   }
 
-  Future<void> clearCurrentSessionId() async {
+  Future<void> _clearCurrentSessionId() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_currentSessionKey);
   }
@@ -177,31 +177,8 @@ class AiChatHistoryService {
 
     final current = await getCurrentSessionId();
     if (current == sessionId) {
-      await clearCurrentSessionId();
+      await _clearCurrentSessionId();
     }
-  }
-
-  Future<void> ensureCurrentSession() async {
-    final existing = await getCurrentSessionId();
-
-    if (existing != null && existing.isNotEmpty) {
-      final user = _supabase.auth.currentUser;
-
-      if (user != null) {
-        final row = await _supabase
-            .from('ai_chat_sessions')
-            .select('id')
-            .eq('id', existing)
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-        if (row != null) return;
-      }
-
-      await clearCurrentSessionId();
-    }
-
-    await createSession();
   }
 
   String _sanitizeTitle(String title) {
