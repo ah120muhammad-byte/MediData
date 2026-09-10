@@ -15,12 +15,65 @@ class ModulesScreen extends StatefulWidget {
 }
 
 class ModulesScreenState extends State<ModulesScreen> {
+  static ModulesScreenState? _activeState;
+
   final SupabaseClient _supabase = Supabase.instance.client;
   String? _pendingLectureId;
   String? _selectedLevelId;
   String? _selectedLevelName;
   String? _selectedModuleId;
   String? _selectedModuleName;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeState = this;
+  }
+
+  @override
+  void dispose() {
+    if (identical(_activeState, this)) {
+      _activeState = null;
+    }
+    super.dispose();
+  }
+
+  static Future<void> openModuleFromSearch(String moduleId) async {
+    final state = _activeState;
+    if (state == null || !state.mounted) return;
+    await state.openModule(moduleId: moduleId);
+  }
+
+  Future<void> openModule({required String moduleId}) async {
+    final normalizedModuleId = moduleId.trim();
+    if (normalizedModuleId.isEmpty || !mounted) return;
+
+    try {
+      final response = await _supabase
+          .from('modules')
+          .select('id,name,academic_level_id,academic_levels(id,name)')
+          .eq('id', normalizedModuleId)
+          .maybeSingle();
+
+      if (response == null || !mounted) return;
+
+      final module = Map<String, dynamic>.from(response);
+      final levelRaw = module['academic_levels'];
+      if (levelRaw is! Map) return;
+
+      final level = Map<String, dynamic>.from(levelRaw);
+
+      setState(() {
+        _selectedLevelId = level['id']?.toString();
+        _selectedLevelName = level['name']?.toString();
+        _selectedModuleId = module['id']?.toString();
+        _selectedModuleName = module['name']?.toString();
+        _pendingLectureId = null;
+      });
+    } catch (e) {
+      debugPrint('Open module from search error: $e');
+    }
+  }
 
   void _goToLevels() {
     if (!mounted) return;
@@ -171,13 +224,7 @@ class _LevelsViewState extends State<_LevelsView> {
     return (levelsResponse as List).map((item) {
       final map = Map<String, dynamic>.from(item);
       final id = map['id']?.toString() ?? '';
-      return _AcademicLevel(
-        id: id,
-        name: map['name']?.toString() ?? '',
-        description: map['description']?.toString(),
-        imageUrl: map['image_url']?.toString(),
-        moduleCount: moduleCountByLevel[id] ?? 0,
-      );
+      return _AcademicLevel(id: id, name: map['name']?.toString() ?? '', description: map['description']?.toString(), imageUrl: map['image_url']?.toString(), moduleCount: moduleCountByLevel[id] ?? 0);
     }).toList();
   }
 
