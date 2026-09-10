@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
-import '../../core/responsive/responsive.dart';
 import '../../services/ai_chat_history_service.dart';
 import '../../services/ai_chat_service.dart';
 
@@ -96,7 +95,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     try {
       final existingSessionId = await _historyService.getCurrentSessionId();
       if (existingSessionId == null || existingSessionId.isEmpty) {
-        final newSessionId = await _historyService.createSession(title: 'New chat');
+        final newSessionId = await _historyService.createSession(
+          title: 'New chat',
+        );
         if (!mounted) return;
         setState(() {
           _chatSessionId = newSessionId;
@@ -122,7 +123,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       debugPrint('AI history load error: $e');
       debugPrint(stackTrace.toString());
       try {
-        final newSessionId = await _historyService.createSession(title: 'New chat');
+        final newSessionId = await _historyService.createSession(
+          title: 'New chat',
+        );
         if (!mounted) return;
         setState(() {
           _chatSessionId = newSessionId;
@@ -130,7 +133,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         });
       } catch (sessionError) {
         debugPrint('AI session create error: $sessionError');
-        if (mounted) setState(() => _isLoadingHistory = false);
+        if (mounted) {
+          setState(() => _isLoadingHistory = false);
+        }
       }
     }
   }
@@ -222,16 +227,15 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         );
 
         if (!mounted) return;
+        final assistantMessage = AiChatMessage(
+          role: 'assistant',
+          content: response.reply,
+        );
         setState(() {
-          _messages.add(
-            AiChatMessage(
-              role: 'assistant',
-              content: response.reply,
-            ),
-          );
+          _messages.add(assistantMessage);
           _isSending = false;
         });
-        await _saveMessageToHistory(_messages.last);
+        await _saveMessageToHistory(assistantMessage);
       } else {
         final assistantIndex = _messages.length;
         setState(() {
@@ -368,7 +372,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      final newSessionId = await _historyService.createSession(title: 'New chat');
+      final newSessionId = await _historyService.createSession(
+        title: 'New chat',
+      );
       if (!mounted) return;
       setState(() {
         _chatSessionId = newSessionId;
@@ -430,7 +436,6 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
       final mimeType = AiChatService.mimeTypeForFile(fileName);
       if (!mounted) return;
-
       setState(() {
         _selectedAttachment = AiAttachment(
           fileName: fileName,
@@ -459,56 +464,64 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            18,
-            6,
-            18,
-            18 + MediaQuery.viewInsetsOf(sheetContext).bottom,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 620),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Choose AI mode',
-                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ..._AiMode.values.map(
-                  (mode) => ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                    leading: Icon(mode.icon),
-                    title: Text(mode.label),
-                    subtitle: Text(
-                      mode.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+      builder: (sheetContext) {
+        final keyboardInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 6, 16, 12 + keyboardInset),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 620,
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * .72,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Choose AI mode',
+                        style: TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                    trailing: _mode == mode
-                        ? Icon(
-                            Icons.check_circle_rounded,
-                            color: Theme.of(sheetContext).colorScheme.primary,
-                          )
-                        : null,
-                    onTap: _isSending
-                        ? null
-                        : () {
-                            setState(() => _mode = mode);
-                            Navigator.of(sheetContext).pop();
-                          },
-                  ),
+                    const SizedBox(height: 10),
+                    ..._AiMode.values.map(
+                      (mode) => ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        leading: Icon(mode.icon),
+                        title: Text(mode.label),
+                        subtitle: Text(
+                          mode.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: _mode == mode
+                            ? Icon(
+                                Icons.check_circle_rounded,
+                                color: Theme.of(sheetContext)
+                                    .colorScheme
+                                    .primary,
+                              )
+                            : null,
+                        onTap: _isSending
+                            ? null
+                            : () {
+                                setState(() => _mode = mode);
+                                Navigator.of(sheetContext).pop();
+                              },
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -573,18 +586,19 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final width = Responsive.width(context);
+    final size = MediaQuery.sizeOf(context);
+    final width = size.width;
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     final isCompact = width < 420;
     final isWide = width >= 900;
-    final horizontalPadding = width < 600 ? 12.0 : 20.0;
-    final contentMaxWidth = isWide ? 900.0 : 780.0;
+    final horizontalPadding = isCompact ? 10.0 : (width < 600 ? 14.0 : 20.0);
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: scheme.surface,
       appBar: AppBar(
         titleSpacing: isCompact ? 4 : 12,
-        toolbarHeight: isCompact ? 58 : 64,
+        toolbarHeight: isCompact ? 56 : 64,
         title: Row(
           children: [
             Container(
@@ -648,17 +662,26 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
               top: false,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: _buildMessagesArea(
-                      context,
-                      maxWidth: contentMaxWidth,
-                      horizontalPadding: horizontalPadding,
-                    ),
-                  ),
-                  _buildComposer(context, horizontalPadding: horizontalPadding),
-                ],
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: _buildMessagesArea(
+                          context,
+                          horizontalPadding: horizontalPadding,
+                          maxWidth: isWide ? 900 : 780,
+                        ),
+                      ),
+                      _buildComposer(
+                        context,
+                        horizontalPadding: horizontalPadding,
+                        keyboardOpen: keyboardOpen,
+                        availableHeight: constraints.maxHeight,
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
     );
@@ -666,46 +689,42 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
   Widget _buildMessagesArea(
     BuildContext context, {
-    required double maxWidth,
     required double horizontalPadding,
+    required double maxWidth,
   }) {
-    final width = Responsive.width(context);
+    final width = MediaQuery.sizeOf(context).width;
 
     if (_messages.isEmpty) {
       return Center(
         child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.fromLTRB(
             horizontalPadding,
-            28,
+            18,
             horizontalPadding,
-            24,
+            18,
           ),
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: width < 600 ? double.infinity : 620,
-            ),
+            constraints: BoxConstraints(maxWidth: width < 600 ? 620 : maxWidth),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   Icons.auto_awesome_rounded,
-                  size: width < 420 ? 52 : 58,
+                  size: width < 420 ? 50 : 58,
                   color: Theme.of(context)
                       .colorScheme
                       .primary
                       .withValues(alpha: .75),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Text(
                   'How can I help you study?',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        fontSize: width < 420 ? 20 : null,
-                      ),
                   textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: width < 420 ? 20 : null,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -720,7 +739,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     fontSize: width < 420 ? 13 : 14,
                   ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 18),
                 Wrap(
                   alignment: WrapAlignment.center,
                   spacing: 8,
@@ -731,7 +750,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       onTap: () => _setPrompt('Explain this concept simply: '),
                     ),
                     _QuickPrompt(
-                      text: 'Make revision notes',
+                      text: 'Revision notes',
                       onTap: () =>
                           _setPrompt('Turn this into high-yield revision notes: '),
                     ),
@@ -787,13 +806,13 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     int index,
   ) {
     final theme = Theme.of(context);
-    final width = Responsive.width(context);
+    final width = MediaQuery.sizeOf(context).width;
     final bool isUser = message.role == 'user';
     final content = message.content;
     final bubbleMaxWidth = width < 420
-        ? width * .90
+        ? width * .92
         : width < 700
-            ? width * .84
+            ? width * .86
             : 780.0;
 
     return Align(
@@ -870,33 +889,42 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   Widget _buildComposer(
     BuildContext context, {
     required double horizontalPadding,
+    required bool keyboardOpen,
+    required double availableHeight,
   }) {
     final theme = Theme.of(context);
-    final width = Responsive.width(context);
+    final width = MediaQuery.sizeOf(context).width;
     final isCompact = width < 420;
-    final maxWidth = width >= 900 ? 900.0 : double.infinity;
+    final isWide = width >= 900;
+    final maxWidth = isWide ? 900.0 : double.infinity;
+
+    // Keep the composer small while the keyboard is open. This prevents the
+    // text field from consuming the already-reduced viewport height.
+    final maxLines = keyboardOpen
+        ? (isCompact ? 2 : 3)
+        : (isCompact ? 4 : 6);
 
     return Material(
       elevation: 8,
       color: theme.colorScheme.surface,
-      child: SafeArea(
-        top: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: SafeArea(
+            top: false,
             child: Padding(
               padding: EdgeInsets.fromLTRB(
                 horizontalPadding,
-                isCompact ? 6 : 8,
+                isCompact ? 5 : 8,
                 horizontalPadding,
-                isCompact ? 8 : 12,
+                isCompact ? 6 : 10,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_selectedAttachment != null)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.only(bottom: 7),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: _AttachmentChip(
@@ -916,26 +944,35 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                         icon: const Icon(Icons.attach_file_rounded),
                       ),
                       Expanded(
-                        child: TextField(
-                          controller: _messageController,
-                          focusNode: _inputFocusNode,
-                          minLines: 1,
-                          maxLines: isCompact ? 5 : 6,
-                          textInputAction: TextInputAction.newline,
-                          decoration: InputDecoration(
-                            hintText: _selectedAttachment == null
-                                ? 'Ask MediData AI...'
-                                : 'Add a message about the file...',
-                            filled: true,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(
-                                isCompact ? 19 : 22,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: keyboardOpen
+                                ? (isCompact ? 78 : 104)
+                                : (isCompact ? 130 : 180),
+                          ),
+                          child: TextField(
+                            controller: _messageController,
+                            focusNode: _inputFocusNode,
+                            minLines: 1,
+                            maxLines: maxLines,
+                            textInputAction: TextInputAction.newline,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: InputDecoration(
+                              hintText: _selectedAttachment == null
+                                  ? 'Ask MediData AI...'
+                                  : 'Add a message about the file...',
+                              filled: true,
+                              isDense: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  isCompact ? 19 : 22,
+                                ),
+                                borderSide: BorderSide.none,
                               ),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: isCompact ? 13 : 16,
-                              vertical: isCompact ? 10 : 11,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: isCompact ? 13 : 16,
+                                vertical: isCompact ? 10 : 11,
+                              ),
                             ),
                           ),
                         ),
@@ -968,15 +1005,18 @@ class _QuickPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = Responsive.width(context);
-    return ActionChip(
-      avatar: const Icon(Icons.auto_awesome_rounded, size: 16),
-      label: Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+    final width = MediaQuery.sizeOf(context).width;
+    return SizedBox(
+      height: width < 420 ? 36 : 40,
+      child: ActionChip(
+        avatar: const Icon(Icons.auto_awesome_rounded, size: 16),
+        label: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        onPressed: onTap,
       ),
-      onPressed: onTap,
     );
   }
 }
@@ -993,50 +1033,43 @@ class _AttachmentChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final width = Responsive.width(context);
-    final maxFileNameWidth = width < 420
-        ? width - 120
-        : width < 700
-            ? width - 150
-            : 300.0;
+    final width = MediaQuery.sizeOf(context).width;
+    final maxWidth = (width - 40).clamp(180.0, 520.0);
 
-    return Container(
-      constraints: BoxConstraints(maxWidth: width - 24),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            attachment.isImage
-                ? Icons.image_rounded
-                : Icons.insert_drive_file_rounded,
-            size: 18,
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: maxFileNameWidth.clamp(120, 300),
-              ),
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              attachment.isImage
+                  ? Icons.image_rounded
+                  : Icons.insert_drive_file_rounded,
+              size: 18,
+            ),
+            const SizedBox(width: 7),
+            Flexible(
               child: Text(
                 attachment.fileName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Remove',
-            onPressed: onRemove,
-            icon: const Icon(Icons.close_rounded, size: 18),
-          ),
-        ],
+            const SizedBox(width: 2),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Remove',
+              onPressed: onRemove,
+              icon: const Icon(Icons.close_rounded, size: 18),
+            ),
+          ],
+        ),
       ),
     );
   }
