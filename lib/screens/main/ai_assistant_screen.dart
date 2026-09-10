@@ -734,7 +734,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                         minLines: 1,
                         maxLines: 6,
                         decoration: const InputDecoration(
-                          hintText: 'Ask MediData AI',
+                          hintText: 'Ask MediData AI...',
                           border: InputBorder.none,
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
