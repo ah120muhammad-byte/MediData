@@ -4,57 +4,33 @@
     <!-- AUDIO / MEDIA -->
     <!-- ===================================================================== -->
 
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE" />
-
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-
-    <!-- Android 13+ notifications -->
-    <uses-permission
-        android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:label="MediData"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- ================================================================= -->
-        <!-- AUDIO SERVICE -->
-        <!-- ================================================================= -->
-
         <service
             android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true">
-
             <intent-filter>
-                <action
-                    android:name="android.media.browse.MediaBrowserService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
-
         </service>
-
-        <!-- ================================================================= -->
-        <!-- MEDIA BUTTON RECEIVER -->
-        <!-- ================================================================= -->
 
         <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true">
-
             <intent-filter>
-                <action
-                    android:name="android.media.action.MEDIA_BUTTON" />
+                <action android:name="android.media.action.MEDIA_BUTTON" />
             </intent-filter>
-
         </receiver>
-
-        <!-- ================================================================= -->
-        <!-- MAIN ACTIVITY -->
-        <!-- ================================================================= -->
 
         <activity
             android:name=".MainActivity"
@@ -66,52 +42,23 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
-            <!-- Flutter normal theme -->
-
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
 
-            <!-- ================================================================= -->
-            <!-- APP LAUNCHER -->
-            <!-- ================================================================= -->
-
             <intent-filter>
-
-                <action
-                    android:name="android.intent.action.MAIN" />
-
-                <category
-                    android:name="android.intent.category.LAUNCHER" />
-
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- ================================================================= -->
-            <!-- SUPABASE AUTH CALLBACK -->
-            <!-- ================================================================= -->
-
             <intent-filter>
-
-                <action
-                    android:name="android.intent.action.VIEW" />
-
-                <category
-                    android:name="android.intent.category.DEFAULT" />
-
-                <category
-                    android:name="android.intent.category.BROWSABLE" />
-
-                <data
-                    android:scheme="medidata26"
-                    android:host="auth-callback" />
-
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="medidata26" android:host="auth-callback" />
             </intent-filter>
 
         </activity>
-
-        <!-- =================================================================== -->
-        <!-- FLUTTER -->
-        <!-- =================================================================== -->
 
         <meta-data
             android:name="flutterEmbedding"
@@ -119,22 +66,11 @@
 
     </application>
 
-    <!-- ======================================================================= -->
-    <!-- QUERY ACTIVITIES -->
-    <!-- ======================================================================= -->
-
     <queries>
-
         <intent>
-
-            <action
-                android:name="android.intent.action.PROCESS_TEXT" />
-
-            <data
-                android:mimeType="text/plain" />
-
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
         </intent>
-
     </queries>
 
 </manifest>
