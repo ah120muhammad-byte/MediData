@@ -112,70 +112,93 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         showDragHandle: true,
         builder: (sheetContext) {
           final scheme = Theme.of(sheetContext).colorScheme;
-          return SafeArea(
-            child: SizedBox(
-              height: MediaQuery.sizeOf(sheetContext).height * .82,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 6, 12, 10),
-                    child: Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Chat history',
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                          ),
+          return StatefulBuilder(
+            builder: (sheetContext, sheetSetState) {
+              final visibleSessions = List<AiChatSession>.from(sessions);
+
+              return SafeArea(
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(sheetContext).height * .82,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 6, 12, 10),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Chat history',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'New chat',
+                              onPressed: () => Navigator.of(sheetContext).pop('__new__'),
+                              icon: const Icon(Icons.add_comment_outlined),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          tooltip: 'New chat',
-                          onPressed: () => Navigator.of(sheetContext).pop('__new__'),
-                          icon: const Icon(Icons.add_comment_outlined),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const Divider(height: 1),
+                      Expanded(
+                        child: visibleSessions.isEmpty
+                            ? const Center(child: Text('No saved conversations yet.'))
+                            : ListView.separated(
+                                padding: const EdgeInsets.all(12),
+                                itemCount: visibleSessions.length,
+                                separatorBuilder: (_, _) => const SizedBox(height: 3),
+                                itemBuilder: (context, index) {
+                                  final session = visibleSessions[index];
+                                  final selected = session.id == selectedId;
+                                  return ListTile(
+                                    selected: selected,
+                                    selectedTileColor:
+                                        scheme.primary.withValues(alpha: .09),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    leading: Icon(
+                                      selected
+                                          ? Icons.forum_rounded
+                                          : Icons.chat_bubble_outline_rounded,
+                                      color: selected ? scheme.primary : null,
+                                    ),
+                                    title: Text(
+                                      session.title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
+                                    subtitle: Text(_dateLabel(session.updatedAt)),
+                                    trailing: IconButton(
+                                      tooltip: 'Delete',
+                                      onPressed: _sending
+                                          ? null
+                                          : () async {
+                                              await _deleteSession(session);
+                                              if (!mounted) return;
+                                              sheetSetState(() {
+                                                sessions.removeWhere(
+                                                  (item) => item.id == session.id,
+                                                );
+                                              });
+                                            },
+                                      icon: const Icon(Icons.delete_outline_rounded),
+                                    ),
+                                    onTap: () =>
+                                        Navigator.of(sheetContext).pop(session.id),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
                   ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: sessions.isEmpty
-                        ? const Center(child: Text('No saved conversations yet.'))
-                        : ListView.separated(
-                            padding: const EdgeInsets.all(12),
-                            itemCount: sessions.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 3),
-                            itemBuilder: (context, index) {
-                              final session = sessions[index];
-                              final selected = session.id == selectedId;
-                              return ListTile(
-                                selected: selected,
-                                selectedTileColor: scheme.primary.withValues(alpha: .09),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                leading: Icon(
-                                  selected ? Icons.forum_rounded : Icons.chat_bubble_outline_rounded,
-                                  color: selected ? scheme.primary : null,
-                                ),
-                                title: Text(
-                                  session.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                subtitle: Text(_dateLabel(session.updatedAt)),
-                                trailing: IconButton(
-                                  tooltip: 'Delete',
-                                  onPressed: _sending ? null : () => _deleteSession(session),
-                                  icon: const Icon(Icons.delete_outline_rounded),
-                                ),
-                                onTap: () => Navigator.of(sheetContext).pop(session.id),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           );
         },
       );
@@ -211,10 +234,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       await _scrollToBottom(animated: false);
       _inputFocusNode.requestFocus();
     } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        _showError('Unable to open this conversation.');
-      }
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _showError('Unable to open this conversation.');
     }
   }
 
@@ -225,6 +247,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
       if (_chatSessionId == session.id) {
         final newId = await _historyService.createSession(title: 'New chat');
+        await _historyService.setCurrentSessionId(newId);
         if (!mounted) return;
         setState(() {
           _chatSessionId = newId;
@@ -233,38 +256,13 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           _mode = _AiMode.smart;
         });
       }
-
-      // Intentionally do not pop the navigator here. The user should remain
-      // in the AI screen after deleting a conversation.
-      setState(() {});
     } catch (e) {
       if (mounted) _showError('Unable to delete this conversation.');
     }
   }
 
-  Future<void> _startNewChat({bool confirm = true}) async {
+  Future<void> _startNewChat() async {
     if (_sending) return;
-    if (confirm) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Start a new chat?'),
-          content: const Text('Your current conversation will remain saved.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('New chat'),
-            ),
-          ],
-        ),
-      );
-      if (ok != true || !mounted) return;
-    }
-
     try {
       final newId = await _historyService.createSession(title: 'New chat');
       if (!mounted) return;
@@ -288,14 +286,19 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
     final instruction = switch (_mode) {
       _AiMode.smart => '',
-      _AiMode.study => '[Study Tutor Mode] Teach step-by-step and check understanding.',
-      _AiMode.examPrep => '[Exam Prep Mode] Focus on high-yield facts, traps and memory aids.',
-      _AiMode.summarize => '[Summarize Mode] Summarize the source into key ideas and revision points.',
+      _AiMode.study =>
+        '[Study Tutor Mode] Teach step-by-step and check understanding.',
+      _AiMode.examPrep =>
+        '[Exam Prep Mode] Focus on high-yield facts, traps and memory aids.',
+      _AiMode.summarize =>
+        '[Summarize Mode] Summarize the source into key ideas and revision points.',
     };
     final userText = text.isEmpty
         ? 'Please analyze the attached file and explain the important points.'
         : text;
-    final content = instruction.isEmpty ? userText : '$instruction\n\n$userText';
+    final content = instruction.isEmpty
+        ? userText
+        : '$instruction\n\n$userText';
     final user = AiChatMessage(role: 'user', content: content);
     final outgoing = [..._messages, user];
 
@@ -305,12 +308,19 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       _attachment = null;
       _sending = true;
     });
-    await _ensureSession();
-    await _historyService.saveMessage(sessionId: _chatSessionId!, message: user);
-    await _historyService.updateTitle(sessionId: _chatSessionId!, title: _buildTitle(userText));
-    await _scrollToBottom();
 
     try {
+      await _ensureSession();
+      await _historyService.saveMessage(
+        sessionId: _chatSessionId!,
+        message: user,
+      );
+      await _historyService.updateTitle(
+        sessionId: _chatSessionId!,
+        title: _buildTitle(userText),
+      );
+      await _scrollToBottom();
+
       if (attachment != null) {
         final response = await _aiService.sendMessageWithAttachment(
           messages: outgoing,
@@ -318,34 +328,56 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           mode: _mode.name,
         );
         if (!mounted) return;
-        final assistant = AiChatMessage(role: 'assistant', content: response.reply);
+        final assistant = AiChatMessage(
+          role: 'assistant',
+          content: response.reply,
+        );
         setState(() {
           _messages.add(assistant);
           _sending = false;
         });
-        await _historyService.saveMessage(sessionId: _chatSessionId!, message: assistant);
+        await _historyService.saveMessage(
+          sessionId: _chatSessionId!,
+          message: assistant,
+        );
       } else {
         final assistantIndex = _messages.length;
-        setState(() => _messages.add(const AiChatMessage(role: 'assistant', content: '')));
+        setState(() {
+          _messages.add(
+            const AiChatMessage(role: 'assistant', content: ''),
+          );
+        });
+
         final response = await _aiService.sendMessageStreaming(
           messages: outgoing,
           mode: _mode.name,
           onText: (partial) {
             if (!mounted) return;
             setState(() {
-              _messages[assistantIndex] = AiChatMessage(role: 'assistant', content: partial);
+              _messages[assistantIndex] = AiChatMessage(
+                role: 'assistant',
+                content: partial,
+              );
             });
             unawaited(_scrollToBottom());
           },
         );
+
         if (!mounted) return;
-        final assistant = AiChatMessage(role: 'assistant', content: response.reply);
+        final assistant = AiChatMessage(
+          role: 'assistant',
+          content: response.reply,
+        );
         setState(() {
           _messages[assistantIndex] = assistant;
           _sending = false;
         });
-        await _historyService.saveMessage(sessionId: _chatSessionId!, message: assistant);
+        await _historyService.saveMessage(
+          sessionId: _chatSessionId!,
+          message: assistant,
+        );
       }
+
       await _scrollToBottom();
       if (mounted) _inputFocusNode.requestFocus();
     } catch (e, stackTrace) {
@@ -371,7 +403,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
   Future<void> _regenerate() async {
     if (_sending || _messages.length < 2) return;
-    final assistantIndex = _messages.lastIndexWhere((m) => m.role == 'assistant');
+    final assistantIndex = _messages.lastIndexWhere(
+      (message) => message.role == 'assistant',
+    );
     if (assistantIndex < 1) return;
     final userIndex = assistantIndex - 1;
     if (_messages[userIndex].role != 'user') return;
@@ -379,7 +413,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     final outgoing = _messages.sublist(0, userIndex + 1);
     setState(() {
       _sending = true;
-      _messages[assistantIndex] = const AiChatMessage(role: 'assistant', content: '');
+      _messages[assistantIndex] =
+          const AiChatMessage(role: 'assistant', content: '');
     });
 
     try {
@@ -389,23 +424,36 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         onText: (partial) {
           if (!mounted) return;
           setState(() {
-            _messages[assistantIndex] = AiChatMessage(role: 'assistant', content: partial);
+            _messages[assistantIndex] = AiChatMessage(
+              role: 'assistant',
+              content: partial,
+            );
           });
           unawaited(_scrollToBottom());
         },
       );
       if (!mounted) return;
-      final assistant = AiChatMessage(role: 'assistant', content: response.reply);
+      final assistant = AiChatMessage(
+        role: 'assistant',
+        content: response.reply,
+      );
       setState(() {
         _messages[assistantIndex] = assistant;
         _sending = false;
       });
       if (_chatSessionId != null) {
-        await _historyService.saveMessage(sessionId: _chatSessionId!, message: assistant);
+        await _historyService.saveMessage(
+          sessionId: _chatSessionId!,
+          message: assistant,
+        );
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _sending = false);
+      setState(() {
+        _sending = false;
+        _messages[assistantIndex] =
+            const AiChatMessage(role: 'assistant', content: '');
+      });
       _showError(_cleanError(e));
     }
   }
@@ -416,17 +464,34 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: const [
-          'jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'txt', 'md', 'docx', 'pptx'
+          'jpg',
+          'jpeg',
+          'png',
+          'webp',
+          'gif',
+          'pdf',
+          'txt',
+          'md',
+          'docx',
+          'pptx',
         ],
       );
       if (file == null) return;
+
       final size = await file.length();
-      if (size <= 0) return _showError('The selected file is empty.');
-      if (size > AiChatService.maxFileBytes) return _showError('File size must be 20 MB or less.');
+      if (size <= 0) {
+        _showError('The selected file is empty.');
+        return;
+      }
+      if (size > AiChatService.maxFileBytes) {
+        _showError('File size must be 20 MB or less.');
+        return;
+      }
+
       final bytes = await file.readAsBytes();
       if (!mounted) return;
+      final mime = AiChatService.mimeTypeForFile(file.name);
       setState(() {
-        final mime = AiChatService.mimeTypeForFile(file.name);
         _attachment = AiAttachment(
           fileName: file.name,
           mimeType: mime,
@@ -443,7 +508,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   Future<void> _openLive() async {
     if (_sending) return;
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => AiLiveScreen(mode: _mode.name)),
+      MaterialPageRoute(
+        builder: (_) => AiLiveScreen(mode: _mode.name),
+      ),
     );
     if (mounted) _inputFocusNode.requestFocus();
   }
@@ -460,7 +527,13 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
             children: [
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Choose AI mode', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+                child: Text(
+                  'Choose AI mode',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
               const SizedBox(height: 8),
               ..._AiMode.values.map(
@@ -468,7 +541,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                   leading: Icon(mode.icon),
                   title: Text(mode.label),
                   subtitle: Text(mode.description),
-                  trailing: _mode == mode ? const Icon(Icons.check_circle_rounded) : null,
+                  trailing: _mode == mode
+                      ? const Icon(Icons.check_circle_rounded)
+                      : null,
                   onTap: () {
                     setState(() => _mode = mode);
                     Navigator.of(sheetContext).pop();
@@ -520,21 +595,27 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     final text = error.toString().trim();
     return text.startsWith('Exception:')
         ? text.substring('Exception:'.length).trim()
-        : (text.isEmpty ? 'Unable to get an AI response. Please try again.' : text);
+        : (text.isEmpty
+            ? 'Unable to get an AI response. Please try again.'
+            : text);
   }
 
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final width = MediaQuery.sizeOf(context).width;
-    final compact = width < 420;
+    final compact = MediaQuery.sizeOf(context).width < 420;
 
     return Scaffold(
       backgroundColor: scheme.surface,
@@ -550,8 +631,17 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('MediData AI', style: TextStyle(fontWeight: FontWeight.w800)),
-            Text(_mode.label, style: TextStyle(fontSize: 11, color: scheme.onSurface.withValues(alpha: .55))),
+            const Text(
+              'MediData AI',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            Text(
+              _mode.label,
+              style: TextStyle(
+                fontSize: 11,
+                color: scheme.onSurface.withValues(alpha: .55),
+              ),
+            ),
           ],
         ),
         actions: [
@@ -589,20 +679,55 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.auto_awesome_rounded, size: 58, color: Theme.of(context).colorScheme.primary),
+              Icon(
+                Icons.auto_awesome_rounded,
+                size: 58,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               const SizedBox(height: 14),
-              const Text('How can I help you study?', textAlign: TextAlign.center, style: TextStyle(fontSize: 27, fontWeight: FontWeight.w800)),
+              const Text(
+                'How can I help you study?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 27,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('Ask about lectures, medical concepts, or exam preparation.', textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .55))),
+              Text(
+                'Ask about lectures, medical concepts, or exam preparation.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: .55),
+                ),
+              ),
               const SizedBox(height: 18),
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _Suggestion(text: 'Explain a concept', onTap: () => _useSuggestion('Explain this medical concept step by step.')),
-                  _Suggestion(text: 'Revision notes', onTap: () => _useSuggestion('Turn this topic into high-yield revision notes.')),
-                  _Suggestion(text: 'Quiz me', onTap: () => _useSuggestion('Quiz me with 5 questions and explain my mistakes.')),
+                  _Suggestion(
+                    text: 'Explain a concept',
+                    onTap: () => _useSuggestion(
+                      'Explain this medical concept step by step.',
+                    ),
+                  ),
+                  _Suggestion(
+                    text: 'Revision notes',
+                    onTap: () => _useSuggestion(
+                      'Turn this topic into high-yield revision notes.',
+                    ),
+                  ),
+                  _Suggestion(
+                    text: 'Quiz me',
+                    onTap: () => _useSuggestion(
+                      'Quiz me with 5 questions and explain my mistakes.',
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -624,32 +749,48 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     final scheme = Theme.of(context).colorScheme;
     final user = message.role == 'user';
     final content = message.content;
+
     return Align(
       alignment: user ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 820),
         margin: const EdgeInsets.only(bottom: 14),
         child: Column(
-          crossAxisAlignment: user ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              user ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: user ? scheme.primary.withValues(alpha: .13) : scheme.surfaceContainerHighest,
+                color: user
+                    ? scheme.primary.withValues(alpha: .13)
+                    : scheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(18),
               ),
               child: user
-                  ? Text(content, style: const TextStyle(height: 1.5))
+                  ? Text(
+                      content,
+                      style: const TextStyle(height: 1.5),
+                    )
                   : content.isEmpty
                       ? const _TypingIndicator()
                       : MarkdownBody(
                           data: content,
                           selectable: true,
-                          styleSheet:  MarkdownStyleSheet(
+                          styleSheet: const MarkdownStyleSheet(
                             p: TextStyle(fontSize: 15, height: 1.6),
-                            h1: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                            h2: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                            h3: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                            h1: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            h2: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            h3: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
             ),
@@ -663,7 +804,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     onPressed: () => _copyText(content),
                     icon: const Icon(Icons.copy_rounded, size: 17),
                   ),
-                  if (index == _messages.lastIndexWhere((item) => item.role == 'assistant'))
+                  if (index ==
+                      _messages.lastIndexWhere(
+                        (item) => item.role == 'assistant',
+                      ))
                     IconButton(
                       tooltip: 'Regenerate',
                       visualDensity: VisualDensity.compact,
@@ -680,6 +824,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
   Widget _buildComposer() {
     final scheme = Theme.of(context).colorScheme;
+
     return Material(
       elevation: 8,
       color: scheme.surface,
@@ -695,7 +840,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                   alignment: Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: scheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(14),
@@ -703,16 +851,27 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(_attachment!.isImage ? Icons.image_rounded : Icons.insert_drive_file_rounded, size: 18),
+                        Icon(
+                          _attachment!.isImage
+                              ? Icons.image_rounded
+                              : Icons.insert_drive_file_rounded,
+                          size: 18,
+                        ),
                         const SizedBox(width: 7),
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 260),
-                          child: Text(_attachment!.fileName, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            _attachment!.fileName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         IconButton(
                           tooltip: 'Remove',
                           visualDensity: VisualDensity.compact,
-                          onPressed: _sending ? null : () => setState(() => _attachment = null),
+                          onPressed: _sending
+                              ? null
+                              : () => setState(() => _attachment = null),
                           icon: const Icon(Icons.close_rounded, size: 18),
                         ),
                       ],
@@ -725,7 +884,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainerHighest.withValues(alpha: .70),
                   borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: scheme.outline.withValues(alpha: .10)),
+                  border: Border.all(
+                    color: scheme.outline.withValues(alpha: .10),
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -745,7 +906,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                           hintText: 'Ask MediData AI...',
                           border: InputBorder.none,
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 10,
+                          ),
                         ),
                         textInputAction: TextInputAction.newline,
                         onSubmitted: (_) => _send(),
@@ -758,7 +922,11 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     ),
                     IconButton.filled(
                       tooltip: 'Send',
-                      onPressed: _sending || (_messageController.text.trim().isEmpty && _attachment == null) ? null : _send,
+                      onPressed: _sending ||
+                              (_messageController.text.trim().isEmpty &&
+                                  _attachment == null)
+                          ? null
+                          : _send,
                       icon: const Icon(Icons.arrow_upward_rounded),
                     ),
                   ],
@@ -773,7 +941,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
   void _useSuggestion(String text) {
     _messageController.text = text;
-    _messageController.selection = TextSelection.collapsed(offset: text.length);
+    _messageController.selection = TextSelection.collapsed(
+      offset: text.length,
+    );
     _inputFocusNode.requestFocus();
   }
 
