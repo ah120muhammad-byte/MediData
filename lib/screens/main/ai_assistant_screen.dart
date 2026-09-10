@@ -146,7 +146,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                             : ListView.separated(
                                 padding: const EdgeInsets.all(12),
                                 itemCount: sessions.length,
-                                separatorBuilder: (_, _) => const SizedBox(height: 3),
+                                separatorBuilder: (_, __) => const SizedBox(height: 3),
                                 itemBuilder: (context, index) {
                                   final session = sessions[index];
                                   final selected = session.id == selectedId;
@@ -615,19 +615,30 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           onPressed: _sending ? null : _showHistory,
           icon: const Icon(Icons.menu_rounded),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'MediData AI',
-              style: TextStyle(fontWeight: FontWeight.w800),
+            Icon(
+              Icons.auto_awesome_rounded,
+              size: compact ? 20 : 22,
+              color: scheme.primary,
             ),
-            Text(
-              _mode.label,
-              style: TextStyle(
-                fontSize: 11,
-                color: scheme.onSurface.withValues(alpha: .55),
-              ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'MediData AI',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  _mode.label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: scheme.onSurface.withValues(alpha: .55),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
