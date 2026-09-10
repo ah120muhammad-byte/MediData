@@ -2,11 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 	<dict>
-		<!-- ===================================================================== -->
-		<!-- DISPLAY / APP INFO -->
-		<!-- ===================================================================== -->
 		<key>CADisableMinimumFrameDurationOnPhone</key>
 		<true/>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>MediData AI uses the microphone for live voice conversations.</string>
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
@@ -29,9 +28,6 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
-		<!-- ===================================================================== -->
-		<!-- SUPABASE / AUTH DEEP LINK -->
-		<!-- ===================================================================== -->
 		<key>CFBundleURLTypes</key>
 		<array>
 			<dict>
@@ -43,9 +39,6 @@
 				</array>
 			</dict>
 		</array>
-		<!-- ===================================================================== -->
-		<!-- SCENE CONFIGURATION -->
-		<!-- ===================================================================== -->
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>
@@ -67,21 +60,12 @@
 				</array>
 			</dict>
 		</dict>
-		<!-- ===================================================================== -->
-		<!-- INPUT -->
-		<!-- ===================================================================== -->
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
-		<!-- ===================================================================== -->
-		<!-- LAUNCH -->
-		<!-- ===================================================================== -->
 		<key>UILaunchStoryboardName</key>
 		<string>LaunchScreen</string>
 		<key>UIMainStoryboardFile</key>
 		<string>Main</string>
-		<!-- ===================================================================== -->
-		<!-- ORIENTATION -->
-		<!-- ===================================================================== -->
 		<key>UISupportedInterfaceOrientations</key>
 		<array>
 			<string>UIInterfaceOrientationPortrait</string>
