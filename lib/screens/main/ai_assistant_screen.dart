@@ -222,10 +222,21 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     try {
       await _historyService.deleteSession(session.id);
       if (!mounted) return;
-      Navigator.of(context).maybePop();
+
       if (_chatSessionId == session.id) {
-        await _startNewChat(confirm: false);
+        final newId = await _historyService.createSession(title: 'New chat');
+        if (!mounted) return;
+        setState(() {
+          _chatSessionId = newId;
+          _messages.clear();
+          _attachment = null;
+          _mode = _AiMode.smart;
+        });
       }
+
+      // Intentionally do not pop the navigator here. The user should remain
+      // in the AI screen after deleting a conversation.
+      setState(() {});
     } catch (e) {
       if (mounted) _showError('Unable to delete this conversation.');
     }
@@ -296,10 +307,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     });
     await _ensureSession();
     await _historyService.saveMessage(sessionId: _chatSessionId!, message: user);
-    await _historyService.updateTitle(
-      sessionId: _chatSessionId!,
-      title: _buildTitle(userText),
-    );
+    await _historyService.updateTitle(sessionId: _chatSessionId!, title: _buildTitle(userText));
     await _scrollToBottom();
 
     try {
@@ -806,7 +814,10 @@ class _TypingIndicator extends StatelessWidget {
           child: Container(
             width: 7,
             height: 7,
-            decoration: BoxDecoration(color: color.withValues(alpha: .65), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .65),
+              shape: BoxShape.circle,
+            ),
           ),
         ),
       ),
