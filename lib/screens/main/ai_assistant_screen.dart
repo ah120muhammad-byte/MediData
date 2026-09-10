@@ -7,6 +7,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../services/ai_chat_history_service.dart';
 import '../../services/ai_chat_service.dart';
+import 'ai_live_screen.dart';
 
 class AiAssistantScreen extends StatefulWidget {
   const AiAssistantScreen({super.key});
@@ -459,6 +460,22 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     setState(() => _selectedAttachment = null);
   }
 
+  Future<void> _openLiveMode() async {
+    if (_isSending || !mounted) return;
+
+    _inputFocusNode.unfocus();
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AiLiveScreen(mode: _mode.name),
+      ),
+    );
+
+    if (mounted) {
+      _inputFocusNode.requestFocus();
+    }
+  }
+
   void _showModeSheet() {
     showModalBottomSheet<void>(
       context: context,
@@ -644,6 +661,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Live AI',
+            visualDensity: isCompact ? VisualDensity.compact : null,
+            onPressed: _isSending ? null : _openLiveMode,
+            icon: const Icon(Icons.mic_rounded),
+          ),
           IconButton(
             tooltip: 'AI mode',
             visualDensity: isCompact ? VisualDensity.compact : null,
@@ -898,8 +921,6 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     final isWide = width >= 900;
     final maxWidth = isWide ? 900.0 : double.infinity;
 
-    // Keep the composer small while the keyboard is open. This prevents the
-    // text field from consuming the already-reduced viewport height.
     final maxLines = keyboardOpen
         ? (isCompact ? 2 : 3)
         : (isCompact ? 4 : 6);
