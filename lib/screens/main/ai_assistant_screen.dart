@@ -1124,7 +1124,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       decoration: InputDecoration(
                         hintText: hasAttachment
                             ? 'Ask something about this file...'
-                            : 'Ask MediData AI anything...',
+                            : 'Ask MediData AI ...',
                         filled: true,
                         fillColor:
                             scheme.surfaceContainerHighest.withValues(alpha: .72),
