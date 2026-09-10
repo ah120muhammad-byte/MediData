@@ -143,14 +143,14 @@ class _SearchScreenState extends State<SearchScreen> {
         if (moduleId == null || moduleId.isEmpty) return;
 
         final navigator = Navigator.of(context);
-        navigator.pushReplacement(
+        navigator.push(
           MaterialPageRoute(
             builder: (_) => LecturesScreen(
               moduleId: moduleId,
               moduleName: result.moduleName?.trim().isNotEmpty == true
                   ? result.moduleName!.trim()
                   : result.title,
-              onBack: navigator.pop,
+              onBack: () => navigator.pop(),
             ),
           ),
         );
@@ -161,14 +161,14 @@ class _SearchScreenState extends State<SearchScreen> {
         if (levelId == null || levelId.isEmpty) return;
 
         final navigator = Navigator.of(context);
-        navigator.pushReplacement(
+        navigator.push(
           MaterialPageRoute(
             builder: (_) => _SearchLevelModulesScreen(
               levelId: levelId,
               levelName: result.levelName?.trim().isNotEmpty == true
                   ? result.levelName!.trim()
                   : result.title,
-              onBack: navigator.pop,
+              onBack: () => navigator.pop(),
             ),
           ),
         );
@@ -282,7 +282,7 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     if (_query.isEmpty) {
-      return _SearchEmptyState();
+      return const _SearchEmptyState();
     }
 
     if (_results.isEmpty) {
@@ -589,7 +589,7 @@ class _SearchLevelModulesScreenState extends State<_SearchLevelModulesScreen> {
     await _markModuleCurrent(module);
     if (!mounted) return;
 
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => LecturesScreen(
           moduleId: module.id,
