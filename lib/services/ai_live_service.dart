@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:audio_io/audio_io.dart';
+import 'package:sound_stream/sound_stream.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -13,11 +13,15 @@ class AiLiveService {
       'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
 
   final SupabaseClient _supabase = Supabase.instance.client;
+  final RecorderStream _recorder = RecorderStream();
+  final PlayerStream _player = PlayerStream();
+
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _socketSubscription;
   StreamSubscription<Uint8List>? _audioInputSubscription;
   bool _connected = false;
   bool _muted = false;
+  bool _audioInitialized = false;
 
   final StreamController<String> _transcriptController =
       StreamController<String>.broadcast();
@@ -45,9 +49,7 @@ class AiLiveService {
 
     final tokenResponse = await _supabase.functions.invoke(
       _tokenFunction,
-      body: {
-        'mode': mode,
-      },
+      body: {'mode': mode},
     );
 
     final token = _extractToken(tokenResponse.data);
@@ -55,7 +57,9 @@ class AiLiveService {
       throw Exception('Unable to start the Live AI session.');
     }
 
-    final uri = Uri.parse('$_liveEndpoint?access_token=${Uri.encodeQueryComponent(token)}');
+    final uri = Uri.parse(
+      '$_liveEndpoint?access_token=${Uri.encodeQueryComponent(token)}',
+    );
     final channel = WebSocketChannel.connect(uri);
     _channel = channel;
 
@@ -72,117 +76,147 @@ class AiLiveService {
       cancelOnError: false,
     );
 
-    channel.sink.add(jsonEncode({
-      'setup': {
-        'model': 'models/$_liveModel',
-        'generationConfig': {
-          'responseModalities': ['AUDIO'],
-          'speechConfig': {
-            'voiceConfig': {
-              'prebuiltVoiceConfig': {
-                'voiceName': 'Aoede',
+    channel.sink.add(
+      jsonEncode({
+        'setup': {
+          'model': 'models/$_liveModel',
+          'generationConfig': {
+            'responseModalities': ['AUDIO'],
+            'speechConfig': {
+              'voiceConfig': {
+                'prebuiltVoiceConfig': {
+                  'voiceName': 'Aoede',
+                },
               },
             },
           },
-        },
-        'systemInstruction': {
-          'parts': [
-            {
-              'text': _systemInstruction(mode),
+          'systemInstruction': {
+            'parts': [
+              {'text': _systemInstruction(mode)},
+            ],
+          },
+          'inputAudioTranscription': {},
+          'outputAudioTranscription': {},
+          'realtimeInputConfig': {
+            'automaticActivityDetection': {
+              'disabled': false,
             },
-          ],
-        },
-        'inputAudioTranscription': {},
-        'outputAudioTranscription': {},
-        'realtimeInputConfig': {
-          'automaticActivityDetection': {
-            'disabled': false,
           },
         },
-      },
-    }));
+      }),
+    );
+
+    try {
+      await _startAudio();
+    } catch (e) {
+      await disconnect();
+      rethrow;
+    }
 
     _connected = true;
-    await _startAudio();
     _emitStatus('Live');
   }
 
   Future<void> _startAudio() async {
-    await AudioIo.instance.requestLatency(AudioIoLatency.Realtime);
-    await AudioIo.instance.startWith(
-      const AudioIoConfig(
-        format: AudioIoFormat.pcm16,
-        inputSampleRate: AudioIoSampleRate.rate16000,
-        outputSampleRate: AudioIoSampleRate.rate24000,
-        outputBufferDuration: 2.0,
-      ),
-    );
+    if (!_audioInitialized) {
+      await _recorder.initialize(
+        sampleRate: 16000,
+        showLogs: false,
+      );
+      await _player.initialize(
+        sampleRate: 24000,
+        showLogs: false,
+      );
+      await _player.usePhoneSpeaker(true);
+      _audioInitialized = true;
+    }
 
     await _audioInputSubscription?.cancel();
-    _audioInputSubscription = AudioIo.instance.inputBytes.listen((bytes) {
+    _audioInputSubscription = _recorder.audioStream.listen((bytes) {
       if (!_connected || _muted || bytes.isEmpty) return;
       _sendAudio(bytes);
     });
+
+    await _player.start();
+    await _recorder.start();
   }
 
   void _sendAudio(Uint8List bytes) {
     final channel = _channel;
     if (channel == null) return;
 
-    channel.sink.add(jsonEncode({
-      'realtimeInput': {
-        'audio': {
-          'data': base64Encode(bytes),
-          'mimeType': 'audio/pcm;rate=16000',
+    channel.sink.add(
+      jsonEncode({
+        'realtimeInput': {
+          'audio': {
+            'data': base64Encode(bytes),
+            'mimeType': 'audio/pcm;rate=16000',
+          },
         },
-      },
-    }));
+      }),
+    );
   }
 
   void sendText(String text) {
     if (!_connected || text.trim().isEmpty) return;
-    _channel?.sink.add(jsonEncode({
-      'clientContent': {
-        'turns': [
-          {
-            'role': 'user',
-            'parts': [
-              {'text': text.trim()},
-            ],
-          },
-        ],
-        'turnComplete': true,
-      },
-    }));
+    _channel?.sink.add(
+      jsonEncode({
+        'clientContent': {
+          'turns': [
+            {
+              'role': 'user',
+              'parts': [
+                {'text': text.trim()},
+              ],
+            },
+          ],
+          'turnComplete': true,
+        },
+      }),
+    );
   }
 
   Future<void> toggleMute() async {
     _muted = !_muted;
     if (_muted) {
-      await AudioIo.instance.clearOutput();
+      await _recorder.stop();
+      try {
+        await _player.stop();
+      } catch (_) {}
+    } else if (_connected) {
+      await _player.start();
+      await _recorder.start();
     }
   }
 
   Future<void> interrupt() async {
     if (!_connected) return;
-    await AudioIo.instance.clearOutput();
-    _channel?.sink.add(jsonEncode({
-      'clientContent': {
-        'turnComplete': true,
-      },
-    }));
+    _channel?.sink.add(
+      jsonEncode({
+        'clientContent': {
+          'turnComplete': true,
+        },
+      }),
+    );
   }
 
   Future<void> disconnect() async {
     _connected = false;
     await _audioInputSubscription?.cancel();
     _audioInputSubscription = null;
+
+    try {
+      await _recorder.stop();
+    } catch (_) {}
+    try {
+      await _player.stop();
+    } catch (_) {}
+
     await _socketSubscription?.cancel();
     _socketSubscription = null;
     try {
-      await AudioIo.instance.stop();
+      await _channel?.sink.close();
     } catch (_) {}
-    await _channel?.sink.close();
     _channel = null;
     _emitStatus('Disconnected');
   }
@@ -219,8 +253,12 @@ class AiLiveService {
         if (inlineData is! Map) continue;
         final base64 = inlineData['data']?.toString();
         if (base64 == null || base64.isEmpty) continue;
+
         try {
-          AudioIo.instance.outputBytes.add(base64Decode(base64));
+          final audioBytes = base64Decode(base64);
+          if (audioBytes.isNotEmpty && _connected) {
+            unawaited(_player.writeChunk(audioBytes));
+          }
         } catch (_) {}
       }
     } catch (_) {
@@ -230,8 +268,7 @@ class AiLiveService {
 
   String _transcriptText(dynamic value) {
     if (value is Map) {
-      final text = value['text']?.toString().trim() ?? '';
-      return text;
+      return value['text']?.toString().trim() ?? '';
     }
     return '';
   }
@@ -265,6 +302,12 @@ class AiLiveService {
 
   Future<void> dispose() async {
     await disconnect();
+    try {
+      _recorder.dispose();
+    } catch (_) {}
+    try {
+      _player.dispose();
+    } catch (_) {}
     await _transcriptController.close();
     await _assistantTranscriptController.close();
     await _statusController.close();
