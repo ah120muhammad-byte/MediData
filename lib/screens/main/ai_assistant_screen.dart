@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
+import '../../core/responsive/responsive.dart';
 import '../../services/ai_chat_history_service.dart';
 import '../../services/ai_chat_service.dart';
 
@@ -222,10 +223,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
         if (!mounted) return;
         setState(() {
-          _messages.add(AiChatMessage(
-            role: 'assistant',
-            content: response.reply,
-          ));
+          _messages.add(
+            AiChatMessage(
+              role: 'assistant',
+              content: response.reply,
+            ),
+          );
           _isSending = false;
         });
         await _saveMessageToHistory(_messages.last);
@@ -455,38 +458,54 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 6, 18, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Choose AI mode',
-                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+          padding: EdgeInsets.fromLTRB(
+            18,
+            6,
+            18,
+            18 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Choose AI mode',
+                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              ..._AiMode.values.map(
-                (mode) => ListTile(
-                  leading: Icon(mode.icon),
-                  title: Text(mode.label),
-                  subtitle: Text(mode.description),
-                  trailing: _mode == mode
-                      ? Icon(Icons.check_circle_rounded,
-                          color: Theme.of(sheetContext).colorScheme.primary)
-                      : null,
-                  onTap: _isSending
-                      ? null
-                      : () {
-                          setState(() => _mode = mode);
-                          Navigator.of(sheetContext).pop();
-                        },
+                const SizedBox(height: 10),
+                ..._AiMode.values.map(
+                  (mode) => ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                    leading: Icon(mode.icon),
+                    title: Text(mode.label),
+                    subtitle: Text(
+                      mode.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: _mode == mode
+                        ? Icon(
+                            Icons.check_circle_rounded,
+                            color: Theme.of(sheetContext).colorScheme.primary,
+                          )
+                        : null,
+                    onTap: _isSending
+                        ? null
+                        : () {
+                            setState(() => _mode = mode);
+                            Navigator.of(sheetContext).pop();
+                          },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -554,40 +573,54 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final width = Responsive.width(context);
+    final isCompact = width < 420;
+    final isWide = width >= 900;
+    final horizontalPadding = width < 600 ? 12.0 : 20.0;
+    final contentMaxWidth = isWide ? 900.0 : 780.0;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: scheme.surface,
       appBar: AppBar(
-        titleSpacing: 12,
+        titleSpacing: isCompact ? 4 : 12,
+        toolbarHeight: isCompact ? 58 : 64,
         title: Row(
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: isCompact ? 34 : 38,
+              height: isCompact ? 34 : 38,
               decoration: BoxDecoration(
                 color: scheme.primary.withValues(alpha: .10),
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(isCompact ? 10 : 11),
               ),
               child: Icon(
                 Icons.auto_awesome_rounded,
+                size: isCompact ? 19 : 21,
                 color: scheme.primary,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: isCompact ? 8 : 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
+                  Text(
                     'MediData AI',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: isCompact ? 15 : 16,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   Text(
                     _mode.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: isCompact ? 10.5 : 11,
                       color: scheme.onSurface.withValues(alpha: .55),
                     ),
                   ),
@@ -599,11 +632,13 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         actions: [
           IconButton(
             tooltip: 'AI mode',
+            visualDensity: isCompact ? VisualDensity.compact : null,
             onPressed: _isSending ? null : _showModeSheet,
             icon: const Icon(Icons.tune_rounded),
           ),
           IconButton(
             tooltip: 'New chat',
+            visualDensity: isCompact ? VisualDensity.compact : null,
             onPressed: _isSending ? null : _startNewChat,
             icon: const Icon(Icons.add_comment_outlined),
           ),
@@ -615,66 +650,100 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
               top: false,
               child: Column(
                 children: [
-                  Expanded(child: _buildMessagesArea(context)),
-                  _buildComposer(context),
+                  Expanded(
+                    child: _buildMessagesArea(
+                      context,
+                      maxWidth: contentMaxWidth,
+                      horizontalPadding: horizontalPadding,
+                    ),
+                  ),
+                  _buildComposer(context, horizontalPadding: horizontalPadding),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildMessagesArea(BuildContext context) {
+  Widget _buildMessagesArea(
+    BuildContext context, {
+    required double maxWidth,
+    required double horizontalPadding,
+  }) {
+    final width = Responsive.width(context);
+
     if (_messages.isEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.auto_awesome_rounded,
-                size: 58,
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: .75),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'How can I help you study?',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w800),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Ask about lectures, medical concepts, or exam preparation.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .55),
-                  height: 1.45,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            28,
+            horizontalPadding,
+            24,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: width < 600 ? double.infinity : 620,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.auto_awesome_rounded,
+                  size: width < 420 ? 52 : 58,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: .75),
                 ),
-              ),
-              const SizedBox(height: 22),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _QuickPrompt(
-                    text: 'Explain a concept',
-                    onTap: () => _setPrompt('Explain this concept simply: '),
+                const SizedBox(height: 14),
+                Text(
+                  'How can I help you study?',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: width < 420 ? 20 : null,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Ask about lectures, medical concepts, or exam preparation.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: .55),
+                    height: 1.45,
+                    fontSize: width < 420 ? 13 : 14,
                   ),
-                  _QuickPrompt(
-                    text: 'Make revision notes',
-                    onTap: () => _setPrompt('Turn this into high-yield revision notes: '),
-                  ),
-                  _QuickPrompt(
-                    text: 'Quiz me',
-                    onTap: () => _setPrompt('Quiz me on this topic with 5 questions: '),
-                  ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 22),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _QuickPrompt(
+                      text: 'Explain a concept',
+                      onTap: () => _setPrompt('Explain this concept simply: '),
+                    ),
+                    _QuickPrompt(
+                      text: 'Make revision notes',
+                      onTap: () =>
+                          _setPrompt('Turn this into high-yield revision notes: '),
+                    ),
+                    _QuickPrompt(
+                      text: 'Quiz me',
+                      onTap: () =>
+                          _setPrompt('Quiz me on this topic with 5 questions: '),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -682,13 +751,24 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        18,
+        horizontalPadding,
+        16,
+      ),
       itemCount: _messages.length,
       itemBuilder: (context, index) {
-        return _buildMessageBubble(
-          context,
-          _messages[index],
-          index,
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: _buildMessageBubble(
+              context,
+              _messages[index],
+              index,
+            ),
+          ),
         );
       },
     );
@@ -707,25 +787,35 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     int index,
   ) {
     final theme = Theme.of(context);
+    final width = Responsive.width(context);
     final bool isUser = message.role == 'user';
     final content = message.content;
+    final bubbleMaxWidth = width < 420
+        ? width * .90
+        : width < 700
+            ? width * .84
+            : 780.0;
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 780),
+        constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
         margin: const EdgeInsets.only(bottom: 12),
         child: Column(
           crossAxisAlignment:
               isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              width: isUser ? null : double.infinity,
+              padding: EdgeInsets.symmetric(
+                horizontal: width < 420 ? 13 : 16,
+                vertical: width < 420 ? 10 : 12,
+              ),
               decoration: BoxDecoration(
                 color: isUser
                     ? theme.colorScheme.primary
                     : theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(width < 420 ? 16 : 18),
               ),
               child: isUser
                   ? Text(
@@ -733,6 +823,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       style: TextStyle(
                         color: theme.colorScheme.onPrimary,
                         height: 1.45,
+                        fontSize: width < 420 ? 14 : 15,
                       ),
                     )
                   : content.isEmpty
@@ -749,8 +840,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
             if (!isUser && content.trim().isNotEmpty && !_isSending)
               Padding(
                 padding: const EdgeInsets.only(left: 4, top: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: Wrap(
+                  spacing: 0,
                   children: [
                     IconButton(
                       visualDensity: VisualDensity.compact,
@@ -776,68 +867,93 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     );
   }
 
-  Widget _buildComposer(BuildContext context) {
+  Widget _buildComposer(
+    BuildContext context, {
+    required double horizontalPadding,
+  }) {
     final theme = Theme.of(context);
+    final width = Responsive.width(context);
+    final isCompact = width < 420;
+    final maxWidth = width >= 900 ? 900.0 : double.infinity;
 
     return Material(
       elevation: 8,
       color: theme.colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_selectedAttachment != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: _AttachmentChip(
-                    attachment: _selectedAttachment!,
-                    onRemove: _removeAttachment,
-                  ),
-                ),
+      child: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                isCompact ? 6 : 8,
+                horizontalPadding,
+                isCompact ? 8 : 12,
               ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                IconButton(
-                  tooltip: 'Attach file',
-                  onPressed: _isSending ? null : _pickFile,
-                  icon: const Icon(Icons.attach_file_rounded),
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    focusNode: _inputFocusNode,
-                    minLines: 1,
-                    maxLines: 6,
-                    textInputAction: TextInputAction.newline,
-                    decoration: InputDecoration(
-                      hintText: _selectedAttachment == null
-                          ? 'Ask MediData AI...'
-                          : 'Add a message about the file...',
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(22),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 11,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_selectedAttachment != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _AttachmentChip(
+                          attachment: _selectedAttachment!,
+                          onRemove: _removeAttachment,
+                        ),
                       ),
                     ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        tooltip: 'Attach file',
+                        visualDensity:
+                            isCompact ? VisualDensity.compact : null,
+                        onPressed: _isSending ? null : _pickFile,
+                        icon: const Icon(Icons.attach_file_rounded),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          focusNode: _inputFocusNode,
+                          minLines: 1,
+                          maxLines: isCompact ? 5 : 6,
+                          textInputAction: TextInputAction.newline,
+                          decoration: InputDecoration(
+                            hintText: _selectedAttachment == null
+                                ? 'Ask MediData AI...'
+                                : 'Add a message about the file...',
+                            filled: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                isCompact ? 19 : 22,
+                              ),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: isCompact ? 13 : 16,
+                              vertical: isCompact ? 10 : 11,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: isCompact ? 3 : 6),
+                      IconButton.filled(
+                        tooltip: 'Send',
+                        visualDensity:
+                            isCompact ? VisualDensity.compact : null,
+                        onPressed: _isSending ? null : _sendMessage,
+                        icon: const Icon(Icons.arrow_upward_rounded),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 6),
-                IconButton.filled(
-                  tooltip: 'Send',
-                  onPressed: _isSending ? null : _sendMessage,
-                  icon: const Icon(Icons.arrow_upward_rounded),
-                ),
-              ],
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -852,9 +968,14 @@ class _QuickPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = Responsive.width(context);
     return ActionChip(
       avatar: const Icon(Icons.auto_awesome_rounded, size: 16),
-      label: Text(text),
+      label: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       onPressed: onTap,
     );
   }
@@ -872,7 +993,15 @@ class _AttachmentChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final width = Responsive.width(context);
+    final maxFileNameWidth = width < 420
+        ? width - 120
+        : width < 700
+            ? width - 150
+            : 300.0;
+
     return Container(
+      constraints: BoxConstraints(maxWidth: width - 24),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
@@ -888,12 +1017,16 @@ class _AttachmentChip extends StatelessWidget {
             size: 18,
           ),
           const SizedBox(width: 8),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
-            child: Text(
-              attachment.fileName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: maxFileNameWidth.clamp(120, 300),
+              ),
+              child: Text(
+                attachment.fileName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           const SizedBox(width: 4),
