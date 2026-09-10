@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'services/audio_player_service.dart';
 import 'services/remote_app_settings_service.dart';
+import 'services/theme_mode_service.dart';
 import 'screens/authentication/auth_gate_v2.dart';
 
 Future<void> main() async {
@@ -21,6 +22,7 @@ Future<void> main() async {
   );
 
   await AudioPlayerService.instance.initialize();
+  await ThemeModeService.instance.load();
 
   RemoteAppSettings settings = RemoteAppSettings.defaults;
   try {
@@ -32,20 +34,43 @@ Future<void> main() async {
   runApp(MyApp(settings: settings));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final RemoteAppSettings settings;
 
   const MyApp({super.key, required this.settings});
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final ThemeModeService _themeService = ThemeModeService.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _themeService.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    _themeService.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: settings.appName,
+      title: widget.settings.appName,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
-      home: AuthGateV2(settings: settings),
+      themeMode: _themeService.themeMode,
+      home: AuthGateV2(settings: widget.settings),
     );
   }
 }
