@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/responsive/responsive.dart';
@@ -119,7 +120,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _SectionCard(
                       title: 'Study Activity',
                       icon: Icons.insights_rounded,
-                      child: _StudyActivityList(
+                      child: _StudyActivityChart(
                         activity: data.analytics.dailyActivity,
                       ),
                     ),
@@ -802,61 +803,117 @@ class _ModuleProgressTile extends StatelessWidget {
   }
 }
 
-class _StudyActivityList extends StatelessWidget {
+class _StudyActivityChart extends StatelessWidget {
   final List<DailyStudyActivity> activity;
 
-  const _StudyActivityList({required this.activity});
+  const _StudyActivityChart({required this.activity});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     if (activity.isEmpty) {
-      return const Text(
-        'Study activity will appear here once you start studying.',
+      return const _ChartEmptyState(
+        icon: Icons.insights_outlined,
+        text: 'Study activity will appear here once you start studying.',
       );
     }
 
-    final theme = Theme.of(context);
+    final spots = List.generate(
+      activity.length,
+      (index) => FlSpot(
+        index.toDouble(),
+        activity[index].studyMinutes.toDouble(),
+      ),
+    );
 
-    return Column(
-      children: activity.reversed.map((item) {
-        final minutes = item.studyMinutes.round();
-        final dayLabel = '${item.day.day}/${item.day.month}';
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 46,
-                child: Text(
-                  dayLabel,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: theme.colorScheme.onSurface.withValues(alpha: .55),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: minutes == 0 ? 0 : (minutes / 120).clamp(0, 1),
-                    minHeight: 7,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 9),
-              SizedBox(
-                width: 52,
-                child: Text(
-                  '${minutes}m',
-                  textAlign: TextAlign.end,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
+    final maxValue = activity.fold<double>(
+      0,
+      (current, item) => current > item.studyMinutes
+          ? current
+          : item.studyMinutes.toDouble(),
+    );
+
+    final maxY = maxValue <= 5
+        ? 10.0
+        : ((maxValue * 1.2) / 5).ceil() * 5.0;
+
+    return SizedBox(
+      height: 220,
+      child: LineChart(
+        LineChartData(
+          minY: 0,
+          maxY: maxY,
+          minX: 0,
+          maxX: (activity.length - 1).toDouble(),
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: maxY / 5,
           ),
-        );
-      }).toList(),
+          borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 32,
+                interval: maxY / 5,
+                getTitlesWidget: (value, meta) => Text(
+                  value.toInt().toString(),
+                  style: const TextStyle(fontSize: 9),
+                ),
+              ),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                interval: activity.length > 7 ? 2 : 1,
+                reservedSize: 28,
+                getTitlesWidget: (value, meta) {
+                  final index = value.round();
+                  if (index < 0 || index >= activity.length) {
+                    return const SizedBox.shrink();
+                  }
+                  final day = activity[index].day;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      '${day.day}/${day.month}',
+                      style: const TextStyle(fontSize: 9),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              barWidth: 3,
+              color: theme.colorScheme.primary,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    theme.colorScheme.primary.withValues(alpha: .14),
+                    theme.colorScheme.primary.withValues(alpha: .01),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
