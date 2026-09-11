@@ -1,0 +1,63 @@
+name: Fix audio loading overlay
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'Fix audio loading overlay') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch audio player loading state
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/screens/main/lecture_audio_player_screen.dart')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''        await _audio.load(\n          source: source,\n          lectureId: widget.lectureId,\n          title: widget.fileTitle,\n          lectureTitle: widget.lectureTitle,\n          isLocalFile: isLocal,\n        );\n\n        await _audio.setSpeed(_playbackSpeed);\n        await _audio.play();'''
+
+          new = '''        await _audio.load(\n          source: source,\n          lectureId: widget.lectureId,\n          title: widget.fileTitle,\n          lectureTitle: widget.lectureTitle,\n          isLocalFile: isLocal,\n        );\n\n        await _audio.setSpeed(_playbackSpeed);\n\n        // The player UI is ready once the source is loaded. Hide the loading\n        // state before starting playback so the screen never stays blocked\n        // behind a loading indicator while audio is already playing.\n        if (mounted) {\n          setState(() {\n            _loading = false;\n            _error = null;\n          });\n        }\n\n        await _audio.play();'''
+
+          if old not in text:
+              raise SystemExit('initializePlayer load/play block not found')
+          text = text.replace(old, new, 1)
+
+          old_body = '''      body: _loading\n          ? const Center(child: CircularProgressIndicator())\n          : _error != null\n              ? _buildError(context)\n              : _buildPlayer(context, scheme),'''
+
+          new_body = '''      body: _error != null\n          ? _buildError(context)\n          : Stack(\n              children: [\n                _buildPlayer(context, scheme),\n                if (_loading)\n                  Positioned.fill(\n                    child: IgnorePointer(\n                      child: ColoredBox(\n                        color: Colors.transparent,\n                        child: Center(\n                          child: DecoratedBox(\n                            decoration: BoxDecoration(\n                              color: Colors.black54,\n                              borderRadius: BorderRadius.all(Radius.circular(16)),\n                            ),\n                            child: Padding(\n                              padding: EdgeInsets.symmetric(horizontal: 18, vertical: 14),\n                              child: Row(\n                                mainAxisSize: MainAxisSize.min,\n                                children: [\n                                  SizedBox(\n                                    width: 20,\n                                    height: 20,\n                                    child: CircularProgressIndicator(strokeWidth: 2),\n                                  ),\n                                  SizedBox(width: 10),\n                                  Text('Loading audio...', style: TextStyle(color: Colors.white)),\n                                ],\n                              ),\n                            ),\n                          ),\n                        ),\n                      ),\n                    ),\n                  ),\n              ],\n            ),'''
+
+          if old_body not in text:
+              raise SystemExit('audio player body block not found')
+          text = text.replace(old_body, new_body, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit patch and remove workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/main/lecture_audio_player_screen.dart .github/workflows/fix-audio-loading.yml
+          git commit -m "Fix audio loading overlay"
+          git push
+
+      - name: Remove workflow file after patch commit
+        if: success()
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-audio-loading.yml
+          git commit -m "Remove temporary audio loading workflow"
+          git push
