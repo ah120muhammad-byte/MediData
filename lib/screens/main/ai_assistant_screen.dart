@@ -146,7 +146,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                             : ListView.separated(
                                 padding: const EdgeInsets.all(12),
                                 itemCount: sessions.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 3),
+                                separatorBuilder: (_, _) => const SizedBox(height: 3),
                                 itemBuilder: (context, index) {
                                   final session = sessions[index];
                                   final selected = session.id == selectedId;
