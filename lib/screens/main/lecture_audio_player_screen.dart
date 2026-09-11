@@ -46,7 +46,10 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    _initializePlayer();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _initializePlayer();
+    });
   }
 
   @override
@@ -142,6 +145,7 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
   }
 
   Future<void> _togglePlayback() async {
+    if (_loading) return;
     if (_audio.isPlaying) {
       await _audio.pause();
     } else {
@@ -278,11 +282,45 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? _buildError(context)
-              : _buildPlayer(context, scheme),
+      body: _error != null
+          ? _buildError(context)
+          : Stack(
+              children: [
+                _buildPlayer(context, scheme),
+                if (_loading)
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: Colors.black12,
+                      child: Center(
+                        child: Card(
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 14,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2.4),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Loading audio…',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 
@@ -449,7 +487,7 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
               width: main,
               height: main,
               child: FilledButton(
-                onPressed: _togglePlayback,
+                onPressed: _loading ? null : _togglePlayback,
                 style: FilledButton.styleFrom(shape: const CircleBorder(), padding: EdgeInsets.zero),
                 child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: main * .48),
               ),
