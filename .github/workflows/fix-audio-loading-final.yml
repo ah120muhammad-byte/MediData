@@ -1,0 +1,52 @@
+name: Fix audio loading overlay before playback
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ !contains(github.event.head_commit.message, 'Fix audio loading overlay before playback') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply fix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/screens/main/lecture_audio_player_screen.dart')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''        await _audio.setSpeed(_playbackSpeed);\n        await _audio.play();\n      }\n\n      _processingSubscription = _audio.processingStateStream.listen((state) {'''
+
+          new = '''        await _audio.setSpeed(_playbackSpeed);\n\n        // Source is ready: remove the loading overlay before playback.\n        if (!mounted) return;\n        setState(() {\n          _loading = false;\n          _error = null;\n        });\n\n        // Do not await play(); on some platforms it can wait for the audio\n        // session while the UI should already be fully interactive.\n        unawaited(_audio.play());\n      }\n\n      _processingSubscription = _audio.processingStateStream.listen((state) {'''
+
+          if old not in text:
+              raise SystemExit('Expected audio initialization block not found')
+          text = text.replace(old, new, 1)
+
+          old2 = '''      if (!mounted) return;\n      setState(() {\n        _loading = false;\n        _error = null;\n      });\n    } catch (e) {'''
+          if old2 not in text:
+              raise SystemExit('Expected trailing loading state not found')
+          text = text.replace(old2, '''    } catch (e) {''', 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit, push, and remove workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/main/lecture_audio_player_screen.dart
+          git commit -m "Fix audio loading overlay before playback"
+          git push
+          git rm .github/workflows/fix-audio-loading-final.yml
+          git commit -m "Remove temporary audio loading workflow"
+          git push
