@@ -1,0 +1,116 @@
+name: Fix audio player screen loading flow
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ !contains(github.event.head_commit.message, 'Fix audio player screen loading flow') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch audio player screen
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/screens/main/lecture_audio_player_screen.dart')
+          text = path.read_text(encoding='utf-8')
+
+          old_init = """  @override
+    void initState() {
+      super.initState();
+      _initializePlayer();
+    }
+"""
+          new_init = """  @override
+    void initState() {
+      super.initState();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _initializePlayer();
+      });
+    }
+"""
+          if old_init not in text:
+              raise SystemExit('initState block not found')
+          text = text.replace(old_init, new_init, 1)
+
+          old_body = """      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _buildError(context)
+              : _buildPlayer(context, scheme),
+"""
+          new_body = """      body: Stack(
+        children: [
+          Positioned.fill(
+            child: _error != null
+                ? _buildError(context)
+                : _buildPlayer(context, scheme),
+          ),
+          if (_loading)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black12,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [
+                        BoxShadow(
+                          blurRadius: 18,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            color: scheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text('Loading audio…'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+"""
+          if old_body not in text:
+              raise SystemExit('body block not found')
+          text = text.replace(old_body, new_body, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit patch and remove workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/main/lecture_audio_player_screen.dart .github/workflows/fix-audio-screen.yml
+          git rm .github/workflows/fix-audio-screen.yml
+          git commit -m "Fix audio player screen loading flow"
+          git push
