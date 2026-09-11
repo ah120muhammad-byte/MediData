@@ -1,4 +1,3 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/responsive/responsive.dart';
@@ -120,7 +119,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _SectionCard(
                       title: 'Study Activity',
                       icon: Icons.insights_rounded,
-                      child: _StudyActivityChart(
+                      child: _StudyActivityList(
                         activity: data.analytics.dailyActivity,
                       ),
                     ),
@@ -128,7 +127,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _SectionCard(
                       title: 'Exam Performance',
                       icon: Icons.analytics_rounded,
-                      child: _ExamChart(attempts: data.analytics.attempts),
+                      child: _ExamPerformance(attempts: data.analytics.attempts),
                     ),
                     _Gap(),
                     _SectionCard(
@@ -235,14 +234,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : () async {
                           final name = nameController.text.trim();
                           if (name.isEmpty) return;
-
                           setDialogState(() => saving = true);
                           try {
                             await _service.updateProfile(
                               fullName: name,
                               phone: phoneController.text,
                             );
-
                             if (!dialogContext.mounted) return;
                             Navigator.of(dialogContext).pop();
                           } catch (_) {
@@ -273,7 +270,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     nameController.dispose();
     phoneController.dispose();
     emailController.dispose();
-
     if (mounted) await _refresh();
   }
 
@@ -324,7 +320,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : () async {
                           final password = passwordController.text;
                           final confirmation = confirmController.text;
-
                           if (password.length < 6 || password != confirmation) {
                             ScaffoldMessenger.of(dialogContext).showSnackBar(
                               const SnackBar(
@@ -333,7 +328,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             );
                             return;
                           }
-
                           setDialogState(() => saving = true);
                           try {
                             await _service.updatePassword(password);
@@ -423,6 +417,7 @@ class _ProfileHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final padding = Responsive.cardPadding(context);
     final radius = Responsive.clamped(context, base: 34, min: 28, max: 46);
+    final imageUrl = profile.profileImageUrl?.trim();
 
     return Card(
       elevation: 0,
@@ -430,8 +425,15 @@ class _ProfileHeader extends StatelessWidget {
         padding: EdgeInsets.all(padding),
         child: Row(
           children: [
-            _Avatar(profile: profile, radius: radius),
-            SizedBox(width: Responsive.spacing(context, base: 14, min: 10, max: 20)),
+            imageUrl == null || imageUrl.isEmpty
+                ? _Avatar(profile: profile, radius: radius)
+                : CircleAvatar(
+                    radius: radius,
+                    backgroundImage: NetworkImage(imageUrl),
+                  ),
+            SizedBox(
+              width: Responsive.spacing(context, base: 14, min: 10, max: 20),
+            ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,7 +443,12 @@ class _ProfileHeader extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: Responsive.titleSize(context, base: 21, min: 18, max: 28),
+                      fontSize: Responsive.titleSize(
+                        context,
+                        base: 21,
+                        min: 18,
+                        max: 28,
+                      ),
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -486,11 +493,6 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = profile.profileImageUrl?.trim();
-    if (url != null && url.isNotEmpty) {
-      return CircleAvatar(radius: radius, backgroundImage: NetworkImage(url));
-    }
-
     final name = profile.fullName.trim();
     final initial = name.isEmpty ? '?' : name[0].toUpperCase();
 
@@ -519,42 +521,638 @@ class _OverviewGrid extends StatelessWidget {
     final width = Responsive.width(context);
     final padding = Responsive.horizontalPadding(context);
     final available = width - (padding * 2);
-    final columns = available >= 900 ? 4 : available >= 560 ? 2 : 1;
-    final spacing = Responsive.spacing(context, base: 10, min: 8, max: 14);
-    final cards = [
+    final columns = available >= 960
+        ? 4
+        : available >= 600
+            ? 3
+            : available >= 420
+                ? 2
+                : 1;
+    final spacing = Responsive.spacing(context, base: 8, min: 6, max: 12);
+    final itemWidth = (available - spacing * (columns - 1)) / columns;
+    final itemHeight = columns == 1
+        ? 70.0
+        : Responsive.clamped(context, base: 90, min: 80, max: 102);
+
+    final cards = <Widget>[
+      _StatCard('Lectures Opened', analytics.lecturesOpened, Icons.menu_book_rounded),
+      _StatCard('Audio Completed', analytics.audioCompleted, Icons.audio_file_rounded),
+      _StatCard('Video Completed', analytics.videoCompleted, Icons.video_file_rounded),
+      _StatCard('Exam Attempts', analytics.examAttempts, Icons.quiz_rounded),
       _StatCard(
-        title: 'Study Hours',
-        value: '${analytics.totalStudyHours}',
-        icon: Icons.timer_outlined,
+        'Average Score',
+        '${analytics.averageScore.toStringAsFixed(0)}%',
+        Icons.analytics_rounded,
       ),
       _StatCard(
-        title: 'Lectures',
-        value: '${analytics.totalLecturesCompleted}',
-        icon: Icons.menu_book_rounded,
+        'Best Score',
+        '${analytics.bestScore.toStringAsFixed(0)}%',
+        Icons.emoji_events_rounded,
       ),
+      _StatCard('Passed Exams', analytics.passedExams, Icons.check_circle_rounded),
       _StatCard(
-        title: 'Exams',
-        value: '${analytics.totalExamsCompleted}',
-        icon: Icons.quiz_rounded,
+        'Success Rate',
+        '${analytics.successRate.toStringAsFixed(0)}%',
+        Icons.trending_up_rounded,
       ),
-      _StatCard(
-        title: 'Average Score',
-        value: '${analytics.averageExamScore.toStringAsFixed(0)}%',
-        icon: Icons.trending_up_rounded,
-      ),
+      _StatCard('Study Time', analytics.formattedStudyTime, Icons.timer_outlined),
     ];
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: cards.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        crossAxisSpacing: spacing,
-        mainAxisSpacing: spacing,
-        childAspectRatio: columns == 1 ? 3.8 : 2.1,
+    return Wrap(
+      spacing: spacing,
+      runSpacing: spacing,
+      children: cards
+          .map(
+            (card) => SizedBox(
+              width: itemWidth,
+              height: itemHeight,
+              child: card,
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final Object value;
+  final IconData icon;
+
+  const _StatCard(this.title, this.value, this.icon);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                color: theme.colorScheme.primary,
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: theme.colorScheme.onSurface.withValues(alpha: .55),
+                    ),
+                  ),
+                  Text(
+                    value.toString(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      itemBuilder: (_, index) => cards[index],
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget child;
+  final Widget? trailing;
+
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: EdgeInsets.all(
+          Responsive.clamped(context, base: 13, min: 10, max: 18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: theme.colorScheme.primary, size: 20),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: Responsive.titleSize(
+                        context,
+                        base: 16,
+                        min: 14,
+                        max: 21,
+                      ),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (trailing != null) trailing!,
+              ],
+            ),
+            const SizedBox(height: 9),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LearningProgress extends StatelessWidget {
+  final List<StudentModuleProgress> modules;
+
+  const _LearningProgress({required this.modules});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final active = modules.where((module) => module.totalLectures > 0).toList();
+
+    if (active.isEmpty) {
+      return const Text(
+        'Learning progress will appear here once lectures are available.',
+      );
+    }
+
+    final total = active.fold<int>(0, (sum, module) => sum + module.totalLectures);
+    final done = active.fold<int>(0, (sum, module) => sum + module.completedLectures);
+    final overall = total == 0 ? 0 : ((done / total) * 100).round();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '$done of $total lectures completed',
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withValues(alpha: .55),
+                ),
+              ),
+            ),
+            Text(
+              '$overall%',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 22,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            value: overall / 100,
+            minHeight: 8,
+          ),
+        ),
+        const SizedBox(height: 16),
+        ...active.map((module) => _ModuleProgressTile(module: module)),
+      ],
+    );
+  }
+}
+
+class _ModuleProgressTile extends StatelessWidget {
+  final StudentModuleProgress module;
+
+  const _ModuleProgressTile({required this.module});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final progress = module.progressPercent / 100;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  module.moduleName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('${module.completedLectures}/${module.totalLectures}'),
+              const SizedBox(width: 7),
+              Text(
+                '${module.progressPercent}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: module.progressPercent >= 100
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(value: progress, minHeight: 6),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StudyActivityList extends StatelessWidget {
+  final List<DailyStudyActivity> activity;
+
+  const _StudyActivityList({required this.activity});
+
+  @override
+  Widget build(BuildContext context) {
+    if (activity.isEmpty) {
+      return const Text(
+        'Study activity will appear here once you start studying.',
+      );
+    }
+
+    final theme = Theme.of(context);
+
+    return Column(
+      children: activity.reversed.map((item) {
+        final minutes = item.studyMinutes.round();
+        final dayLabel = '${item.day.day}/${item.day.month}';
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 46,
+                child: Text(
+                  dayLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurface.withValues(alpha: .55),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: minutes == 0 ? 0 : (minutes / 120).clamp(0, 1),
+                    minHeight: 7,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 9),
+              SizedBox(
+                width: 52,
+                child: Text(
+                  '${minutes}m',
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _ExamPerformance extends StatelessWidget {
+  final List<StudentExamAttempt> attempts;
+
+  const _ExamPerformance({required this.attempts});
+
+  @override
+  Widget build(BuildContext context) {
+    final completed = attempts.where((item) => item.isCompleted).toList();
+    if (completed.isEmpty) {
+      return const _ChartEmptyState(
+        icon: Icons.analytics_outlined,
+        text: 'Completed exam scores will appear here.',
+      );
+    }
+
+    final theme = Theme.of(context);
+    final average = completed
+            .map((item) => item.score)
+            .fold<int>(0, (sum, score) => sum + score) /
+        completed.length;
+    final best = completed
+        .map((item) => item.score)
+        .fold<int>(0, (best, score) => score > best ? score : best);
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _PerformanceMetric(
+                label: 'Average',
+                value: '${average.toStringAsFixed(0)}%',
+                icon: Icons.analytics_rounded,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _PerformanceMetric(
+                label: 'Best',
+                value: '$best%',
+                icon: Icons.emoji_events_rounded,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        ...completed.take(5).map(
+          (attempt) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    attempt.examTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '${attempt.score}%',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: attempt.passed
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.error,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PerformanceMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _PerformanceMetric({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: .07),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: theme.colorScheme.primary, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurface.withValues(alpha: .55),
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChartEmptyState extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _ChartEmptyState({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 130,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 42,
+              color: theme.colorScheme.onSurface.withValues(alpha: .22),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withValues(alpha: .58),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExamAttemptsList extends StatelessWidget {
+  final List<StudentExamAttempt> attempts;
+  final void Function(StudentExamAttempt attempt)? onAttemptTap;
+
+  const _ExamAttemptsList({required this.attempts, required this.onAttemptTap});
+
+  @override
+  Widget build(BuildContext context) {
+    if (attempts.isEmpty) return const Text('No exam attempts yet.');
+
+    return Column(
+      children: attempts
+          .map(
+            (attempt) => _ExamAttemptTile(
+              attempt: attempt,
+              onTap: onAttemptTap == null
+                  ? null
+                  : () => onAttemptTap!(attempt),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _ExamAttemptTile extends StatelessWidget {
+  final StudentExamAttempt attempt;
+  final VoidCallback? onTap;
+
+  const _ExamAttemptTile({required this.attempt, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color statusColor;
+    final String statusLabel;
+
+    if (attempt.isCompleted) {
+      statusColor = attempt.passed ? Colors.green : theme.colorScheme.error;
+      statusLabel = attempt.passed ? 'Passed' : 'Failed';
+    } else if (attempt.isInProgress) {
+      statusColor = theme.colorScheme.primary;
+      statusLabel = 'In Progress';
+    } else {
+      statusColor = Colors.orange;
+      statusLabel = 'Abandoned';
+    }
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: CircleAvatar(
+        backgroundColor: statusColor.withValues(alpha: .10),
+        child: Icon(
+          attempt.isInProgress
+              ? Icons.play_arrow_rounded
+              : attempt.passed
+                  ? Icons.check_rounded
+                  : Icons.close_rounded,
+          color: statusColor,
+        ),
+      ),
+      title: Text(
+        attempt.examTitle,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      subtitle: Text(
+        attempt.isCompleted ? '${attempt.score}% • $statusLabel' : statusLabel,
+      ),
+      trailing: onTap == null ? null : const Icon(Icons.chevron_right_rounded),
+      onTap: onTap,
+    );
+  }
+}
+
+class _LectureActivityList extends StatelessWidget {
+  final List<StudentLectureActivity> activities;
+  final void Function({
+    required String moduleId,
+    required String moduleName,
+    required String lectureId,
+  })? onOpenLecture;
+
+  const _LectureActivityList({
+    required this.activities,
+    required this.onOpenLecture,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (activities.isEmpty) return const Text('No lecture activity yet.');
+
+    return Column(
+      children: activities
+          .map(
+            (activity) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primary.withValues(alpha: .10),
+                child: const Icon(
+                  Icons.menu_book_rounded,
+                  color: AppColors.primary,
+                ),
+              ),
+              title: Text(
+                activity.lectureTitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                '${activity.moduleName} • ${activity.progressPercent}% progress',
+              ),
+              trailing: onOpenLecture == null
+                  ? null
+                  : const Icon(Icons.chevron_right_rounded),
+              onTap: onOpenLecture == null
+                  ? null
+                  : () => onOpenLecture!(
+                        moduleId: activity.moduleId,
+                        moduleName: activity.moduleName,
+                        lectureId: activity.lectureId,
+                      ),
+            ),
+          )
+          .toList(),
     );
   }
 }
@@ -567,7 +1165,8 @@ class _StudentSettings extends StatefulWidget {
 }
 
 class _StudentSettingsState extends State<_StudentSettings> {
-  final StudentPreferencesService _preferences = StudentPreferencesService.instance;
+  final StudentPreferencesService _preferences =
+      StudentPreferencesService.instance;
   final ThemeModeService _themeService = ThemeModeService.instance;
 
   bool _loading = true;
@@ -575,7 +1174,6 @@ class _StudentSettingsState extends State<_StudentSettings> {
   bool _autoPlay = true;
   bool _wifiOnlyDownloads = true;
   double _defaultSpeed = 1.0;
-
   ThemeMode _themeMode = ThemeMode.system;
 
   @override
@@ -650,9 +1248,9 @@ class _StudentSettingsState extends State<_StudentSettings> {
                 child: Text('Device'),
               ),
             ],
-            onChanged: (mode) {
+            onChanged: (mode) async {
               if (mode == null) return;
-              unawaited(_themeService.setThemeMode(mode));
+              await _themeService.setThemeMode(mode);
             },
           ),
         ),
@@ -761,7 +1359,10 @@ class _AccountActions extends StatelessWidget {
           ListTile(
             dense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 6),
-            leading: Icon(Icons.logout_rounded, color: theme.colorScheme.error),
+            leading: Icon(
+              Icons.logout_rounded,
+              color: theme.colorScheme.error,
+            ),
             title: Text(
               'Sign Out',
               style: TextStyle(
@@ -779,6 +1380,7 @@ class _AccountActions extends StatelessWidget {
 
 class _ErrorView extends StatelessWidget {
   final Future<void> Function() onRetry;
+
   const _ErrorView({required this.onRetry});
 
   @override
