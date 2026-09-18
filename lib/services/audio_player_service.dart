@@ -965,7 +965,17 @@ class _LectureAudioHandler
         source.tag;
 
     if (tag is MediaItem) {
-      mediaItem.add(tag);
+      final duration =
+          _player.duration;
+
+      mediaItem.add(
+        duration == null
+            ? tag
+            : tag.copyWith(
+                duration:
+                    duration,
+              ),
+      );
     }
   }
 
