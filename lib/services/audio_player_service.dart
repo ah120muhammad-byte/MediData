@@ -37,11 +37,21 @@ class AudioPlayerService {
           androidNotificationChannelId: 'com.medidata.dataapp.audio',
           androidNotificationChannelName: 'Lecture Audio',
           androidNotificationChannelDescription: 'Lecture audio playback',
+          androidNotificationOngoing: true,
+          androidResumeOnClick: true,
           androidStopForegroundOnPause: false,
           fastForwardInterval: Duration(seconds: 15),
           rewindInterval: Duration(seconds: 15),
         ),
       );
+
+      if (!kIsWeb &&
+          defaultTargetPlatform ==
+              TargetPlatform.android) {
+        await AudioService
+            .androidForceEnableMediaButtons();
+      }
+
       _initialized = true;
     } catch (_) {
       _initializationFuture = null;
