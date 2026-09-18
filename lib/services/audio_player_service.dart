@@ -145,9 +145,36 @@ class AudioPlayerService {
   // ===========================================================================
 
   Future<void> play() async {
-    await initialize();
+    await _ready;
 
-    await _audioHandler.play();
+    // just_audio's play() future completes when playback is later paused,
+    // stopped, or completed. Do not await it in the AudioService callback.
+    unawaited(
+      _player.play().catchError(
+        (Object error, StackTrace stackTrace) {
+          debugPrint('Audio play error: $error');
+          debugPrintStack(
+            stackTrace: stackTrace,
+          );
+        },
+      ),
+    );
+
+    _broadcastState(
+      _player.playbackEvent,
+    );
+
+    if (!_studySessionOpened) {
+      _studySessionOpened =
+          true;
+
+      _studyTracker.start(
+        lectureOpened:
+            true,
+      );
+    } else {
+      _studyTracker.start();
+    }
   }
 
   // ===========================================================================
@@ -155,9 +182,32 @@ class AudioPlayerService {
   // ===========================================================================
 
   Future<void> pause() async {
-    await initialize();
+    await _ready;
 
-    await _audioHandler.pause();
+    await _player.pause();
+
+    _broadcastState(
+      _player.playbackEvent,
+    );
+
+    // Never block an Android notification command on Supabase writes.
+    unawaited(
+      _finishPauseBookkeeping(),
+    );
+  }
+
+  Future<void> _finishPauseBookkeeping() async {
+    try {
+      await _studyTracker.pause();
+      await _saveProgress();
+    } catch (e, stackTrace) {
+      debugPrint(
+        'Audio pause bookkeeping error: $e',
+      );
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   // ===========================================================================
