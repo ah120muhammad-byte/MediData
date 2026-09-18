@@ -42,14 +42,12 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
 
   Timer? _sleepTimer;
   Duration? _sleepRemaining;
+  int _initializationGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _initializePlayer();
-    });
+    _initializePlayer();
   }
 
   @override
@@ -62,15 +60,46 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
   }
 
   Future<void> _initializePlayer() async {
+    final generation = ++_initializationGeneration;
+
+    await _processingSubscription?.cancel();
+    await _playerStateSubscription?.cancel();
+    _processingSubscription = null;
+    _playerStateSubscription = null;
+
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+        _completed = false;
+      });
+    }
+
     try {
-      // Reuse the current AudioService session when returning to the same
-      // lecture. This prevents the source from being reloaded from zero and
-      // preserves the live position/background playback state.
-      final sameLectureIsLoaded =
-          _audio.currentMediaItem?.id == widget.lectureId &&
+      // Finish AudioService initialization before touching its streams.
+      await _audio.initialize();
+      if (!mounted || generation != _initializationGeneration) return;
+
+      // Subscribe before loading/playing so the first player events are not missed.
+      _processingSubscription = _audio.processingStateStream.listen((state) {
+        if (!mounted || generation != _initializationGeneration) return;
+        if (state == ProcessingState.completed) {
+          setState(() => _completed = true);
+        }
+      });
+
+      _playerStateSubscription = _audio.playingStream.listen((_) {
+        if (!mounted || generation != _initializationGeneration) return;
+        setState(() {});
+      });
+
+      // Match the exact audio file, not only the lecture.
+      final expectedMediaId = '${widget.lectureId}::${widget.fileId}';
+      final sameFileIsLoaded =
+          _audio.currentMediaItem?.id == expectedMediaId &&
           _audio.duration != null;
 
-      if (!sameLectureIsLoaded) {
+      if (!sameFileIsLoaded) {
         final downloaded = await DownloadsService.instance.findById(widget.fileId);
         var source = widget.fileUrl;
         var isLocal = false;
@@ -90,37 +119,39 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
           );
         }
 
+        if (!mounted || generation != _initializationGeneration) return;
+
         await _audio.load(
           source: source,
           lectureId: widget.lectureId,
+          fileId: widget.fileId,
           title: widget.fileTitle,
           lectureTitle: widget.lectureTitle,
           isLocalFile: isLocal,
         );
 
+        if (!mounted || generation != _initializationGeneration) return;
+
         await _audio.setSpeed(_playbackSpeed);
         await _audio.play();
       }
 
-      _processingSubscription = _audio.processingStateStream.listen((state) {
-        if (!mounted) return;
-        if (state == ProcessingState.completed) {
-          setState(() => _completed = true);
-        }
-      });
+      if (!mounted || generation != _initializationGeneration) return;
 
-      _playerStateSubscription = _audio.playingStream.listen((_) {
-        if (mounted) setState(() {});
-      });
+      if (_audio.currentMediaItem?.id == expectedMediaId &&
+          _audio.duration != null &&
+          _audio.position >= _audio.duration!) {
+        _completed = true;
+      }
 
-      if (!mounted) return;
       setState(() {
         _loading = false;
         _error = null;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Audio player error: $e');
-      if (!mounted) return;
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted || generation != _initializationGeneration) return;
       setState(() {
         _loading = false;
         _error = 'Unable to play this audio.';
