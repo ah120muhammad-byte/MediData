@@ -572,6 +572,24 @@ class _LectureAudioHandler
       audioSource,
     );
 
+    // Android's media notification uses the MediaItem metadata together with
+    // PlaybackState to render the progress bar. The duration is only known
+    // after the source is prepared, so publish it now.
+    final loadedDuration =
+        _player.duration;
+
+    if (loadedDuration != null) {
+      final itemWithDuration =
+          mediaItem.copyWith(
+        duration:
+            loadedDuration,
+      );
+
+      this.mediaItem.add(
+        itemWithDuration,
+      );
+    }
+
     // -------------------------------------------------------------------------
     // LOAD SAVED PROGRESS
     // -------------------------------------------------------------------------
@@ -1005,6 +1023,8 @@ class _LectureAudioHandler
             event.updatePosition,
         bufferedPosition:
             event.bufferedPosition,
+        updateTime:
+            DateTime.now(),
         speed:
             _player.speed,
         queueIndex:
