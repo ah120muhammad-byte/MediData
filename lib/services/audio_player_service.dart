@@ -280,10 +280,6 @@ class _LectureAudioHandler
       _sequenceSubscription;
 
   StreamSubscription<
-          Duration>?
-      _positionSubscription;
-
-  StreamSubscription<
           AudioInterruptionEvent>?
       _interruptionSubscription;
 
@@ -362,18 +358,6 @@ class _LectureAudioHandler
             .listen(
       (_) {
         _broadcastMediaItem();
-      },
-    );
-
-    _positionSubscription =
-        _player
-            .positionStream
-            .listen(
-      (_) {
-        _broadcastState(
-          _player
-              .playbackEvent,
-        );
       },
     );
 
@@ -494,13 +478,22 @@ class _LectureAudioHandler
   }) async {
     await _ready;
 
-    // -------------------------------------------------------------------------
-    // Save previous lecture before replacing it.
-    // -------------------------------------------------------------------------
+    // Start previous-session cleanup in parallel with the next source load.
+    // The initial open has no previous audio session, so it does no remote save.
+    final hadPreviousAudio =
+        _lectureId != null &&
+        _player.processingState !=
+            ProcessingState.idle;
 
-    await _studyTracker.stop();
+    final previousProgressSave =
+        hadPreviousAudio
+            ? _saveProgress()
+            : Future<void>.value();
 
-    await _saveProgress();
+    final previousStudyStop =
+        _studySessionOpened
+            ? _studyTracker.stop()
+            : Future<void>.value();
 
     _saveTimer?.cancel();
 
@@ -562,6 +555,11 @@ class _LectureAudioHandler
       );
     }
 
+    final progressFuture =
+        _progressService.getProgress(
+      lectureId,
+    );
+
     await _player.setAudioSource(
       audioSource,
     );
@@ -571,10 +569,11 @@ class _LectureAudioHandler
     // -------------------------------------------------------------------------
 
     final progress =
-        await _progressService
-            .getProgress(
-      lectureId,
-    );
+        await progressFuture;
+
+    // Wait only for the bookkeeping to finish before the new play session starts.
+    await previousStudyStop;
+    await previousProgressSave;
 
     if (!progress.audioCompleted &&
         progress.audioPosition > 0) {
@@ -700,6 +699,7 @@ class _LectureAudioHandler
   Future<void> play() async {
     await _ready;
     await _player.play();
+    _broadcastState(_player.playbackEvent);
 
     if (!_studySessionOpened) {
       _studySessionOpened =
@@ -722,6 +722,7 @@ class _LectureAudioHandler
   Future<void> pause() async {
     await _ready;
     await _player.pause();
+    _broadcastState(_player.playbackEvent);
 
     await _studyTracker.pause();
 
@@ -765,6 +766,7 @@ class _LectureAudioHandler
     await _player.seek(
       position,
     );
+    _broadcastState(_player.playbackEvent);
 
     unawaited(
       _saveProgress(),
@@ -798,6 +800,7 @@ class _LectureAudioHandler
         target,
       );
     }
+    _broadcastState(_player.playbackEvent);
 
     unawaited(
       _saveProgress(),
@@ -823,6 +826,7 @@ class _LectureAudioHandler
           ? Duration.zero
           : target,
     );
+    _broadcastState(_player.playbackEvent);
 
     unawaited(
       _saveProgress(),
@@ -903,8 +907,7 @@ class _LectureAudioHandler
   ) {
     final processingState =
         switch (
-            _player
-                .processingState) {
+            event.processingState) {
       ProcessingState.idle =>
         AudioProcessingState.idle,
       ProcessingState.loading =>
@@ -921,14 +924,24 @@ class _LectureAudioHandler
             .completed,
     };
 
+    final isPlaying =
+        _player.playing;
+
+    final controls =
+        <MediaControl>[
+      MediaControl.rewind,
+      if (isPlaying)
+        MediaControl.pause
+      else
+        MediaControl.play,
+      MediaControl.fastForward,
+      MediaControl.stop,
+    ];
+
     playbackState.add(
       PlaybackState(
-        controls: const [
-          MediaControl.rewind,
-          MediaControl.play,
-          MediaControl.fastForward,
-          MediaControl.stop,
-        ],
+        controls:
+            controls,
         systemActions:
             const {
           MediaAction.seek,
@@ -945,12 +958,11 @@ class _LectureAudioHandler
         processingState:
             processingState,
         playing:
-            _player.playing,
+            isPlaying,
         updatePosition:
-            _player.position,
+            event.updatePosition,
         bufferedPosition:
-            _player
-                .bufferedPosition,
+            event.bufferedPosition,
         speed:
             _player.speed,
         queueIndex:
@@ -1017,9 +1029,6 @@ class _LectureAudioHandler
         ?.cancel();
 
     await _sequenceSubscription
-        ?.cancel();
-
-    await _positionSubscription
         ?.cancel();
 
     await _interruptionSubscription
