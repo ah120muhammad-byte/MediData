@@ -789,6 +789,17 @@ class _LectureAudioHandler
     }
   }
 
+  @override
+  Future<void> playPause() async {
+    await _ready;
+
+    if (_player.playing) {
+      await pause();
+    } else {
+      await play();
+    }
+  }
+
   // ===========================================================================
   // STOP
   // ===========================================================================
@@ -990,10 +1001,7 @@ class _LectureAudioHandler
     final controls =
         <MediaControl>[
       MediaControl.rewind,
-      if (isPlaying)
-        MediaControl.pause
-      else
-        MediaControl.play,
+      MediaControl.playPause,
       MediaControl.fastForward,
       MediaControl.stop,
     ];
