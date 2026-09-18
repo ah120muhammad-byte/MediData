@@ -114,6 +114,8 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
                 .createSignedUrlForLectureFile(
           fileUrl: widget.fileUrl,
           fileType: 'audio',
+        ).catchError(
+          (_) => '',
         );
 
         final downloaded =
@@ -141,6 +143,12 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
         if (!isLocal) {
           source =
               await signedUrlFuture;
+
+          if (source.isEmpty) {
+            throw Exception(
+              'Unable to prepare the audio URL.',
+            );
+          }
         }
 
         if (!mounted || generation != _initializationGeneration) return;
