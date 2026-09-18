@@ -28,12 +28,6 @@ class _RegisterScreenState
   final _emailController =
       TextEditingController();
 
-  final _dateOfBirthController =
-      TextEditingController();
-
-  final _phoneController =
-      TextEditingController();
-
   final _passwordController =
       TextEditingController();
 
@@ -51,60 +45,9 @@ class _RegisterScreenState
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
-    _dateOfBirthController.dispose();
-    _phoneController.dispose();
     _passwordController.dispose();
 
     super.dispose();
-  }
-
-  // ==========================================================================
-  // DATE
-  // ==========================================================================
-
-  Future<void>
-      _selectDateOfBirth() async {
-    FocusScope.of(context).unfocus();
-
-    final now =
-        DateTime.now();
-
-    final pickedDate =
-        await showDatePicker(
-      context: context,
-      initialDate:
-          DateTime(
-        now.year - 18,
-        now.month,
-        now.day,
-      ),
-      firstDate:
-          DateTime(
-        now.year - 100,
-        now.month,
-        now.day,
-      ),
-      lastDate:
-          DateTime(
-        now.year - 10,
-        now.month,
-        now.day,
-      ),
-      helpText:
-          'Select your date of birth',
-    );
-
-    if (pickedDate == null ||
-        !mounted) {
-      return;
-    }
-
-    setState(() {
-      _dateOfBirthController.text =
-          '${pickedDate.day.toString().padLeft(2, '0')}/'
-          '${pickedDate.month.toString().padLeft(2, '0')}/'
-          '${pickedDate.year}';
-    });
   }
 
   // ==========================================================================
@@ -126,22 +69,12 @@ class _RegisterScreenState
         _emailController.text
             .trim();
 
-    final dob =
-        _dateOfBirthController.text
-            .trim();
-
-    final phone =
-        _phoneController.text
-            .trim();
-
     final password =
         _passwordController.text;
 
     if (firstName.isEmpty ||
         lastName.isEmpty ||
         email.isEmpty ||
-        dob.isEmpty ||
-        phone.isEmpty ||
         password.isEmpty) {
       _showMessage(
         'Please complete all fields.',
@@ -162,55 +95,6 @@ class _RegisterScreenState
       );
       return;
     }
-
-    final parts =
-        dob.split('/');
-
-    if (parts.length != 3) {
-      _showMessage(
-        'Invalid date of birth.',
-      );
-      return;
-    }
-
-    final day =
-        int.tryParse(parts[0]);
-
-    final month =
-        int.tryParse(parts[1]);
-
-    final year =
-        int.tryParse(parts[2]);
-
-    if (day == null ||
-        month == null ||
-        year == null) {
-      _showMessage(
-        'Invalid date of birth.',
-      );
-      return;
-    }
-
-    final parsed =
-        DateTime(
-      year,
-      month,
-      day,
-    );
-
-    if (parsed.year != year ||
-        parsed.month != month ||
-        parsed.day != day) {
-      _showMessage(
-        'Invalid date of birth.',
-      );
-      return;
-    }
-
-    final dateOfBirth =
-        '${year.toString().padLeft(4, '0')}-'
-        '${month.toString().padLeft(2, '0')}-'
-        '${day.toString().padLeft(2, '0')}';
 
     if (!mounted) {
       return;
@@ -240,15 +124,6 @@ class _RegisterScreenState
               lastName,
           'full_name':
               '$firstName $lastName',
-          'date_of_birth':
-              dateOfBirth,
-
-          // Important:
-          // This is PROFILE DATA only.
-          // It is NOT Supabase Auth phone.
-          'phone':
-              phone,
-
           'role':
               'student',
         },
@@ -812,38 +687,6 @@ class _RegisterScreenState
                                     12,
                               ),
 
-                              _dateField(
-                                height:
-                                    fieldHeight,
-                              ),
-
-                              const SizedBox(
-                                height:
-                                    12,
-                              ),
-
-                              _field(
-                                label:
-                                    'Phone',
-                                controller:
-                                    _phoneController,
-                                hint:
-                                    'Phone number',
-                                icon:
-                                    Icons
-                                        .phone_outlined,
-                                height:
-                                    fieldHeight,
-                                keyboardType:
-                                    TextInputType
-                                        .phone,
-                              ),
-
-                              const SizedBox(
-                                height:
-                                    12,
-                              ),
-
                               _passwordField(
                                 height:
                                     fieldHeight,
@@ -989,65 +832,6 @@ class _RegisterScreenState
                   true,
               fillColor:
                   const Color(
-                0xFFF8F9FB,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _dateField({
-    required double height,
-  }) {
-    return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Date of Birth',
-          style:
-              TextStyle(
-            fontSize:
-                14,
-            fontWeight:
-                FontWeight.w600,
-          ),
-        ),
-        const SizedBox(
-          height:
-              7,
-        ),
-        SizedBox(
-          height:
-              height,
-          child:
-              TextField(
-            controller:
-                _dateOfBirthController,
-            readOnly:
-                true,
-            onTap:
-                _selectDateOfBirth,
-            decoration:
-                const InputDecoration(
-              hintText:
-                  'DD/MM/YYYY',
-              prefixIcon:
-                  Icon(
-                Icons
-                    .calendar_today_outlined,
-              ),
-              border:
-                  OutlineInputBorder(
-                borderSide:
-                    BorderSide.none,
-              ),
-              filled:
-                  true,
-              fillColor:
-                  Color(
                 0xFFF8F9FB,
               ),
             ),
