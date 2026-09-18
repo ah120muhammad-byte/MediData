@@ -103,23 +103,44 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
           _audio.duration != null;
 
       if (!sameFileIsLoaded) {
-        final downloaded = await DownloadsService.instance.findById(widget.fileId);
-        var source = widget.fileUrl;
-        var isLocal = false;
+        final downloadedFuture =
+            DownloadsService.instance.findById(
+          widget.fileId,
+        );
+
+        // Start the signed-URL request in parallel with local-download lookup.
+        final signedUrlFuture =
+            DownloadsService.instance
+                .createSignedUrlForLectureFile(
+          fileUrl: widget.fileUrl,
+          fileType: 'audio',
+        );
+
+        final downloaded =
+            await downloadedFuture;
+
+        var source =
+            widget.fileUrl;
+        var isLocal =
+            false;
 
         if (downloaded != null) {
-          final file = File(downloaded.localPath);
+          final file =
+              File(
+            downloaded.localPath,
+          );
+
           if (await file.exists()) {
-            source = file.path;
-            isLocal = true;
+            source =
+                file.path;
+            isLocal =
+                true;
           }
         }
 
         if (!isLocal) {
-          source = await DownloadsService.instance.createSignedUrlForLectureFile(
-            fileUrl: widget.fileUrl,
-            fileType: 'audio',
-          );
+          source =
+              await signedUrlFuture;
         }
 
         if (!mounted || generation != _initializationGeneration) return;
@@ -135,8 +156,14 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
 
         if (!mounted || generation != _initializationGeneration) return;
 
-        await _audio.setSpeed(_playbackSpeed);
-        await _audio.play();
+        await _audio.setSpeed(
+          _playbackSpeed,
+        );
+
+        // Start playback without waiting for the playback Future to finish.
+        unawaited(
+          _audio.play(),
+        );
       }
 
       if (!mounted || generation != _initializationGeneration) return;
