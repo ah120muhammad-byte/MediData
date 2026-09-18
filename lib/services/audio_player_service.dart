@@ -725,18 +725,11 @@ class _LectureAudioHandler
   Future<void> play() async {
     await _ready;
 
-    // just_audio's play() Future completes only when playback later pauses,
-    // stops, or completes. Do not await it in an AudioService callback.
-    unawaited(
-      _player.play().catchError(
-        (Object error, StackTrace stackTrace) {
-          debugPrint('Audio play error: $error');
-          debugPrintStack(
-            stackTrace: stackTrace,
-          );
-        },
-      ),
-    );
+    // Keep the AudioHandler callback alive for the duration of the player
+    // command. The screen calls AudioPlayerService.play() without awaiting it,
+    // so UI startup remains non-blocking while Android gets the standard
+    // audio_service callback semantics.
+    await _player.play();
 
     _broadcastState(
       _player.playbackEvent,
@@ -769,7 +762,7 @@ class _LectureAudioHandler
       _player.playbackEvent,
     );
 
-    // Do not make Android notification actions wait for persistence/network IO.
+    // Persistence must not make the player command itself slow.
     unawaited(
       _finishPauseBookkeeping(),
     );
