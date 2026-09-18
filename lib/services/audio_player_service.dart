@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
@@ -145,36 +146,8 @@ class AudioPlayerService {
   // ===========================================================================
 
   Future<void> play() async {
-    await _ready;
-
-    // just_audio's play() future completes when playback is later paused,
-    // stopped, or completed. Do not await it in the AudioService callback.
-    unawaited(
-      _player.play().catchError(
-        (Object error, StackTrace stackTrace) {
-          debugPrint('Audio play error: $error');
-          debugPrintStack(
-            stackTrace: stackTrace,
-          );
-        },
-      ),
-    );
-
-    _broadcastState(
-      _player.playbackEvent,
-    );
-
-    if (!_studySessionOpened) {
-      _studySessionOpened =
-          true;
-
-      _studyTracker.start(
-        lectureOpened:
-            true,
-      );
-    } else {
-      _studyTracker.start();
-    }
+    await initialize();
+    await _audioHandler.play();
   }
 
   // ===========================================================================
@@ -182,32 +155,8 @@ class AudioPlayerService {
   // ===========================================================================
 
   Future<void> pause() async {
-    await _ready;
-
-    await _player.pause();
-
-    _broadcastState(
-      _player.playbackEvent,
-    );
-
-    // Never block an Android notification command on Supabase writes.
-    unawaited(
-      _finishPauseBookkeeping(),
-    );
-  }
-
-  Future<void> _finishPauseBookkeeping() async {
-    try {
-      await _studyTracker.pause();
-      await _saveProgress();
-    } catch (e, stackTrace) {
-      debugPrint(
-        'Audio pause bookkeeping error: $e',
-      );
-      debugPrintStack(
-        stackTrace: stackTrace,
-      );
-    }
+    await initialize();
+    await _audioHandler.pause();
   }
 
   // ===========================================================================
@@ -748,8 +697,23 @@ class _LectureAudioHandler
   @override
   Future<void> play() async {
     await _ready;
-    await _player.play();
-    _broadcastState(_player.playbackEvent);
+
+    // just_audio's play() Future completes only when playback later pauses,
+    // stops, or completes. Do not await it in an AudioService callback.
+    unawaited(
+      _player.play().catchError(
+        (Object error, StackTrace stackTrace) {
+          debugPrint('Audio play error: $error');
+          debugPrintStack(
+            stackTrace: stackTrace,
+          );
+        },
+      ),
+    );
+
+    _broadcastState(
+      _player.playbackEvent,
+    );
 
     if (!_studySessionOpened) {
       _studySessionOpened =
@@ -771,12 +735,31 @@ class _LectureAudioHandler
   @override
   Future<void> pause() async {
     await _ready;
+
     await _player.pause();
-    _broadcastState(_player.playbackEvent);
 
-    await _studyTracker.pause();
+    _broadcastState(
+      _player.playbackEvent,
+    );
 
-    await _saveProgress();
+    // Do not make Android notification actions wait for persistence/network IO.
+    unawaited(
+      _finishPauseBookkeeping(),
+    );
+  }
+
+  Future<void> _finishPauseBookkeeping() async {
+    try {
+      await _studyTracker.pause();
+      await _saveProgress();
+    } catch (e, stackTrace) {
+      debugPrint(
+        'Audio pause bookkeeping error: $e',
+      );
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   // ===========================================================================
