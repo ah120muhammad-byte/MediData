@@ -37,8 +37,8 @@ class AudioPlayerService {
           androidNotificationChannelId: 'com.medidata.dataapp.audio',
           androidNotificationChannelName: 'Lecture Audio',
           androidNotificationChannelDescription: 'Lecture audio playback',
-          androidNotificationOngoing: true,
           androidResumeOnClick: true,
+          androidStopForegroundOnPause: false,
           fastForwardInterval: Duration(seconds: 15),
           rewindInterval: Duration(seconds: 15),
         ),
@@ -723,13 +723,8 @@ class _LectureAudioHandler
 
   @override
   Future<void> play() async {
-    await _ready;
-
-    // Keep the AudioHandler callback alive for the duration of the player
-    // command. The screen calls AudioPlayerService.play() without awaiting it,
-    // so UI startup remains non-blocking while Android gets the standard
-    // audio_service callback semantics.
-    await _player.play();
+    final playFuture =
+        _player.play();
 
     _broadcastState(
       _player.playbackEvent,
@@ -746,6 +741,8 @@ class _LectureAudioHandler
     } else {
       _studyTracker.start();
     }
+
+    await playFuture;
   }
 
   // ===========================================================================
@@ -754,15 +751,12 @@ class _LectureAudioHandler
 
   @override
   Future<void> pause() async {
-    await _ready;
-
     await _player.pause();
 
     _broadcastState(
       _player.playbackEvent,
     );
 
-    // Persistence must not make the player command itself slow.
     unawaited(
       _finishPauseBookkeeping(),
     );
@@ -788,16 +782,14 @@ class _LectureAudioHandler
 
   @override
   Future<void> stop() async {
-    await _ready;
-    await _studyTracker.stop();
-
-    await _saveProgress();
-
     await _player.stop();
 
-    await _player.seek(
-      Duration.zero,
+    _broadcastState(
+      _player.playbackEvent,
     );
+
+    await _studyTracker.stop();
+    await _saveProgress();
 
     _saveTimer?.cancel();
 
@@ -815,11 +807,13 @@ class _LectureAudioHandler
   Future<void> seek(
     Duration position,
   ) async {
-    await _ready;
     await _player.seek(
       position,
     );
-    _broadcastState(_player.playbackEvent);
+
+    _broadcastState(
+      _player.playbackEvent,
+    );
 
     unawaited(
       _saveProgress(),
@@ -833,7 +827,6 @@ class _LectureAudioHandler
   Future<void> skipForward(
     Duration amount,
   ) async {
-    await _ready;
     final current =
         _player.position;
 
@@ -853,7 +846,10 @@ class _LectureAudioHandler
         target,
       );
     }
-    _broadcastState(_player.playbackEvent);
+
+    _broadcastState(
+      _player.playbackEvent,
+    );
 
     unawaited(
       _saveProgress(),
@@ -867,7 +863,6 @@ class _LectureAudioHandler
   Future<void> skipBackward(
     Duration amount,
   ) async {
-    await _ready;
     final current =
         _player.position;
 
@@ -879,7 +874,10 @@ class _LectureAudioHandler
           ? Duration.zero
           : target,
     );
-    _broadcastState(_player.playbackEvent);
+
+    _broadcastState(
+      _player.playbackEvent,
+    );
 
     unawaited(
       _saveProgress(),
@@ -894,7 +892,6 @@ class _LectureAudioHandler
   Future<void> setSpeed(
     double speed,
   ) async {
-    await _ready;
     await _player.setSpeed(
       speed,
     );
@@ -907,7 +904,6 @@ class _LectureAudioHandler
   Future<void> setVolume(
     double volume,
   ) async {
-    await _ready;
     await _player.setVolume(
       volume.clamp(
         0.0,
