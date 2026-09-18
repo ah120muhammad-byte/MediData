@@ -16,40 +16,36 @@ class AudioPlayerService {
   AudioHandler? _handler;
 
   bool _initialized = false;
+  Future<void>? _initializationFuture;
 
   // ===========================================================================
   // INITIALIZE
   // ===========================================================================
 
-  Future<void> initialize() async {
-    if (_initialized) {
-      return;
+  Future<void> initialize() {
+    if (_initialized) return Future.value();
+    return _initializationFuture ??= _doInitialize();
+  }
+
+  Future<void> _doInitialize() async {
+    try {
+      if (_initialized) return;
+      _handler = await AudioService.init(
+        builder: () => _LectureAudioHandler(),
+        config: const AudioServiceConfig(
+          androidNotificationChannelId: 'com.medidata.dataapp.audio',
+          androidNotificationChannelName: 'Lecture Audio',
+          androidNotificationChannelDescription: 'Lecture audio playback',
+          androidStopForegroundOnPause: false,
+          fastForwardInterval: Duration(seconds: 15),
+          rewindInterval: Duration(seconds: 15),
+        ),
+      );
+      _initialized = true;
+    } catch (_) {
+      _initializationFuture = null;
+      rethrow;
     }
-
-    _handler = await AudioService.init(
-      builder: () =>
-          _LectureAudioHandler(),
-      config: const AudioServiceConfig(
-        androidNotificationChannelId:
-            'com.medidata.dataapp.audio',
-        androidNotificationChannelName:
-            'Lecture Audio',
-        androidNotificationChannelDescription:
-            'Lecture audio playback',
-        androidStopForegroundOnPause:
-            false,
-        fastForwardInterval:
-            Duration(
-          seconds: 15,
-        ),
-        rewindInterval:
-            Duration(
-          seconds: 15,
-        ),
-      ),
-    );
-
-    _initialized = true;
   }
 
   // ===========================================================================
@@ -118,6 +114,7 @@ class AudioPlayerService {
   Future<void> load({
     required String source,
     required String lectureId,
+    required String fileId,
     required String title,
     required String lectureTitle,
     required bool isLocalFile,
@@ -130,6 +127,8 @@ class AudioPlayerService {
           source,
       lectureId:
           lectureId,
+      fileId:
+          fileId,
       title:
           title,
       lectureTitle:
@@ -304,13 +303,13 @@ class _LectureAudioHandler
   bool _studySessionOpened =
       false;
 
+  late final Future<void> _ready = _initialize();
+
   // ===========================================================================
   // CONSTRUCTOR
   // ===========================================================================
 
-  _LectureAudioHandler() {
-    _initialize();
-  }
+  _LectureAudioHandler();
 
   // ===========================================================================
   // GETTERS
@@ -487,11 +486,14 @@ class _LectureAudioHandler
   Future<void> loadLecture({
     required String source,
     required String lectureId,
+    required String fileId,
     required String title,
     required String lectureTitle,
     required bool isLocalFile,
     String? artUri,
   }) async {
+    await _ready;
+
     // -------------------------------------------------------------------------
     // Save previous lecture before replacing it.
     // -------------------------------------------------------------------------
@@ -515,11 +517,15 @@ class _LectureAudioHandler
     final mediaItem =
         MediaItem(
       id:
-          lectureId,
+          '$lectureId::$fileId',
       title:
           title,
       album:
           lectureTitle,
+      extras: <String, dynamic>{
+        'lectureId': lectureId,
+        'fileId': fileId,
+      },
       artUri:
           artUri == null
               ? null
@@ -692,6 +698,7 @@ class _LectureAudioHandler
 
   @override
   Future<void> play() async {
+    await _ready;
     await _player.play();
 
     if (!_studySessionOpened) {
@@ -713,6 +720,7 @@ class _LectureAudioHandler
 
   @override
   Future<void> pause() async {
+    await _ready;
     await _player.pause();
 
     await _studyTracker.pause();
@@ -726,6 +734,7 @@ class _LectureAudioHandler
 
   @override
   Future<void> stop() async {
+    await _ready;
     await _studyTracker.stop();
 
     await _saveProgress();
@@ -752,6 +761,7 @@ class _LectureAudioHandler
   Future<void> seek(
     Duration position,
   ) async {
+    await _ready;
     await _player.seek(
       position,
     );
@@ -768,6 +778,7 @@ class _LectureAudioHandler
   Future<void> skipForward(
     Duration amount,
   ) async {
+    await _ready;
     final current =
         _player.position;
 
@@ -800,6 +811,7 @@ class _LectureAudioHandler
   Future<void> skipBackward(
     Duration amount,
   ) async {
+    await _ready;
     final current =
         _player.position;
 
@@ -825,6 +837,7 @@ class _LectureAudioHandler
   Future<void> setSpeed(
     double speed,
   ) async {
+    await _ready;
     await _player.setSpeed(
       speed,
     );
@@ -837,6 +850,7 @@ class _LectureAudioHandler
   Future<void> setVolume(
     double volume,
   ) async {
+    await _ready;
     await _player.setVolume(
       volume.clamp(
         0.0,
