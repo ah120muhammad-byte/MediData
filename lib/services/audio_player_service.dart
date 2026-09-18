@@ -37,8 +37,8 @@ class AudioPlayerService {
           androidNotificationChannelId: 'com.medidata.dataapp.audio',
           androidNotificationChannelName: 'Lecture Audio',
           androidNotificationChannelDescription: 'Lecture audio playback',
+          androidNotificationOngoing: true,
           androidResumeOnClick: true,
-          androidStopForegroundOnPause: false,
           fastForwardInterval: Duration(seconds: 15),
           rewindInterval: Duration(seconds: 15),
         ),
@@ -789,17 +789,6 @@ class _LectureAudioHandler
     }
   }
 
-  @override
-  Future<void> playPause() async {
-    await _ready;
-
-    if (_player.playing) {
-      await pause();
-    } else {
-      await play();
-    }
-  }
-
   // ===========================================================================
   // STOP
   // ===========================================================================
@@ -1011,9 +1000,12 @@ class _LectureAudioHandler
     final controls =
         <MediaControl>[
       MediaControl.rewind,
-      MediaControl.playPause,
-      MediaControl.fastForward,
+      if (isPlaying)
+        MediaControl.pause
+      else
+        MediaControl.play,
       MediaControl.stop,
+      MediaControl.fastForward,
     ];
 
     playbackState.add(
@@ -1031,7 +1023,7 @@ class _LectureAudioHandler
             const [
           0,
           1,
-          2,
+          3,
         ],
         processingState:
             processingState,
