@@ -42,6 +42,8 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
 
   Timer? _sleepTimer;
   Duration? _sleepRemaining;
+  Duration? _dragPosition;
+  bool _isDragging = false;
   int _initializationGeneration = 0;
 
   @override
@@ -83,7 +85,8 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
       // Subscribe before loading/playing so the first player events are not missed.
       _processingSubscription = _audio.processingStateStream.listen((state) {
         if (!mounted || generation != _initializationGeneration) return;
-        if (state == ProcessingState.completed) {
+        if (state == ProcessingState.completed &&
+            !_isDragging) {
           setState(() => _completed = true);
         }
       });
@@ -465,13 +468,38 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
     return StreamBuilder<Duration>(
       stream: _audio.positionStream,
       builder: (context, positionSnapshot) {
-        final position = positionSnapshot.data ?? Duration.zero;
+        final streamPosition =
+            positionSnapshot.data ??
+                _audio.position;
+
         return StreamBuilder<Duration?>(
           stream: _audio.durationStream,
           builder: (context, durationSnapshot) {
-            final duration = durationSnapshot.data ?? Duration.zero;
-            final max = duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
-            final value = position.inMilliseconds.clamp(0, duration.inMilliseconds > 0 ? duration.inMilliseconds : 0).toDouble();
+            final duration =
+                durationSnapshot.data ??
+                    _audio.duration ??
+                    Duration.zero;
+
+            final displayedPosition =
+                _dragPosition ??
+                    streamPosition;
+
+            final max =
+                duration.inMilliseconds > 0
+                    ? duration.inMilliseconds
+                        .toDouble()
+                    : 1.0;
+
+            final value =
+                displayedPosition.inMilliseconds
+                    .clamp(
+                      0,
+                      duration.inMilliseconds > 0
+                          ? duration.inMilliseconds
+                          : 0,
+                    )
+                    .toDouble();
+
             return Column(
               children: [
                 SliderTheme(
@@ -479,24 +507,99 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
                     activeTrackColor: AppColors.gold,
                     thumbColor: AppColors.gold,
                     trackHeight: 5,
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+                    overlayShape:
+                        const RoundSliderOverlayShape(
+                      overlayRadius: 16,
+                    ),
                   ),
                   child: Slider(
                     min: 0,
                     max: max,
                     value: value,
-                    onChanged: duration > Duration.zero
-                        ? (next) => unawaited(_audio.seek(Duration(milliseconds: next.round())))
-                        : null,
+                    onChangeStart:
+                        duration > Duration.zero
+                            ? (_) {
+                                if (!mounted) {
+                                  return;
+                                }
+                                setState(() {
+                                  _isDragging = true;
+                                  _dragPosition =
+                                      displayedPosition;
+                                });
+                              }
+                            : null,
+                    onChanged:
+                        duration > Duration.zero
+                            ? (next) {
+                                if (!mounted) {
+                                  return;
+                                }
+                                setState(() {
+                                  _dragPosition =
+                                      Duration(
+                                    milliseconds:
+                                        next.round(),
+                                  );
+                                });
+                              }
+                            : null,
+                    onChangeEnd:
+                        duration > Duration.zero
+                            ? (next) {
+                                final target =
+                                    Duration(
+                                  milliseconds:
+                                      next.round(),
+                                );
+                                _dragPosition =
+                                    target;
+                                unawaited(
+                                  _finishSeek(
+                                    target,
+                                  ),
+                                );
+                              }
+                            : null,
                   ),
                 ),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(_format(position)), Text(_format(duration))]),
+                Row(
+                  mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _format(
+                        displayedPosition,
+                      ),
+                    ),
+                    Text(
+                      _format(duration),
+                    ),
+                  ],
+                ),
               ],
             );
           },
         );
       },
     );
+  }
+
+  Future<void> _finishSeek(
+    Duration target,
+  ) async {
+    try {
+      await _audio.seek(target);
+    } finally {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isDragging = false;
+        _dragPosition = null;
+      });
+    }
   }
 
   Widget _buildMainControls(BuildContext context) {
