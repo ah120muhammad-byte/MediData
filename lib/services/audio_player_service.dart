@@ -37,7 +37,6 @@ class AudioPlayerService {
           androidNotificationChannelId: 'com.medidata.dataapp.audio',
           androidNotificationChannelName: 'Lecture Audio',
           androidNotificationChannelDescription: 'Lecture audio playback',
-          androidNotificationOngoing: true,
           androidResumeOnClick: true,
           androidStopForegroundOnPause: false,
           fastForwardInterval: Duration(seconds: 15),
