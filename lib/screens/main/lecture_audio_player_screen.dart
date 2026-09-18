@@ -626,14 +626,12 @@ class _LectureAudioPlayerScreenState extends State<LectureAudioPlayerScreen> {
     try {
       await _audio.seek(target);
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _isDragging = false;
+          _dragPosition = null;
+        });
       }
-
-      setState(() {
-        _isDragging = false;
-        _dragPosition = null;
-      });
     }
   }
 
