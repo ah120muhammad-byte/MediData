@@ -13,20 +13,19 @@ import 'screens/authentication/auth_gate_v2.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
-
-  await Supabase.initialize(
-    url: 'https://eoyehpqknyoksaxlvnwl.supabase.co',
-    publishableKey: 'sb_publishable_vkiv3hr00CNPiGJKlQosNw_oZEG81zZ',
-    authOptions: const FlutterAuthClientOptions(
-      authFlowType: AuthFlowType.pkce,
+  // These startup tasks are independent, so run them in parallel instead
+  // of making the first frame wait on them sequentially.
+  await Future.wait<void>([
+    Firebase.initializeApp(),
+    Supabase.initialize(
+      url: 'https://eoyehpqknyoksaxlvnwl.supabase.co',
+      publishableKey: 'sb_publishable_vkiv3hr00CNPiGJKlQosNw_oZEG81zZ',
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.pkce,
+      ),
     ),
-  );
-
-  // Keep the first frame fast: local services that are required for the
-  // initial theme are loaded before runApp, while audio and remote settings
-  // continue after the UI is visible.
-  await ThemeModeService.instance.load();
+    ThemeModeService.instance.load(),
+  ]);
 
   runApp(const MyApp(settings: RemoteAppSettings.defaults));
 }
