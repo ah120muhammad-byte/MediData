@@ -56,7 +56,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _refresh() async {
     if (!mounted) return;
     final future = _loadData();
-    setState(() => _future = future);
+    setState(() {
+      _future = future;
+    });
     await future;
   }
 
