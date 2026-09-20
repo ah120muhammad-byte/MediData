@@ -21,17 +21,12 @@ Future<void> main() async {
     ),
   );
 
-  await AudioPlayerService.instance.initialize();
+  // Keep the first frame fast: local services that are required for the
+  // initial theme are loaded before runApp, while audio and remote settings
+  // continue after the UI is visible.
   await ThemeModeService.instance.load();
 
-  RemoteAppSettings settings = RemoteAppSettings.defaults;
-  try {
-    settings = await RemoteAppSettingsService().getSettings();
-  } catch (e) {
-    debugPrint('Remote app settings load failed: $e');
-  }
-
-  runApp(MyApp(settings: settings));
+  runApp(const MyApp(settings: RemoteAppSettings.defaults));
 }
 
 class MyApp extends StatefulWidget {
@@ -46,10 +41,30 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   final ThemeModeService _themeService = ThemeModeService.instance;
 
+  late RemoteAppSettings _settings;
+
   @override
   void initState() {
     super.initState();
+    _settings = widget.settings;
     _themeService.addListener(_onThemeChanged);
+
+    // These services no longer block the first rendered frame.
+    unawaited(AudioPlayerService.instance.initialize());
+    unawaited(_loadRemoteSettings());
+  }
+
+  Future<void> _loadRemoteSettings() async {
+    try {
+      final settings = await RemoteAppSettingsService().getSettings();
+      if (!mounted) return;
+
+      setState(() {
+        _settings = settings;
+      });
+    } catch (e) {
+      debugPrint('Remote app settings load failed: $e');
+    }
   }
 
   @override
@@ -66,11 +81,11 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: widget.settings.appName,
+      title: _settings.appName,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeService.themeMode,
-      home: AuthGateV2(settings: widget.settings),
+      home: AuthGateV2(settings: _settings),
     );
   }
 }
