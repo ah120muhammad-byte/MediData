@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -30,11 +32,29 @@ class _HomeScreenState extends State<HomeScreen> {
     _homeFuture = _loadHomeData();
   }
 
+  _LectureHomeData _lectureFromRow(Map<String, dynamic> row) {
+    final moduleRaw = row['modules'];
+
+    return _LectureHomeData(
+      id: row['id']?.toString() ?? '',
+      moduleId: row['module_id']?.toString() ?? '',
+      title: row['title']?.toString() ?? '',
+      description: row['description']?.toString(),
+      moduleName: moduleRaw is Map
+          ? moduleRaw['name']?.toString() ?? 'Module'
+          : 'Module',
+      publishedAt: DateTime.tryParse(row['published_at']?.toString() ?? ''),
+    );
+  }
+
   Future<_HomeData> _loadHomeData() async {
     final user = _supabase.auth.currentUser;
-    _LectureHomeData? latestLecture;
+    final now = DateTime.now();
+    final startOfTodayLocal = DateTime(now.year, now.month, now.day);
+    final startOfTomorrowLocal =
+        startOfTodayLocal.add(const Duration(days: 1));
 
-    final latestResponse = await _supabase
+    final todayResponse = await _supabase
         .from('lectures')
         .select('''
           id,
@@ -51,26 +71,52 @@ class _HomeScreenState extends State<HomeScreen> {
         ''')
         .eq('is_active', true)
         .eq('is_published', true)
-        .order('published_at', ascending: false)
-        .limit(1);
+        .gte(
+          'published_at',
+          startOfTodayLocal.toUtc().toIso8601String(),
+        )
+        .lt(
+          'published_at',
+          startOfTomorrowLocal.toUtc().toIso8601String(),
+        )
+        .order('published_at', ascending: false);
 
-    final latestRows = List<Map<String, dynamic>>.from(
-      (latestResponse as List).map((item) => Map<String, dynamic>.from(item)),
+    final todayRows = List<Map<String, dynamic>>.from(
+      (todayResponse as List).map((item) => Map<String, dynamic>.from(item)),
     );
 
-    if (latestRows.isNotEmpty) {
-      final row = latestRows.first;
-      final moduleRaw = row['modules'];
-      latestLecture = _LectureHomeData(
-        id: row['id']?.toString() ?? '',
-        moduleId: row['module_id']?.toString() ?? '',
-        title: row['title']?.toString() ?? '',
-        description: row['description']?.toString(),
-        moduleName: moduleRaw is Map
-            ? moduleRaw['name']?.toString() ?? 'Module'
-            : 'Module',
-        publishedAt: DateTime.tryParse(row['published_at']?.toString() ?? ''),
+    final todayLectures = todayRows.map(_lectureFromRow).toList();
+
+    _LectureHomeData? latestLecture;
+    if (todayLectures.isEmpty) {
+      final latestResponse = await _supabase
+          .from('lectures')
+          .select('''
+            id,
+            module_id,
+            title,
+            description,
+            published_at,
+            is_published,
+            is_active,
+            modules (
+              id,
+              name
+            )
+          ''')
+          .eq('is_active', true)
+          .eq('is_published', true)
+          .order('published_at', ascending: false)
+          .limit(1);
+
+      final latestRows = List<Map<String, dynamic>>.from(
+        (latestResponse as List)
+            .map((item) => Map<String, dynamic>.from(item)),
       );
+
+      if (latestRows.isNotEmpty) {
+        latestLecture = _lectureFromRow(latestRows.first);
+      }
     }
 
     _ModuleHomeData? currentModule;
@@ -201,6 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return _HomeData(
       latestLecture: latestLecture,
+      todayLectures: todayLectures,
       currentModule: currentModule,
       completedLectures: completedLectures,
       totalTrackableLectures: totalTrackableLectures,
@@ -257,18 +304,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           delegate: SliverChildListDelegate([
                             _SectionTitle(title: "What's New", icon: Icons.auto_awesome_rounded),
                             const SizedBox(height: 10),
-                            _LatestLectureCard(
-                              lecture: data.latestLecture,
-                              onTap: data.latestLecture == null
-                                  ? null
-                                  : () {
-                                      final lecture = data.latestLecture!;
-                                      widget.onOpenLecture(
-                                        moduleId: lecture.moduleId,
-                                        moduleName: lecture.moduleName,
-                                        lectureId: lecture.id,
-                                      );
-                                    },
+                            _WhatsNewCarousel(
+                              lectures: data.todayLectures,
+                              fallbackLecture: data.latestLecture,
+                              onOpenLecture: (lecture) {
+                                widget.onOpenLecture(
+                                  moduleId: lecture.moduleId,
+                                  moduleName: lecture.moduleName,
+                                  lectureId: lecture.id,
+                                );
+                              },
                             ),
                             const SizedBox(height: 22),
                             _SectionTitle(title: 'Your Module', icon: Icons.menu_book_rounded),
@@ -296,6 +341,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _HomeData {
   final _LectureHomeData? latestLecture;
+  final List<_LectureHomeData> todayLectures;
   final _ModuleHomeData? currentModule;
   final int completedLectures;
   final int totalTrackableLectures;
@@ -303,6 +349,7 @@ class _HomeData {
 
   const _HomeData({
     this.latestLecture,
+    this.todayLectures = const <_LectureHomeData>[],
     this.currentModule,
     this.completedLectures = 0,
     this.totalTrackableLectures = 0,
@@ -376,11 +423,192 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
+class _WhatsNewCarousel extends StatefulWidget {
+  final List<_LectureHomeData> lectures;
+  final _LectureHomeData? fallbackLecture;
+  final ValueChanged<_LectureHomeData> onOpenLecture;
+
+  const _WhatsNewCarousel({
+    required this.lectures,
+    required this.fallbackLecture,
+    required this.onOpenLecture,
+  });
+
+  @override
+  State<_WhatsNewCarousel> createState() => _WhatsNewCarouselState();
+}
+
+class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
+  final PageController _pageController = PageController();
+  Timer? _autoPlayTimer;
+  int _currentPage = 0;
+
+  List<_LectureHomeData> get _items {
+    if (widget.lectures.isNotEmpty) return widget.lectures;
+    final fallback = widget.fallbackLecture;
+    return fallback == null
+        ? const <_LectureHomeData>[]
+        : <_LectureHomeData>[fallback];
+  }
+
+  bool get _hasMultiple => _items.length > 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoPlay();
+  }
+
+  @override
+  void didUpdateWidget(covariant _WhatsNewCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldCount = oldWidget.lectures.length +
+        (oldWidget.lectures.isEmpty && oldWidget.fallbackLecture != null ? 1 : 0);
+    final newCount = _items.length;
+
+    if (newCount != oldCount || _currentPage >= newCount) {
+      _currentPage = 0;
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(0);
+      }
+    }
+
+    _startAutoPlay();
+  }
+
+  @override
+  void dispose() {
+    _autoPlayTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _startAutoPlay() {
+    _autoPlayTimer?.cancel();
+
+    if (!_hasMultiple) return;
+
+    _autoPlayTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || !_pageController.hasClients || !_hasMultiple) return;
+
+      final nextPage = (_currentPage + 1) % _items.length;
+      _pageController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 550),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _items;
+
+    if (items.isEmpty) {
+      return const _EmptyWhatsNewCard();
+    }
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 258,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: items.length,
+            physics: const BouncingScrollPhysics(),
+            onPageChanged: (index) {
+              if (!mounted) return;
+              setState(() => _currentPage = index);
+            },
+            itemBuilder: (context, index) {
+              final lecture = items[index];
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1),
+                child: _LatestLectureCard(
+                  lecture: lecture,
+                  isToday: widget.lectures.isNotEmpty,
+                  position: index + 1,
+                  total: items.length,
+                  onTap: () => widget.onOpenLecture(lecture),
+                ),
+              );
+            },
+          ),
+        ),
+        if (_hasMultiple) ...[
+          const SizedBox(height: 9),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(items.length, (index) {
+              final selected = index == _currentPage;
+
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: selected ? 22 : 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _EmptyWhatsNewCard extends StatelessWidget {
+  const _EmptyWhatsNewCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Icon(Icons.auto_awesome_outlined, color: scheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'No new lectures available yet.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _LatestLectureCard extends StatelessWidget {
-  final _LectureHomeData? lecture;
+  final _LectureHomeData lecture;
+  final bool isToday;
+  final int position;
+  final int total;
   final VoidCallback? onTap;
 
-  const _LatestLectureCard({required this.lecture, required this.onTap});
+  const _LatestLectureCard({
+    required this.lecture,
+    required this.isToday,
+    required this.position,
+    required this.total,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -388,25 +616,9 @@ class _LatestLectureCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     final radius = Responsive.cardRadius(context);
 
-    if (lecture == null) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Icon(Icons.auto_awesome_outlined, color: scheme.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'No new lectures available yet.',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    final dateLabel = isToday
+        ? 'NEW TODAY'
+        : 'LATEST LECTURE';
 
     return Material(
       color: Colors.transparent,
@@ -415,6 +627,7 @@ class _LatestLectureCard extends StatelessWidget {
         onTap: onTap,
         child: Ink(
           width: double.infinity,
+          height: 258,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
@@ -431,91 +644,138 @@ class _LatestLectureCard extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              Row(
+              Positioned(
+                right: -16,
+                top: -24,
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 110,
+                  color: Colors.white.withValues(alpha: 0.07),
+                ),
+              ),
+              Positioned(
+                right: 4,
+                bottom: 8,
+                child: Icon(
+                  Icons.menu_book_rounded,
+                  size: 78,
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'LATEST LECTURE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          dateLabel,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                       ),
-                    ),
+                      const Spacer(),
+                      if (total > 1)
+                        Text(
+                          '$position / $total',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.82),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                lecture!.moduleName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.78),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                lecture!.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 23,
-                  height: 1.15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              if ((lecture!.description ?? '').trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  lecture!.description!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.76),
-                    fontSize: 13,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 17),
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow_rounded,
-                      color: Colors.white,
-                      size: 23,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Open lecture',
+                  const SizedBox(height: 12),
+                  Text(
+                    lecture.moduleName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.78),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    lecture.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
                       color: Colors.white,
+                      fontSize: 23,
+                      height: 1.15,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                  if ((lecture.description ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      lecture.description!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.76),
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
                   const Spacer(),
-                  const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                  Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 23,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Open lecture',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.13),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ],
