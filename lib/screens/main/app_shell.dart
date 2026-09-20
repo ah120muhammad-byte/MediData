@@ -49,17 +49,33 @@ class _AppShellState extends State<AppShell> {
   // APP PAGES
   // ==========================================================================
 
-  late final List<Widget> _pages = [
-    ModulesScreen(key: _modulesScreenKey),
-    const AiAssistantScreen(),
-    HomeScreen(onOpenLecture: _openLectureFromHome),
-    const DownloadsScreen(),
-    ProfileScreen(
-      onOpenLecture: _openLectureFromHome,
-      onExamAttemptTap: _openExamAttempt,
-      onOpenExamHistory: _openExamHistory,
-    ),
-  ];
+  // Build tab screens lazily. IndexedStack used to construct all five
+  // screens at startup, including their initial data loads.
+  final List<Widget?> _loadedPages = List<Widget?>.filled(5, null);
+
+  Widget _buildPage(int index) {
+    switch (index) {
+      case 0:
+        return ModulesScreen(key: _modulesScreenKey);
+      case 2:
+        return HomeScreen(onOpenLecture: _openLectureFromHome);
+      case 3:
+        return const DownloadsScreen();
+      case 4:
+        return ProfileScreen(
+          onOpenLecture: _openLectureFromHome,
+          onExamAttemptTap: _openExamAttempt,
+          onOpenExamHistory: _openExamHistory,
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  void _ensurePageLoaded(int index) {
+    if (index < 0 || index >= _loadedPages.length) return;
+    _loadedPages[index] ??= _buildPage(index);
+  }
 
   // ==========================================================================
   // INIT
@@ -68,6 +84,9 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+
+    // Home is the initial tab, so only it is created during startup.
+    _ensurePageLoaded(_currentIndex);
 
     _notificationService.setLectureTapHandler(_openLectureFromNotification);
 
@@ -113,7 +132,13 @@ class _AppShellState extends State<AppShell> {
             const _AppHeader(),
 
             Expanded(
-              child: IndexedStack(index: _currentIndex, children: _pages),
+              child: IndexedStack(
+                index: _currentIndex,
+                children: List<Widget>.generate(
+                  _loadedPages.length,
+                  (index) => _loadedPages[index] ?? const SizedBox.shrink(),
+                ),
+              ),
             ),
           ],
         ),
@@ -156,6 +181,8 @@ class _AppShellState extends State<AppShell> {
     if (_currentIndex == index) {
       return;
     }
+
+    _ensurePageLoaded(index);
 
     setState(() {
       _currentIndex = index;
