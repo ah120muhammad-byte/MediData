@@ -27,6 +27,7 @@ class NotificationService {
 
   bool _initialized = false;
   String? _registeredUserId;
+  Future<void>? _initializationFuture;
 
   final ValueNotifier<int> unreadCount = ValueNotifier<int>(0);
 
@@ -79,15 +80,28 @@ class NotificationService {
     return value;
   }
 
-  Future<void> initialize() async {
+  Future<void> initialize() {
     final user = _supabase.auth.currentUser;
-    if (user == null) return;
+    if (user == null) return Future<void>.value();
 
     if (_initialized && _registeredUserId == user.id) {
-      await refreshUnreadCount();
-      return;
+      return refreshUnreadCount();
     }
 
+    final inFlight = _initializationFuture;
+    if (inFlight != null) return inFlight;
+
+    final future = _initializeInternal(user.id);
+    _initializationFuture = future;
+
+    return future.whenComplete(() {
+      if (identical(_initializationFuture, future)) {
+        _initializationFuture = null;
+      }
+    });
+  }
+
+  Future<void> _initializeInternal(String userId) async {
     try {
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
       await _initializeLocalNotifications();
@@ -118,7 +132,8 @@ class NotificationService {
       );
 
       await _onMessageOpenedAppSubscription?.cancel();
-      _onMessageOpenedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+      _onMessageOpenedAppSubscription =
+          FirebaseMessaging.onMessageOpenedApp.listen(
         _handleNotificationOpen,
         onError: (error) => debugPrint('FCM notification open error: $error'),
       );
@@ -129,7 +144,7 @@ class NotificationService {
       }
 
       _initialized = true;
-      _registeredUserId = user.id;
+      _registeredUserId = userId;
     } catch (e) {
       _initialized = false;
       _registeredUserId = null;
