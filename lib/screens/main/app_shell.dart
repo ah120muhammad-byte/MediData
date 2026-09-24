@@ -24,33 +24,14 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  // ==========================================================================
-  // SERVICES
-  // ==========================================================================
-
   final SupabaseClient _supabase = Supabase.instance.client;
-
   final NotificationService _notificationService = NotificationService.instance;
-
-  // ==========================================================================
-  // MODULES SCREEN KEY
-  // ==========================================================================
 
   final GlobalKey<ModulesScreenState> _modulesScreenKey =
       GlobalKey<ModulesScreenState>();
 
-  // ==========================================================================
-  // CURRENT PAGE
-  // ==========================================================================
-
   int _currentIndex = 2;
 
-  // ==========================================================================
-  // APP PAGES
-  // ==========================================================================
-
-  // Build tab screens lazily. IndexedStack used to construct all five
-  // screens at startup, including their initial data loads.
   final List<Widget?> _loadedPages = List<Widget?>.filled(5, null);
 
   Widget _buildPage(int index) {
@@ -77,15 +58,10 @@ class _AppShellState extends State<AppShell> {
     _loadedPages[index] ??= _buildPage(index);
   }
 
-  // ==========================================================================
-  // INIT
-  // ==========================================================================
-
   @override
   void initState() {
     super.initState();
 
-    // Home is the initial tab, so only it is created during startup.
     _ensurePageLoaded(_currentIndex);
 
     _notificationService.setLectureTapHandler(_openLectureFromNotification);
@@ -105,20 +81,11 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  // ==========================================================================
-  // DISPOSE
-  // ==========================================================================
-
   @override
   void dispose() {
     _notificationService.clearLectureTapHandler();
-
     super.dispose();
   }
-
-  // ==========================================================================
-  // BUILD
-  // ==========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -130,7 +97,6 @@ class _AppShellState extends State<AppShell> {
         child: Column(
           children: [
             const _AppHeader(),
-
             Expanded(
               child: IndexedStack(
                 index: _currentIndex,
@@ -150,10 +116,6 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  // ==========================================================================
-  // PENDING NOTIFICATION
-  // ==========================================================================
-
   void _openPendingNotificationLecture() {
     final lectureId = _notificationService.takePendingLectureId();
 
@@ -164,12 +126,7 @@ class _AppShellState extends State<AppShell> {
     _openLectureFromNotification(lectureId);
   }
 
-  // ==========================================================================
-  // NAVIGATION
-  // ==========================================================================
-
   void _onNavigationChanged(int index) {
-    // AI is opened as a full-screen pushed page.
     if (index == 1) {
       Navigator.of(
         context,
@@ -188,6 +145,7 @@ class _AppShellState extends State<AppShell> {
       _currentIndex = index;
     });
   }
+
   // ==========================================================================
   // OPEN LECTURE FROM HOME
   // ==========================================================================
@@ -197,11 +155,19 @@ class _AppShellState extends State<AppShell> {
     required String moduleName,
     required String lectureId,
   }) {
+    // Modules is lazy-loaded, so make sure its State exists before scheduling
+    // the navigation callback. Previously What's New could switch to index 0
+    // while the ModulesScreen was still null, making the tap appear to do
+    // nothing.
+    _ensurePageLoaded(0);
+
     setState(() {
       _currentIndex = 0;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
       _modulesScreenKey.currentState?.openLecture(
         moduleId: moduleId,
         lectureId: lectureId,
@@ -251,7 +217,6 @@ class _AppShellState extends State<AppShell> {
       }
 
       final lecture = Map<String, dynamic>.from(response);
-
       final moduleId = lecture['module_id']?.toString();
 
       if (moduleId == null || moduleId.isEmpty) {
@@ -262,11 +227,17 @@ class _AppShellState extends State<AppShell> {
         return;
       }
 
+      // Notifications/Search can also reach this path before ModulesScreen
+      // has ever been opened, so load it before changing the selected tab.
+      _ensurePageLoaded(0);
+
       setState(() {
         _currentIndex = 0;
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
         _modulesScreenKey.currentState?.openLecture(
           moduleId: moduleId,
           lectureId: normalizedLectureId,
@@ -285,10 +256,6 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  // ==========================================================================
-  // OPEN EXAM HISTORY
-  // ==========================================================================
-
   void _openExamHistory() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -296,10 +263,6 @@ class _AppShellState extends State<AppShell> {
       ),
     );
   }
-
-  // ==========================================================================
-  // OPEN EXAM ATTEMPT
-  // ==========================================================================
 
   Future<void> _openExamAttempt(StudentExamAttempt attempt) async {
     if (!mounted) {
@@ -333,19 +296,12 @@ class _AppShellState extends State<AppShell> {
       }
 
       final exam = Map<String, dynamic>.from(response);
-
       final examId = exam['id']?.toString() ?? attempt.examId;
-
       final examTitle = exam['title']?.toString() ?? attempt.examTitle;
-
-      final durationMinutes = (exam['duration_minutes'] as num?)?.toInt() ?? 0;
-
+      final durationMinutes =
+          (exam['duration_minutes'] as num?)?.toInt() ?? 0;
       final passingScore =
           (exam['passing_score'] as num?)?.toInt() ?? attempt.passingScore;
-
-      // ======================================================================
-      // IN PROGRESS
-      // ======================================================================
 
       if (attempt.isInProgress) {
         await Navigator.of(context).push(
@@ -362,12 +318,6 @@ class _AppShellState extends State<AppShell> {
 
         return;
       }
-
-      // ======================================================================
-      // COMPLETED
-      //
-      // Open the result directly.
-      // ======================================================================
 
       if (attempt.isCompleted) {
         await Navigator.of(context).push(
@@ -389,10 +339,6 @@ class _AppShellState extends State<AppShell> {
 
         return;
       }
-
-      // ======================================================================
-      // ABANDONED
-      // ======================================================================
 
       await Navigator.of(context).push(
         MaterialPageRoute(
@@ -416,10 +362,6 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  // ==========================================================================
-  // SEARCH
-  // ==========================================================================
-
   void _openSearch() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -440,11 +382,8 @@ class _AppHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     final isDark = theme.brightness == Brightness.dark;
-
     final horizontalPadding = Responsive.horizontalPadding(context);
-
     final width = Responsive.width(context);
 
     final headerHeight = Responsive.clamped(
@@ -462,7 +401,6 @@ class _AppHeader extends StatelessWidget {
     );
 
     final logoSize = Responsive.clamped(context, base: 58, min: 50, max: 70);
-
     final iconSize = Responsive.iconSize(context, base: 25, min: 22, max: 30);
 
     final outerVerticalPadding = Responsive.spacing(
@@ -472,7 +410,12 @@ class _AppHeader extends StatelessWidget {
       max: 14,
     );
 
-    final bottomSpacing = Responsive.spacing(context, base: 8, min: 6, max: 12);
+    final bottomSpacing = Responsive.spacing(
+      context,
+      base: 8,
+      min: 6,
+      max: 12,
+    );
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -488,9 +431,6 @@ class _AppHeader extends StatelessWidget {
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
-            // =================================================================
-            // BACKGROUND
-            // =================================================================
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -523,10 +463,6 @@ class _AppHeader extends StatelessWidget {
                 ),
               ),
             ),
-
-            // =================================================================
-            // LOGO
-            // =================================================================
             Container(
               width: logoSize,
               height: logoSize,
@@ -543,7 +479,9 @@ class _AppHeader extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
+                    color: Colors.black.withValues(
+                      alpha: isDark ? 0.22 : 0.08,
+                    ),
                     blurRadius: Responsive.clamped(
                       context,
                       base: 10,
@@ -573,10 +511,6 @@ class _AppHeader extends StatelessWidget {
                 ),
               ),
             ),
-
-            // =================================================================
-            // SEARCH
-            // =================================================================
             Positioned(
               left: Responsive.spacing(context, base: 4, min: 2, max: 10),
               child: _HeaderActionButton(
@@ -584,23 +518,18 @@ class _AppHeader extends StatelessWidget {
                 icon: Icons.search_rounded,
                 iconSize: iconSize,
                 onTap: () {
-                  final state = context
-                      .findAncestorStateOfType<_AppShellState>();
-
+                  final state =
+                      context.findAncestorStateOfType<_AppShellState>();
                   state?._openSearch();
                 },
               ),
             ),
-
-            // =================================================================
-            // NOTIFICATIONS
-            // =================================================================
             Positioned(
               right: Responsive.spacing(context, base: 4, min: 2, max: 10),
               child: NotificationBell(
                 onLectureTap: (lectureId) async {
-                  final state = context
-                      .findAncestorStateOfType<_AppShellState>();
+                  final state =
+                      context.findAncestorStateOfType<_AppShellState>();
 
                   if (state != null) {
                     await state._openLectureFromNotification(lectureId);
@@ -608,10 +537,6 @@ class _AppHeader extends StatelessWidget {
                 },
               ),
             ),
-
-            // =================================================================
-            // EDGE PROTECTION
-            // =================================================================
             if (width < 340)
               Positioned(
                 left: 0,
@@ -621,51 +546,6 @@ class _AppHeader extends StatelessWidget {
                 ),
               ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================================
-// HEADER ACTION BUTTON
-// ============================================================================
-
-class _HeaderActionButton extends StatelessWidget {
-  final String tooltip;
-  final IconData icon;
-  final double iconSize;
-  final VoidCallback onTap;
-
-  const _HeaderActionButton({
-    required this.tooltip,
-    required this.icon,
-    required this.iconSize,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    final padding = Responsive.spacing(context, base: 8, min: 6, max: 12);
-
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Padding(
-            padding: EdgeInsets.all(padding),
-            child: Icon(
-              icon,
-              size: iconSize,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
         ),
       ),
     );
@@ -716,9 +596,7 @@ class _CustomBottomNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     final isDark = theme.brightness == Brightness.dark;
-
     final width = Responsive.width(context);
 
     final horizontalMargin = Responsive.clamped(
@@ -728,7 +606,12 @@ class _CustomBottomNavigation extends StatelessWidget {
       max: 48,
     );
 
-    final bottomMargin = Responsive.clamped(context, base: 10, min: 6, max: 22);
+    final bottomMargin = Responsive.clamped(
+      context,
+      base: 10,
+      min: 6,
+      max: 22,
+    );
 
     final navigationHeight = Responsive.clamped(
       context,
@@ -819,11 +702,8 @@ class _AnimatedNavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     final isDark = theme.brightness == Brightness.dark;
-
     final primaryColor = theme.colorScheme.primary;
-
     final isCompact = Responsive.width(context) < 340;
 
     final selectedCircleSize = Responsive.clamped(
@@ -851,15 +731,22 @@ class _AnimatedNavItem extends StatelessWidget {
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            // ================================================================
-            // SELECTED CIRCLE
-            // ================================================================
             AnimatedPositioned(
               duration: const Duration(milliseconds: 350),
               curve: Curves.easeOutBack,
               top: selected
-                  ? -Responsive.clamped(context, base: 20, min: 16, max: 24)
-                  : Responsive.clamped(context, base: 15, min: 12, max: 20),
+                  ? -Responsive.clamped(
+                      context,
+                      base: 20,
+                      min: 16,
+                      max: 24,
+                    )
+                  : Responsive.clamped(
+                      context,
+                      base: 15,
+                      min: 12,
+                      max: 20,
+                    ),
               child: AnimatedScale(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOutBack,
@@ -903,10 +790,6 @@ class _AnimatedNavItem extends StatelessWidget {
                 ),
               ),
             ),
-
-            // ================================================================
-            // NORMAL ITEM
-            // ================================================================
             AnimatedPadding(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
@@ -951,10 +834,6 @@ class _AnimatedNavItem extends StatelessWidget {
                 ),
               ),
             ),
-
-            // ================================================================
-            // SELECTED LABEL
-            // ================================================================
             AnimatedPositioned(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
@@ -987,10 +866,6 @@ class _AnimatedNavItem extends StatelessWidget {
     );
   }
 }
-
-// ============================================================================
-// NAV ITEM
-// ============================================================================
 
 class _NavItem {
   final String label;
