@@ -703,11 +703,14 @@ Future<List<StudentModuleProgress>> getModuleProgress() async {
       );
     }
 
-    return StudentProfile.fromMap(
-      Map<String, dynamic>.from(
-        response,
-      ),
-    );
+    final profileMap = Map<String, dynamic>.from(response);
+    final authEmail = user.email?.trim();
+
+    if (authEmail != null && authEmail.isNotEmpty) {
+      profileMap['email'] = authEmail;
+    }
+
+    return StudentProfile.fromMap(profileMap);
   }
 
   // ===========================================================================
