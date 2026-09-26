@@ -626,9 +626,10 @@ class _ExamScreenState extends State<ExamScreen>
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop || _leaving) return;
+        final navigator = Navigator.of(context);
         final shouldLeave = await _confirmExit();
         if (shouldLeave && mounted) {
-          Navigator.of(context).pop();
+          navigator.pop();
         } else {
           _leaving = false;
         }
@@ -713,9 +714,10 @@ class _ExamScreenState extends State<ExamScreen>
       leading: IconButton(
         tooltip: 'Leave exam',
         onPressed: _isSubmitting ? null : () async {
+          final navigator = Navigator.of(context);
           final shouldLeave = await _confirmExit();
           if (shouldLeave && mounted) {
-            Navigator.of(context).pop();
+            navigator.pop();
           } else {
             _leaving = false;
           }
