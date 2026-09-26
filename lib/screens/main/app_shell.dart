@@ -90,28 +90,34 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBody: false,
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: Column(
-          children: [
-            const _AppHeader(),
-            Expanded(
-              child: IndexedStack(
-                index: _currentIndex,
-                children: List<Widget>.generate(
-                  _loadedPages.length,
-                  (index) => _loadedPages[index] ?? const SizedBox.shrink(),
-                ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SafeArea(
+              top: true,
+              bottom: false,
+              child: Column(
+                children: [
+                  const _AppHeader(),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _currentIndex,
+                      children: List<Widget>.generate(
+                        _loadedPages.length,
+                        (index) =>
+                            _loadedPages[index] ?? const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: _CustomBottomNavigation(
-        currentIndex: _currentIndex,
-        onItemSelected: _onNavigationChanged,
+          ),
+          _CustomBottomNavigation(
+            currentIndex: _currentIndex,
+            onItemSelected: _onNavigationChanged,
+          ),
+        ],
       ),
     );
   }
