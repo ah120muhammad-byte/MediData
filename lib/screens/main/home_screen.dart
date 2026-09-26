@@ -15,10 +15,7 @@ class HomeScreen extends StatefulWidget {
     required String lectureId,
   }) onOpenLecture;
 
-  const HomeScreen({
-    super.key,
-    required this.onOpenLecture,
-  });
+  const HomeScreen({super.key, required this.onOpenLecture});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -26,8 +23,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
-  late Future<_HomeData> _homeFuture;
   final ClinicalCaseService _caseService = ClinicalCaseService.instance;
+  late Future<_HomeData> _homeFuture;
 
   @override
   void initState() {
@@ -37,15 +34,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   _LectureHomeData _lectureFromRow(Map<String, dynamic> row) {
     final moduleRaw = row['modules'];
-
     return _LectureHomeData(
       id: row['id']?.toString() ?? '',
       moduleId: row['module_id']?.toString() ?? '',
       title: row['title']?.toString() ?? '',
       description: row['description']?.toString(),
-      moduleName: moduleRaw is Map
-          ? moduleRaw['name']?.toString() ?? 'Module'
-          : 'Module',
+      moduleName:
+          moduleRaw is Map ? moduleRaw['name']?.toString() ?? 'Module' : 'Module',
       publishedAt: DateTime.tryParse(row['published_at']?.toString() ?? ''),
     );
   }
@@ -55,40 +50,23 @@ class _HomeScreenState extends State<HomeScreen> {
     final todayCase = await _caseService.getTodayCase();
     final now = DateTime.now();
     final startOfTodayLocal = DateTime(now.year, now.month, now.day);
-    final startOfTomorrowLocal =
-        startOfTodayLocal.add(const Duration(days: 1));
+    final startOfTomorrowLocal = startOfTodayLocal.add(const Duration(days: 1));
 
     final todayResponse = await _supabase
         .from('lectures')
         .select('''
-          id,
-          module_id,
-          title,
-          description,
-          published_at,
-          is_published,
-          is_active,
-          modules (
-            id,
-            name
-          )
+          id, module_id, title, description, published_at, is_published,
+          is_active, modules (id, name)
         ''')
         .eq('is_active', true)
         .eq('is_published', true)
-        .gte(
-          'published_at',
-          startOfTodayLocal.toUtc().toIso8601String(),
-        )
-        .lt(
-          'published_at',
-          startOfTomorrowLocal.toUtc().toIso8601String(),
-        )
+        .gte('published_at', startOfTodayLocal.toUtc().toIso8601String())
+        .lt('published_at', startOfTomorrowLocal.toUtc().toIso8601String())
         .order('published_at', ascending: false);
 
     final todayRows = List<Map<String, dynamic>>.from(
       (todayResponse as List).map((item) => Map<String, dynamic>.from(item)),
     );
-
     final todayLectures = todayRows.map(_lectureFromRow).toList();
 
     _LectureHomeData? latestLecture;
@@ -96,17 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final latestResponse = await _supabase
           .from('lectures')
           .select('''
-            id,
-            module_id,
-            title,
-            description,
-            published_at,
-            is_published,
-            is_active,
-            modules (
-              id,
-              name
-            )
+            id, module_id, title, description, published_at, is_published,
+            is_active, modules (id, name)
           ''')
           .eq('is_active', true)
           .eq('is_published', true)
@@ -114,10 +83,8 @@ class _HomeScreenState extends State<HomeScreen> {
           .limit(1);
 
       final latestRows = List<Map<String, dynamic>>.from(
-        (latestResponse as List)
-            .map((item) => Map<String, dynamic>.from(item)),
+        (latestResponse as List).map((item) => Map<String, dynamic>.from(item)),
       );
-
       if (latestRows.isNotEmpty) {
         latestLecture = _lectureFromRow(latestRows.first);
       }
@@ -128,16 +95,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final latestProgressResponse = await _supabase
           .from('lecture_progress')
           .select('''
-            lecture_id,
-            last_opened_at,
+            lecture_id, last_opened_at,
             lectures (
-              id,
-              module_id,
-              modules (
-                id,
-                name,
-                description
-              )
+              id, module_id,
+              modules (id, name, description)
             )
           ''')
           .eq('user_id', user.id)
@@ -145,9 +106,8 @@ class _HomeScreenState extends State<HomeScreen> {
           .limit(1);
 
       final progressRows = List<Map<String, dynamic>>.from(
-        (latestProgressResponse as List).map(
-          (item) => Map<String, dynamic>.from(item),
-        ),
+        (latestProgressResponse as List)
+            .map((item) => Map<String, dynamic>.from(item)),
       );
 
       if (progressRows.isNotEmpty) {
@@ -183,9 +143,8 @@ class _HomeScreenState extends State<HomeScreen> {
           .order('display_order', ascending: true);
 
       final lectures = List<Map<String, dynamic>>.from(
-        (lecturesResponse as List).map(
-          (item) => Map<String, dynamic>.from(item),
-        ),
+        (lecturesResponse as List)
+            .map((item) => Map<String, dynamic>.from(item)),
       );
 
       if (lectures.isNotEmpty) {
@@ -201,9 +160,8 @@ class _HomeScreenState extends State<HomeScreen> {
             .eq('is_active', true);
 
         final files = List<Map<String, dynamic>>.from(
-          (filesResponse as List).map(
-            (item) => Map<String, dynamic>.from(item),
-          ),
+          (filesResponse as List)
+              .map((item) => Map<String, dynamic>.from(item)),
         );
 
         final trackableLectureIds = <String>{};
@@ -271,7 +229,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth >= 900 ? 900.0 : constraints.maxWidth;
+        final maxWidth =
+            constraints.maxWidth >= 900 ? 900.0 : constraints.maxWidth;
 
         return Center(
           child: ConstrainedBox(
@@ -289,7 +248,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
 
                 final data = snapshot.data ?? const _HomeData();
-                final horizontalPadding = Responsive.horizontalPadding(context);
+                final horizontalPadding =
+                    Responsive.horizontalPadding(context);
 
                 return RefreshIndicator(
                   onRefresh: _refresh,
@@ -307,7 +267,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
-                            _SectionTitle(title: "What's New", icon: Icons.auto_awesome_rounded),
+                            _SectionTitle(
+                              title: "What's New",
+                              icon: Icons.auto_awesome_rounded,
+                            ),
                             const SizedBox(height: 10),
                             _WhatsNewCarousel(
                               lectures: data.todayLectures,
@@ -321,20 +284,38 @@ class _HomeScreenState extends State<HomeScreen> {
                               },
                             ),
                             const SizedBox(height: 22),
-                            _SectionTitle(title: 'Case of the Day', icon: Icons.local_hospital_rounded),
+                            _SectionTitle(
+                              title: 'Case of the Day',
+                              icon: Icons.local_hospital_rounded,
+                            ),
                             const SizedBox(height: 10),
                             _CaseOfTheDayCard(
                               clinicalCase: data.todayCase,
-                              onTap: data.todayCase == null ? null : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ClinicalCaseScreen(clinicalCase: data.todayCase!))),
+                              onTap: data.todayCase == null
+                                  ? null
+                                  : () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              ClinicalCaseScreen(
+                                            clinicalCase: data.todayCase!,
+                                          ),
+                                        ),
+                                      );
+                                    },
                             ),
                             const SizedBox(height: 22),
-                            _SectionTitle(title: 'Your Module', icon: Icons.menu_book_rounded),
+                            _SectionTitle(
+                              title: 'Your Module',
+                              icon: Icons.menu_book_rounded,
+                            ),
                             const SizedBox(height: 10),
                             _YourModuleCard(
                               module: data.currentModule,
                               progress: data.moduleProgress,
                               completedLectures: data.completedLectures,
-                              totalTrackableLectures: data.totalTrackableLectures,
+                              totalTrackableLectures:
+                                  data.totalTrackableLectures,
                             ),
                           ]),
                         ),
@@ -361,6 +342,7 @@ class _HomeData {
   final double moduleProgress;
 
   const _HomeData({
+    this.todayCase,
     this.latestLecture,
     this.todayLectures = const <_LectureHomeData>[],
     this.currentModule,
@@ -426,7 +408,8 @@ class _SectionTitle extends StatelessWidget {
         Text(
           title,
           style: theme.textTheme.titleLarge?.copyWith(
-            fontSize: Responsive.titleSize(context, base: 21, min: 19, max: 27),
+            fontSize:
+                Responsive.titleSize(context, base: 21, min: 19, max: 27),
             fontWeight: FontWeight.w800,
             color: scheme.onSurface,
           ),
@@ -476,7 +459,9 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
   void didUpdateWidget(covariant _WhatsNewCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
     final oldCount = oldWidget.lectures.length +
-        (oldWidget.lectures.isEmpty && oldWidget.fallbackLecture != null ? 1 : 0);
+        (oldWidget.lectures.isEmpty && oldWidget.fallbackLecture != null
+            ? 1
+            : 0);
     final newCount = _items.length;
 
     if (newCount != oldCount || _currentPage >= newCount) {
@@ -498,7 +483,6 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
 
   void _startAutoPlay() {
     _autoPlayTimer?.cancel();
-
     if (!_hasMultiple) return;
 
     _autoPlayTimer = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -535,7 +519,6 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
             },
             itemBuilder: (context, index) {
               final lecture = items[index];
-
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 1),
                 child: _LatestLectureCard(
@@ -555,7 +538,6 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(items.length, (index) {
               final selected = index == _currentPage;
-
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOut,
@@ -625,12 +607,8 @@ class _LatestLectureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final radius = Responsive.cardRadius(context);
-
-    final dateLabel = isToday
-        ? 'NEW TODAY'
-        : 'LATEST LECTURE';
+    final dateLabel = isToday ? 'NEW TODAY' : 'LATEST LECTURE';
 
     return Material(
       color: Colors.transparent,
@@ -643,18 +621,11 @@ class _LatestLectureCard extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
-            gradient: LinearGradient(
+            gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [AppColors.gold, AppColors.goldDark],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.gold.withValues(alpha: 0.18),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
           child: Stack(
             children: [
@@ -665,15 +636,6 @@ class _LatestLectureCard extends StatelessWidget {
                   Icons.auto_awesome_rounded,
                   size: 110,
                   color: Colors.white.withValues(alpha: 0.07),
-                ),
-              ),
-              Positioned(
-                right: 4,
-                bottom: 8,
-                child: Icon(
-                  Icons.menu_book_rounded,
-                  size: 78,
-                  color: Colors.white.withValues(alpha: 0.05),
                 ),
               ),
               Column(
@@ -801,24 +763,40 @@ class _LatestLectureCard extends StatelessWidget {
 class _CaseOfTheDayCard extends StatelessWidget {
   final ClinicalCase? clinicalCase;
   final VoidCallback? onTap;
-  const _CaseOfTheDayCard({required this.clinicalCase, required this.onTap});
+
+  const _CaseOfTheDayCard({
+    required this.clinicalCase,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final radius = Responsive.cardRadius(context);
+
     if (clinicalCase == null) {
-      return Card(child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(children: [
-          Icon(Icons.local_hospital_outlined, color: scheme.primary),
-          const SizedBox(width: 12),
-          Expanded(child: Text('No case of the day has been published yet.', style: theme.textTheme.bodyMedium)),
-        ]),
-      ));
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Icon(Icons.local_hospital_outlined, color: scheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'No case of the day has been published yet.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
+
     final c = clinicalCase!;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -829,31 +807,87 @@ class _CaseOfTheDayCard extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [scheme.primary, scheme.primaryContainer]),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [scheme.primary, scheme.primaryContainer],
+            ),
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: .16), borderRadius: BorderRadius.circular(999)),
-                child: const Text('CLINICAL CASE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: .5)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'CLINICAL CASE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  const Icon(
+                    Icons.medical_services_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ],
               ),
+              const SizedBox(height: 14),
+              Text(
+                c.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if ((c.shortDescription ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  c.shortDescription!,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.82),
+                    height: 1.35,
+                  ),
+                ),
+              ],
               const Spacer(),
-              const Icon(Icons.medical_services_rounded, color: Colors.white, size: 26),
-            ]),
-            const SizedBox(height: 14),
-            Text(c.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-            if ((c.shortDescription ?? '').trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(c.shortDescription!, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withValues(alpha: .82), height: 1.35)),
+              const Row(
+                children: [
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'View Case',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
             ],
-            const Spacer(),
-            const Row(children: [
-              Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 8),
-              Text('View Case', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-            ]),
-          ]),
+          ),
         ),
       ),
     );
@@ -910,13 +944,6 @@ class _YourModuleCard extends StatelessWidget {
         color: scheme.surface,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: scheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.035),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -926,7 +953,7 @@ class _YourModuleCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  module!.name,
+                  module.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleLarge?.copyWith(
@@ -938,7 +965,8 @@ class _YourModuleCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                 decoration: BoxDecoration(
                   color: scheme.secondaryContainer,
                   borderRadius: BorderRadius.circular(12),
@@ -953,10 +981,10 @@ class _YourModuleCard extends StatelessWidget {
               ),
             ],
           ),
-          if ((module!.description ?? '').trim().isNotEmpty) ...[
+          if ((module.description ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
-              module!.description!,
+              module.description!,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
