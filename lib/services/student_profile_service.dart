@@ -4,14 +4,12 @@ class StudentProfile {
   final String id;
   final String fullName;
   final String email;
-  final String? phone;
   final String? profileImageUrl;
 
   const StudentProfile({
     required this.id,
     required this.fullName,
     required this.email,
-    required this.phone,
     required this.profileImageUrl,
   });
 
@@ -26,8 +24,6 @@ class StudentProfile {
               'Student',
       email:
           map['email']?.toString() ?? '',
-      phone:
-          map['phone']?.toString(),
       profileImageUrl:
           map['profile_image_url']
               ?.toString(),
@@ -693,7 +689,6 @@ Future<List<StudentModuleProgress>> getModuleProgress() async {
               id,
               full_name,
               email,
-              phone,
               profile_image_url
             ''')
             .eq(
@@ -1160,7 +1155,6 @@ Future<List<StudentModuleProgress>> getModuleProgress() async {
 
   Future<void> updateProfile({
     required String fullName,
-    String? phone,
   }) async {
     final user =
         _supabase.auth.currentUser;
@@ -1176,8 +1170,6 @@ Future<List<StudentModuleProgress>> getModuleProgress() async {
         .update({
           'full_name':
               fullName.trim(),
-          'phone':
-              phone?.trim(),
           'updated_at':
               DateTime.now()
                   .toUtc()
