@@ -263,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           horizontalPadding,
                           0,
                           horizontalPadding,
-                          16,
+                          MediaQuery.paddingOf(context).bottom + 108,
                         ),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
