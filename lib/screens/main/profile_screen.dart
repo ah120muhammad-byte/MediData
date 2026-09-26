@@ -385,7 +385,8 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
   }
 
   bool _isValidEmail(String value) {
-    return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+
+    return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim());
+  }
 
   @override
   Widget build(BuildContext context) {
