@@ -6,12 +6,19 @@ class ClinicalCase {
   final DateTime caseDate;
   final String? shortDescription;
   final String? clinicalPresentation;
+  final String? clinicalPresentationRich;
   final String? history;
+  final String? historyRich;
   final String? examination;
+  final String? examinationRich;
   final String? investigations;
+  final String? investigationsRich;
   final String? diagnosis;
+  final String? diagnosisRich;
   final String? management;
+  final String? managementRich;
   final String? medications;
+  final String? medicationsRich;
   final List<String> imageUrls;
   final String? presentationImageUrl;
   final String? historyImageUrl;
@@ -27,14 +34,37 @@ class ClinicalCase {
   final bool isPublished;
 
   const ClinicalCase({
-    required this.id, required this.title, required this.caseDate,
-    this.shortDescription, this.clinicalPresentation, this.history,
-    this.examination, this.investigations, this.diagnosis, this.management,
-    this.medications, this.imageUrls = const [],
-    this.presentationImageUrl, this.historyImageUrl, this.examinationImageUrl,
-    this.investigationsImageUrl, this.diagnosisImageUrl, this.managementImageUrl,
-    this.medicationsImageUrl, this.cardBackgroundUrl, this.fontFamily = 'default',
-    this.fontSize = 16, this.fontColor = '#000000', this.isPublished = false,
+    required this.id,
+    required this.title,
+    required this.caseDate,
+    this.shortDescription,
+    this.clinicalPresentation,
+    this.clinicalPresentationRich,
+    this.history,
+    this.historyRich,
+    this.examination,
+    this.examinationRich,
+    this.investigations,
+    this.investigationsRich,
+    this.diagnosis,
+    this.diagnosisRich,
+    this.management,
+    this.managementRich,
+    this.medications,
+    this.medicationsRich,
+    this.imageUrls = const [],
+    this.presentationImageUrl,
+    this.historyImageUrl,
+    this.examinationImageUrl,
+    this.investigationsImageUrl,
+    this.diagnosisImageUrl,
+    this.managementImageUrl,
+    this.medicationsImageUrl,
+    this.cardBackgroundUrl,
+    this.fontFamily = 'default',
+    this.fontSize = 16,
+    this.fontColor = '#000000',
+    this.isPublished = false,
   });
 
   factory ClinicalCase.fromMap(Map<String, dynamic> map) => ClinicalCase(
@@ -43,12 +73,19 @@ class ClinicalCase {
     caseDate: DateTime.parse(map['case_date'].toString()),
     shortDescription: map['short_description']?.toString(),
     clinicalPresentation: map['clinical_presentation']?.toString(),
+    clinicalPresentationRich: map['clinical_presentation_rich']?.toString(),
     history: map['history']?.toString(),
+    historyRich: map['history_rich']?.toString(),
     examination: map['examination']?.toString(),
+    examinationRich: map['examination_rich']?.toString(),
     investigations: map['investigations']?.toString(),
+    investigationsRich: map['investigations_rich']?.toString(),
     diagnosis: map['diagnosis']?.toString(),
+    diagnosisRich: map['diagnosis_rich']?.toString(),
     management: map['management']?.toString(),
+    managementRich: map['management_rich']?.toString(),
     medications: map['medications']?.toString(),
+    medicationsRich: map['medications_rich']?.toString(),
     imageUrls: List<String>.from(map['image_urls'] ?? const []),
     presentationImageUrl: map['presentation_image_url']?.toString(),
     historyImageUrl: map['history_image_url']?.toString(),
