@@ -6,6 +6,8 @@ import '../../core/theme/app_colors.dart';
 import '../../services/student_preferences_service.dart';
 import '../../services/student_profile_service.dart';
 import '../../services/theme_mode_service.dart';
+import '../../services/clinical_case_service.dart';
+import 'clinical_case_screen.dart';
 import 'contact_support_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -31,6 +33,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final StudentProfileService _service = StudentProfileService.instance;
+  final ClinicalCaseService _caseService = ClinicalCaseService.instance;
   late Future<_ProfilePageData> _future;
 
   @override
@@ -44,12 +47,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _service.getProfile(),
       _service.getAnalytics(),
       _service.getModuleProgress(),
+      _caseService.getSavedCases(),
     ]);
 
     return _ProfilePageData(
       profile: results[0] as StudentProfile,
       analytics: results[1] as StudentProfileAnalytics,
       moduleProgress: results[2] as List<StudentModuleProgress>,
+      savedCases: results[3] as List<ClinicalCase>,
     );
   }
 
@@ -155,6 +160,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         activities: data.analytics.lectureActivities,
                         onOpenLecture: widget.onOpenLecture,
                       ),
+                    ),
+                    _Gap(),
+                    _SectionCard(
+                      title: 'Saved Cases',
+                      icon: Icons.bookmarks_rounded,
+                      trailing: data.savedCases.isEmpty ? null : Text('${data.savedCases.length} saved'),
+                      child: _SavedCasesList(cases: data.savedCases),
                     ),
                     _Gap(),
                     _SectionCard(
@@ -390,6 +402,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+class _SavedCasesList extends StatelessWidget {
+  final List<ClinicalCase> cases;
+  const _SavedCasesList({required this.cases});
+
+  @override
+  Widget build(BuildContext context) {
+    if (cases.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text('No saved clinical cases yet.'),
+      );
+    }
+    return Column(
+      children: cases.take(5).map((c) => ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const CircleAvatar(child: Icon(Icons.local_hospital_outlined)),
+        title: Text(c.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+        subtitle: Text(c.caseDate.toLocal().toString().split(' ').first),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ClinicalCaseScreen(clinicalCase: c))),
+      )).toList(),
+    );
+  }
+}
+
 class _Gap extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -401,11 +438,13 @@ class _ProfilePageData {
   final StudentProfile profile;
   final StudentProfileAnalytics analytics;
   final List<StudentModuleProgress> moduleProgress;
+  final List<ClinicalCase> savedCases;
 
   const _ProfilePageData({
     required this.profile,
     required this.analytics,
     required this.moduleProgress,
+    required this.savedCases,
   });
 }
 
