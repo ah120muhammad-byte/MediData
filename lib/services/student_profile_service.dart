@@ -1155,7 +1155,6 @@ Future<List<StudentModuleProgress>> getModuleProgress() async {
 
   Future<void> updateProfile({
     required String fullName,
-    required String email,
   }) async {
     final user =
         _supabase.auth.currentUser;
@@ -1171,8 +1170,6 @@ Future<List<StudentModuleProgress>> getModuleProgress() async {
         .update({
           'full_name':
               fullName.trim(),
-          'email':
-              email.trim().toLowerCase(),
           'updated_at':
               DateTime.now()
                   .toUtc()
