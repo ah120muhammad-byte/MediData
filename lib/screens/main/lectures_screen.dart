@@ -316,6 +316,7 @@ class _LecturesScreenState extends State<LecturesScreen> {
         await StudentPreferencesService.instance.getWifiOnlyDownloads();
     if (!shouldWarn) return true;
 
+    if (!mounted) return false;
     final theme = Theme.of(context);
     final result = await showDialog<bool>(
       context: context,
