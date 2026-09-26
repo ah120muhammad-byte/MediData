@@ -31,9 +31,11 @@ class _ClinicalCaseScreenState extends State<ClinicalCaseScreen> {
       await _service.setSaved(widget.clinicalCase.id, next);
       if (mounted) setState(() => _saved = next);
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unable to update saved cases.')),
       );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
