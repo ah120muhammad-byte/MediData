@@ -365,13 +365,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        TextField(
-                          controller: TextEditingController(text: currentEmail),
-                          readOnly: true,
+                        InputDecorator(
                           decoration: const InputDecoration(
                             labelText: 'Current Email',
                             prefixIcon: Icon(Icons.email_outlined),
                             suffixIcon: Icon(Icons.lock_outline_rounded),
+                          ),
+                          child: Text(
+                            currentEmail,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(height: 14),
