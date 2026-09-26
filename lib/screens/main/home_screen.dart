@@ -953,7 +953,7 @@ class _YourModuleCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  module.name,
+                  module!.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleLarge?.copyWith(
@@ -981,10 +981,10 @@ class _YourModuleCard extends StatelessWidget {
               ),
             ],
           ),
-          if ((module.description ?? '').trim().isNotEmpty) ...[
+          if ((module!.description ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
-              module.description!,
+              module!.description!,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
