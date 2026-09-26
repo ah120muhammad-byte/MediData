@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/responsive/responsive.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/clinical_case_service.dart';
+import 'clinical_case_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final void Function({
@@ -25,6 +27,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
   late Future<_HomeData> _homeFuture;
+  final ClinicalCaseService _caseService = ClinicalCaseService.instance;
 
   @override
   void initState() {
@@ -49,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<_HomeData> _loadHomeData() async {
     final user = _supabase.auth.currentUser;
+    final todayCase = await _caseService.getTodayCase();
     final now = DateTime.now();
     final startOfTodayLocal = DateTime(now.year, now.month, now.day);
     final startOfTomorrowLocal =
@@ -246,6 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return _HomeData(
+      todayCase: todayCase,
       latestLecture: latestLecture,
       todayLectures: todayLectures,
       currentModule: currentModule,
@@ -316,6 +321,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               },
                             ),
                             const SizedBox(height: 22),
+                            _SectionTitle(title: 'Case of the Day', icon: Icons.local_hospital_rounded),
+                            const SizedBox(height: 10),
+                            _CaseOfTheDayCard(
+                              clinicalCase: data.todayCase,
+                              onTap: data.todayCase == null ? null : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ClinicalCaseScreen(clinicalCase: data.todayCase!))),
+                            ),
+                            const SizedBox(height: 22),
                             _SectionTitle(title: 'Your Module', icon: Icons.menu_book_rounded),
                             const SizedBox(height: 10),
                             _YourModuleCard(
@@ -340,6 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _HomeData {
+  final ClinicalCase? todayCase;
   final _LectureHomeData? latestLecture;
   final List<_LectureHomeData> todayLectures;
   final _ModuleHomeData? currentModule;
@@ -779,6 +792,68 @@ class _LatestLectureCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CaseOfTheDayCard extends StatelessWidget {
+  final ClinicalCase? clinicalCase;
+  final VoidCallback? onTap;
+  const _CaseOfTheDayCard({required this.clinicalCase, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final radius = Responsive.cardRadius(context);
+    if (clinicalCase == null) {
+      return Card(child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(children: [
+          Icon(Icons.local_hospital_outlined, color: scheme.primary),
+          const SizedBox(width: 12),
+          Expanded(child: Text('No case of the day has been published yet.', style: theme.textTheme.bodyMedium)),
+        ]),
+      ));
+    }
+    final c = clinicalCase!;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(radius),
+        onTap: onTap,
+        child: Ink(
+          height: 220,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [scheme.primary, scheme.primaryContainer]),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: .16), borderRadius: BorderRadius.circular(999)),
+                child: const Text('CLINICAL CASE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: .5)),
+              ),
+              const Spacer(),
+              const Icon(Icons.medical_services_rounded, color: Colors.white, size: 26),
+            ]),
+            const SizedBox(height: 14),
+            Text(c.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+            if ((c.shortDescription ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(c.shortDescription!, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withValues(alpha: .82), height: 1.35)),
+            ],
+            const Spacer(),
+            const Row(children: [
+              Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Text('View Case', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+            ]),
+          ]),
         ),
       ),
     );
