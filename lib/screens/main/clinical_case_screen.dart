@@ -41,22 +41,16 @@ class _ClinicalCaseScreenState extends State<ClinicalCaseScreen> {
 
   Widget _rich(String? rich, String? plain) {
     final raw = rich?.trim() ?? '';
-    if (raw.isEmpty) return Text(plain ?? '', style: const TextStyle(height: 1.65));
+    if (raw.isEmpty) {
+      return Text(plain ?? '', style: const TextStyle(height: 1.65));
+    }
     try {
       final controller = QuillController(
         document: Document.fromJson(jsonDecode(raw)),
         selection: const TextSelection.collapsed(offset: 0),
-        readOnly: true,
       );
-      return QuillEditor.basic(
-        controller: controller,
-        config: const QuillEditorConfig(
-          scrollable: false,
-          padding: EdgeInsets.zero,
-          showCursor: false,
-          showCodeBlockLineNumbers: false,
-        ),
-      );
+      controller.readOnly = true;
+      return _ReadOnlyQuill(controller: controller);
     } catch (_) {
       return Text(plain ?? '', style: const TextStyle(height: 1.65));
     }
@@ -151,6 +145,35 @@ class _ClinicalCaseScreenState extends State<ClinicalCaseScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ReadOnlyQuill extends StatefulWidget {
+  const _ReadOnlyQuill({required this.controller});
+  final QuillController controller;
+
+  @override
+  State<_ReadOnlyQuill> createState() => _ReadOnlyQuillState();
+}
+
+class _ReadOnlyQuillState extends State<_ReadOnlyQuill> {
+  @override
+  void dispose() {
+    widget.controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return QuillEditor.basic(
+      controller: widget.controller,
+      config: const QuillEditorConfig(
+        scrollable: false,
+        padding: EdgeInsets.zero,
+        showCursor: false,
+        showCodeBlockLineNumbers: false,
       ),
     );
   }
