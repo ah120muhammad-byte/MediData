@@ -552,6 +552,46 @@ class _AppHeader extends StatelessWidget {
   }
 }
 
+class _HeaderActionButton extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final double iconSize;
+  final VoidCallback onTap;
+
+  const _HeaderActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.iconSize,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final padding = Responsive.spacing(context, base: 8, min: 6, max: 12);
+
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Padding(
+            padding: EdgeInsets.all(padding),
+            child: Icon(
+              icon,
+              size: iconSize,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ============================================================================
 // CUSTOM BOTTOM NAVIGATION
 // ============================================================================
