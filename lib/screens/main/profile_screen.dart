@@ -173,7 +173,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _Gap(),
                     _AccountActions(
                       onPassword: _showChangePassword,
-                      onEmail: () => _showChangeEmail(data.profile.email),
                       onSupport: _openSupport,
                       onLogout: _showLogoutDialog,
                     ),
@@ -336,166 +335,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
     }
-  }
-
-  Future<void> _showChangeEmail(String currentEmail) async {
-    final newEmailController = TextEditingController();
-    final confirmController = TextEditingController();
-    String? result;
-
-    try {
-      result = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) {
-          bool saving = false;
-
-          return StatefulBuilder(
-            builder: (dialogContext, setDialogState) {
-              return AlertDialog(
-                title: const Row(
-                  children: [
-                    Icon(Icons.alternate_email_rounded),
-                    SizedBox(width: 10),
-                    Text('Change Email'),
-                  ],
-                ),
-                content: SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 430),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        InputDecorator(
-                          decoration: const InputDecoration(
-                            labelText: 'Current Email',
-                            prefixIcon: Icon(Icons.email_outlined),
-                            suffixIcon: Icon(Icons.lock_outline_rounded),
-                          ),
-                          child: Text(
-                            currentEmail,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        TextField(
-                          controller: newEmailController,
-                          enabled: !saving,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          autofillHints: const [AutofillHints.email],
-                          decoration: const InputDecoration(
-                            labelText: 'New Email',
-                            hintText: 'name@example.com',
-                            prefixIcon: Icon(Icons.alternate_email_rounded),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        TextField(
-                          controller: confirmController,
-                          enabled: !saving,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.done,
-                          decoration: const InputDecoration(
-                            labelText: 'Confirm New Email',
-                            prefixIcon: Icon(Icons.mark_email_read_outlined),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'If email confirmation is enabled, you will receive a confirmation link at the new address.',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: saving
-                        ? null
-                        : () => Navigator.of(dialogContext).pop(),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: saving
-                        ? null
-                        : () async {
-                            final email =
-                                newEmailController.text.trim().toLowerCase();
-                            final confirmation =
-                                confirmController.text.trim().toLowerCase();
-
-                            final validEmail = RegExp(
-                              r'^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$',
-                            ).hasMatch(email);
-
-                            if (!validEmail) {
-                              setDialogState(() {});
-                              return;
-                            }
-
-                            if (email == currentEmail.trim().toLowerCase()) {
-                              return;
-                            }
-
-                            if (email != confirmation) {
-                              return;
-                            }
-
-                            setDialogState(() => saving = true);
-
-                            try {
-                              await _service.updateEmail(email);
-                              if (!dialogContext.mounted) return;
-                              Navigator.of(dialogContext).pop('success');
-                            } catch (error) {
-                              if (!dialogContext.mounted) return;
-                              setDialogState(() => saving = false);
-                              ScaffoldMessenger.of(dialogContext).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    error.toString().replaceFirst(
-                                          'Exception: ',
-                                          '',
-                                        ),
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                    icon: saving
-                        ? const SizedBox(
-                            width: 17,
-                            height: 17,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check_rounded, size: 18),
-                    label: Text(saving ? 'Updating...' : 'Update Email'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-    } finally {
-      newEmailController.dispose();
-      confirmController.dispose();
-    }
-
-    if (!mounted || result != 'success') return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Email change requested. Check your new inbox to confirm it.',
-          ),
-        ),
-      );
-    });
   }
 
   Future<void> _showChangePassword() async {
@@ -1616,13 +1455,11 @@ class _StudentSettingsState extends State<_StudentSettings> {
 
 class _AccountActions extends StatelessWidget {
   final VoidCallback onPassword;
-  final VoidCallback onEmail;
   final VoidCallback onSupport;
   final VoidCallback onLogout;
 
   const _AccountActions({
     required this.onPassword,
-    required this.onEmail,
     required this.onSupport,
     required this.onLogout,
   });
@@ -1642,19 +1479,6 @@ class _AccountActions extends StatelessWidget {
             title: const Text('Change Password'),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: onPassword,
-          ),
-          const Divider(height: 1),
-          ListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 6),
-            leading: Icon(
-              Icons.alternate_email_rounded,
-              color: theme.colorScheme.primary,
-            ),
-            title: const Text('Change Email'),
-            subtitle: const Text('Update the email linked to your account.'),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: onEmail,
           ),
           const Divider(height: 1),
           ListTile(
