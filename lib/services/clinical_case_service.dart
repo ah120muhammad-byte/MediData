@@ -13,13 +13,28 @@ class ClinicalCase {
   final String? management;
   final String? medications;
   final List<String> imageUrls;
+  final String? presentationImageUrl;
+  final String? historyImageUrl;
+  final String? examinationImageUrl;
+  final String? investigationsImageUrl;
+  final String? diagnosisImageUrl;
+  final String? managementImageUrl;
+  final String? medicationsImageUrl;
+  final String? cardBackgroundUrl;
+  final String fontFamily;
+  final double fontSize;
+  final String fontColor;
   final bool isPublished;
 
   const ClinicalCase({
     required this.id, required this.title, required this.caseDate,
     this.shortDescription, this.clinicalPresentation, this.history,
     this.examination, this.investigations, this.diagnosis, this.management,
-    this.medications, this.imageUrls = const [], this.isPublished = false,
+    this.medications, this.imageUrls = const [],
+    this.presentationImageUrl, this.historyImageUrl, this.examinationImageUrl,
+    this.investigationsImageUrl, this.diagnosisImageUrl, this.managementImageUrl,
+    this.medicationsImageUrl, this.cardBackgroundUrl, this.fontFamily = 'default',
+    this.fontSize = 16, this.fontColor = '#000000', this.isPublished = false,
   });
 
   factory ClinicalCase.fromMap(Map<String, dynamic> map) => ClinicalCase(
@@ -35,6 +50,17 @@ class ClinicalCase {
     management: map['management']?.toString(),
     medications: map['medications']?.toString(),
     imageUrls: List<String>.from(map['image_urls'] ?? const []),
+    presentationImageUrl: map['presentation_image_url']?.toString(),
+    historyImageUrl: map['history_image_url']?.toString(),
+    examinationImageUrl: map['examination_image_url']?.toString(),
+    investigationsImageUrl: map['investigations_image_url']?.toString(),
+    diagnosisImageUrl: map['diagnosis_image_url']?.toString(),
+    managementImageUrl: map['management_image_url']?.toString(),
+    medicationsImageUrl: map['medications_image_url']?.toString(),
+    cardBackgroundUrl: map['card_background_url']?.toString(),
+    fontFamily: map['font_family']?.toString() ?? 'default',
+    fontSize: (map['font_size'] as num?)?.toDouble() ?? 16,
+    fontColor: map['font_color']?.toString() ?? '#000000',
     isPublished: map['is_published'] as bool? ?? false,
   );
 }
