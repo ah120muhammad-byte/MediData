@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart' hide Text;
+import 'package:flutter_quill/flutter_quill.dart';
 import '../../core/responsive/responsive.dart';
 import '../../services/clinical_case_service.dart';
 
@@ -170,7 +170,6 @@ class _ReadOnlyQuillState extends State<_ReadOnlyQuill> {
   Widget build(BuildContext context) {
     return QuillEditor.basic(
       controller: widget.controller,
-      readOnly: true,
     );
   }
 }
