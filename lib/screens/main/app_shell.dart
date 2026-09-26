@@ -90,7 +90,7 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBody: true,
+      extendBody: false,
       body: SafeArea(
         top: true,
         bottom: false,
@@ -639,20 +639,6 @@ class _CustomBottomNavigation extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final width = Responsive.width(context);
 
-    final horizontalMargin = Responsive.clamped(
-      context,
-      base: 12,
-      min: 6,
-      max: 48,
-    );
-
-    final bottomMargin = Responsive.clamped(
-      context,
-      base: 10,
-      min: 6,
-      max: 22,
-    );
-
     final navigationHeight = Responsive.clamped(
       context,
       base: 74,
@@ -674,16 +660,15 @@ class _CustomBottomNavigation extends StatelessWidget {
       child: Align(
         alignment: Alignment.bottomCenter,
         child: Container(
+          width: double.infinity,
           constraints: BoxConstraints(maxWidth: maxWidth),
-          margin: EdgeInsets.only(
-            left: horizontalMargin,
-            right: horizontalMargin,
-            bottom: bottomMargin,
-          ),
           height: navigationHeight,
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(borderRadius),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(borderRadius),
+              topRight: Radius.circular(borderRadius),
+            ),
             border: Border.all(
               color: isDark
                   ? Colors.white.withValues(alpha: 0.05)
