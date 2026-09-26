@@ -1182,22 +1182,6 @@ Future<List<StudentModuleProgress>> getModuleProgress() async {
   }
 
   // ===========================================================================
-  // CHANGE EMAIL
-  // ===========================================================================
-
-  Future<void> updateEmail(String email) async {
-    final normalizedEmail = email.trim().toLowerCase();
-
-    if (normalizedEmail.isEmpty) {
-      throw Exception('Email cannot be empty.');
-    }
-
-    await _supabase.auth.updateUser(
-      UserAttributes(email: normalizedEmail),
-    );
-  }
-
-  // ===========================================================================
   // PASSWORD
   // ===========================================================================
 
