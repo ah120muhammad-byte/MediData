@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/theme/app_theme.dart';
-import 'services/audio_player_service.dart';
 import 'services/remote_app_settings_service.dart';
 import 'services/theme_mode_service.dart';
 import 'screens/authentication/auth_gate_v2.dart';
@@ -50,8 +49,8 @@ class _MyAppState extends State<MyApp> {
     _settings = widget.settings;
     _themeService.addListener(_onThemeChanged);
 
-    // These services no longer block the first rendered frame.
-    unawaited(AudioPlayerService.instance.initialize());
+    // Audio is initialized lazily when the user opens an audio lecture.
+    // Initializing AudioService at startup can cause an audible click on launch.
     unawaited(_loadRemoteSettings());
   }
 
