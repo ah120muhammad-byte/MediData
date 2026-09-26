@@ -89,11 +89,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final data = snapshot.data!;
         final horizontalPadding = Responsive.horizontalPadding(context);
 
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: Responsive.clamped(context, base: 92, min: 84, max: 105),
-          ),
-          child: RefreshIndicator(
+        return RefreshIndicator(
             onRefresh: _refresh,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(
