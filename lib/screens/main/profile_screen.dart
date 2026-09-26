@@ -190,150 +190,147 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final emailController = TextEditingController(text: profile.email);
     bool saving = false;
 
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            final theme = Theme.of(dialogContext);
+    try {
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (dialogContext, setDialogState) {
+              final theme = Theme.of(dialogContext);
 
-            return AlertDialog(
-              title: const Row(
-                children: [
-                  Icon(Icons.manage_accounts_rounded),
-                  SizedBox(width: 10),
-                  Text('Edit Profile'),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 430),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        enabled: !saving,
-                        autofocus: true,
-                        textCapitalization: TextCapitalization.words,
-                        textInputAction: TextInputAction.done,
-                        decoration: InputDecoration(
-                          labelText: 'Full Name',
-                          hintText: 'Enter your full name',
-                          prefixIcon: const Icon(Icons.person_outline_rounded),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: .35),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none,
+              return AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.manage_accounts_rounded),
+                    SizedBox(width: 10),
+                    Text('Edit Profile'),
+                  ],
+                ),
+                content: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 430),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(
+                          controller: nameController,
+                          enabled: !saving,
+                          autofocus: true,
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.done,
+                          decoration: InputDecoration(
+                            labelText: 'Full Name',
+                            hintText: 'Enter your full name',
+                            prefixIcon:
+                                const Icon(Icons.person_outline_rounded),
+                            filled: true,
+                            fillColor: theme
+                                .colorScheme.surfaceContainerHighest
+                                .withValues(alpha: .35),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
                         ),
-                        onSubmitted: (_) {
-                          if (!saving) {
-                            setDialogState(() => saving = true);
-                            _saveProfile(
-                              dialogContext,
-                              nameController.text,
-                              setDialogState,
-                              () => saving = false,
-                            );
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: emailController,
-                        readOnly: true,
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          helperText: 'Email is linked to your account',
-                          prefixIcon: const Icon(Icons.email_outlined),
-                          suffixIcon: const Icon(Icons.lock_outline_rounded, size: 19),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: .20),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none,
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: emailController,
+                          readOnly: true,
+                          decoration: InputDecoration(
+                            labelText: 'Email',
+                            helperText: 'Email is linked to your account',
+                            prefixIcon:
+                                const Icon(Icons.email_outlined),
+                            suffixIcon: const Icon(
+                              Icons.lock_outline_rounded,
+                              size: 19,
+                            ),
+                            filled: true,
+                            fillColor: theme
+                                .colorScheme.surfaceContainerHighest
+                                .withValues(alpha: .20),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: saving
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton.icon(
-                  onPressed: saving
-                      ? null
-                      : () {
-                          setDialogState(() => saving = true);
-                          _saveProfile(
-                            dialogContext,
-                            nameController.text,
-                            setDialogState,
-                            () => saving = false,
-                          );
-                        },
-                  icon: saving
-                      ? const SizedBox(
-                          width: 17,
-                          height: 17,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.check_rounded, size: 18),
-                  label: Text(saving ? 'Saving...' : 'Save Changes'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+                actions: [
+                  TextButton(
+                    onPressed: saving
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final name = nameController.text.trim();
 
-    nameController.dispose();
-    emailController.dispose();
-    if (mounted) await _refresh();
-  }
+                            if (name.length < 2) {
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Please enter your full name.',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
 
-  Future<void> _saveProfile(
-    BuildContext dialogContext,
-    String rawName,
-    StateSetter setDialogState,
-    VoidCallback resetSaving,
-  ) async {
-    final name = rawName.trim();
+                            setDialogState(() => saving = true);
 
-    if (name.length < 2) {
-      ScaffoldMessenger.of(dialogContext).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your full name.'),
-        ),
+                            try {
+                              await _service.updateProfile(
+                                fullName: name,
+                              );
+
+                              if (!dialogContext.mounted) return;
+                              Navigator.of(dialogContext).pop(true);
+                            } catch (_) {
+                              if (!dialogContext.mounted) return;
+                              setDialogState(() => saving = false);
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Unable to update your profile. Please try again.',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                    icon: saving
+                        ? const SizedBox(
+                            width: 17,
+                            height: 17,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.check_rounded, size: 18),
+                    label: Text(
+                      saving ? 'Saving...' : 'Save Changes',
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       );
-      resetSaving();
-      return;
-    }
 
-    try {
-      await _service.updateProfile(fullName: name);
-      if (!dialogContext.mounted) return;
-      Navigator.of(dialogContext).pop();
-    } catch (_) {
-      if (!dialogContext.mounted) return;
-      setDialogState(() {});
-      resetSaving();
-      ScaffoldMessenger.of(dialogContext).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to update your profile. Please try again.'),
-        ),
-      );
+      if (saved == true && mounted) {
+        await _refresh();
+      }
+    } finally {
+      nameController.dispose();
+      emailController.dispose();
     }
   }
 
