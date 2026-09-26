@@ -187,7 +187,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _showEditProfile(StudentProfile profile) async {
     final nameController = TextEditingController(text: profile.fullName);
-    final phoneController = TextEditingController(text: profile.phone ?? '');
     final emailController = TextEditingController(text: profile.email);
     bool saving = false;
 
@@ -196,39 +195,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
+            final theme = Theme.of(dialogContext);
+
             return AlertDialog(
-              title: const Text('Edit Profile'),
+              title: const Row(
+                children: [
+                  Icon(Icons.manage_accounts_rounded),
+                  SizedBox(width: 10),
+                  Text('Edit Profile'),
+                ],
+              ),
               content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Full Name',
-                        prefixIcon: Icon(Icons.person_outline_rounded),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 430),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        enabled: !saving,
+                        autofocus: true,
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.done,
+                        decoration: InputDecoration(
+                          labelText: 'Full Name',
+                          hintText: 'Enter your full name',
+                          prefixIcon: const Icon(Icons.person_outline_rounded),
+                          filled: true,
+                          fillColor: theme.colorScheme.surfaceContainerHighest
+                              .withValues(alpha: .35),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        onSubmitted: (_) {
+                          if (!saving) {
+                            setDialogState(() => saving = true);
+                            _saveProfile(
+                              dialogContext,
+                              nameController.text,
+                              setDialogState,
+                              () => saving = false,
+                            );
+                          }
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone',
-                        prefixIcon: Icon(Icons.phone_outlined),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: emailController,
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          helperText: 'Email is linked to your account',
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          suffixIcon: const Icon(Icons.lock_outline_rounded, size: 19),
+                          filled: true,
+                          fillColor: theme.colorScheme.surfaceContainerHighest
+                              .withValues(alpha: .20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      readOnly: true,
-                      controller: emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email_outlined),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -238,37 +270,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancel'),
                 ),
-                FilledButton(
+                FilledButton.icon(
                   onPressed: saving
                       ? null
-                      : () async {
-                          final name = nameController.text.trim();
-                          if (name.isEmpty) return;
+                      : () {
                           setDialogState(() => saving = true);
-                          try {
-                            await _service.updateProfile(
-                              fullName: name,
-                              phone: phoneController.text,
-                            );
-                            if (!dialogContext.mounted) return;
-                            Navigator.of(dialogContext).pop();
-                          } catch (_) {
-                            if (!dialogContext.mounted) return;
-                            setDialogState(() => saving = false);
-                            ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              const SnackBar(
-                                content: Text('Unable to update profile.'),
-                              ),
-                            );
-                          }
+                          _saveProfile(
+                            dialogContext,
+                            nameController.text,
+                            setDialogState,
+                            () => saving = false,
+                          );
                         },
-                  child: saving
+                  icon: saving
                       ? const SizedBox(
-                          width: 18,
-                          height: 18,
+                          width: 17,
+                          height: 17,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Save'),
+                      : const Icon(Icons.check_rounded, size: 18),
+                  label: Text(saving ? 'Saving...' : 'Save Changes'),
                 ),
               ],
             );
@@ -278,9 +299,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     nameController.dispose();
-    phoneController.dispose();
     emailController.dispose();
     if (mounted) await _refresh();
+  }
+
+  Future<void> _saveProfile(
+    BuildContext dialogContext,
+    String rawName,
+    StateSetter setDialogState,
+    VoidCallback resetSaving,
+  ) async {
+    final name = rawName.trim();
+
+    if (name.length < 2) {
+      ScaffoldMessenger.of(dialogContext).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your full name.'),
+        ),
+      );
+      resetSaving();
+      return;
+    }
+
+    try {
+      await _service.updateProfile(fullName: name);
+      if (!dialogContext.mounted) return;
+      Navigator.of(dialogContext).pop();
+    } catch (_) {
+      if (!dialogContext.mounted) return;
+      setDialogState(() {});
+      resetSaving();
+      ScaffoldMessenger.of(dialogContext).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to update your profile. Please try again.'),
+        ),
+      );
+    }
   }
 
   Future<void> _showChangePassword() async {
@@ -498,15 +552,6 @@ class _ProfileHeader extends StatelessWidget {
                       color: theme.colorScheme.onSurface.withValues(alpha: .60),
                     ),
                   ),
-                  if (profile.phone != null && profile.phone!.isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      profile.phone!,
-                      style: TextStyle(
-                        color: theme.colorScheme.onSurface.withValues(alpha: .50),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
