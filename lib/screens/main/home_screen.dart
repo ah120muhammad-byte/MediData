@@ -796,6 +796,7 @@ class _CaseOfTheDayCard extends StatelessWidget {
     }
 
     final c = clinicalCase!;
+    final background = (c.cardBackgroundUrl ?? '').trim();
 
     return Material(
       color: Colors.transparent,
@@ -807,82 +808,104 @@ class _CaseOfTheDayCard extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [scheme.primary, scheme.primaryContainer],
-            ),
+            color: scheme.primary,
+            image: background.isEmpty
+                ? null
+                : DecorationImage(
+                    image: NetworkImage(background),
+                    fit: BoxFit.cover,
+                    colorFilter: ColorFilter.mode(
+                      Colors.black.withValues(alpha: 0.42),
+                      BlendMode.darken,
+                    ),
+                  ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
+              if (background.isEmpty)
+                Positioned.fill(
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'CLINICAL CASE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [scheme.primary, scheme.primaryContainer],
                       ),
                     ),
                   ),
-                  const Spacer(),
-                  const Icon(
-                    Icons.medical_services_rounded,
-                    color: Colors.white,
-                    size: 26,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                c.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
                 ),
-              ),
-              if ((c.shortDescription ?? '').trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  c.shortDescription!,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    height: 1.35,
-                  ),
-                ),
-              ],
-              const Spacer(),
-              const Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    color: Colors.white,
-                    size: 20,
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'CLINICAL CASE',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      const Icon(
+                        Icons.medical_services_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ],
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(height: 14),
                   Text(
-                    'View Case',
-                    style: TextStyle(
+                    c.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
                       color: Colors.white,
+                      fontSize: 22,
                       fontWeight: FontWeight.w800,
                     ),
+                  ),
+                  if ((c.shortDescription ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      c.shortDescription!,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.82),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'View Case',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
