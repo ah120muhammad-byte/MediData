@@ -324,26 +324,17 @@ class _EditProfileDialog extends StatefulWidget {
 }
 
 class _EditProfileDialogState extends State<_EditProfileDialog> {
-  late final TextEditingController _nameController;
-  late final TextEditingController _emailController;
+  late String _name;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.profile.fullName);
-    _emailController = TextEditingController(text: widget.profile.email);
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    super.dispose();
+    _name = widget.profile.fullName;
   }
 
   Future<void> _save() async {
-    final name = _nameController.text.trim();
+    final name = _name.trim();
 
     if (name.length < 2) {
       if (!mounted) return;
@@ -391,13 +382,14 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: _nameController,
+              TextFormField(
+                initialValue: widget.profile.fullName,
                 enabled: !_saving,
                 autofocus: true,
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.done,
-                onSubmitted: (_) {
+                onChanged: (value) => _name = value,
+                onFieldSubmitted: (_) {
                   if (!_saving) _save();
                 },
                 decoration: InputDecoration(
@@ -414,9 +406,7 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
                 ),
               ),
               const SizedBox(height: 14),
-              TextField(
-                controller: _emailController,
-                readOnly: true,
+              InputDecorator(
                 decoration: InputDecoration(
                   labelText: 'Email',
                   helperText: 'Email is linked to your account',
@@ -433,6 +423,11 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
                     borderSide: BorderSide.none,
                   ),
                 ),
+                child: Text(
+                  widget.profile.email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -440,7 +435,9 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+          onPressed: _saving
+              ? null
+              : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
         FilledButton.icon(
