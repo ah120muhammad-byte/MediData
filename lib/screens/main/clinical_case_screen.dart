@@ -50,8 +50,8 @@ class _ClinicalCaseScreenState extends State<ClinicalCaseScreen> {
       final controller = QuillController(
         document: Document.fromJson(jsonDecode(raw)),
         selection: const TextSelection.collapsed(offset: 0),
+        readOnly: true,
       );
-      controller.readOnly = true;
       return _ReadOnlyQuill(controller: controller);
     } catch (_) {
       return Text(plain ?? '', style: const TextStyle(height: 1.65));
@@ -171,12 +171,7 @@ class _ReadOnlyQuillState extends State<_ReadOnlyQuill> {
   Widget build(BuildContext context) {
     return QuillEditor.basic(
       controller: widget.controller,
-      config: const QuillEditorConfig(
-        scrollable: false,
-        padding: EdgeInsets.zero,
-        showCursor: false,
-        showCodeBlockLineNumbers: false,
-      ),
+      readOnly: true,
     );
   }
 }
