@@ -50,7 +50,6 @@ class _ClinicalCaseScreenState extends State<ClinicalCaseScreen> {
       final controller = QuillController(
         document: Document.fromJson(jsonDecode(raw)),
         selection: const TextSelection.collapsed(offset: 0),
-        readOnly: true,
       );
       return _ReadOnlyQuill(controller: controller);
     } catch (_) {
