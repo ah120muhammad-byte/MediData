@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -392,7 +394,7 @@ class AiChatService {
   }
 
   void _debugLog(String message) {
-    print('[MediData AI] $message');
+    debugPrint('[MediData AI] $message');
   }
 
   static String mimeTypeForFile(String fileName) {
