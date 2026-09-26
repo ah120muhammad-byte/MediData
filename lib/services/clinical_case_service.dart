@@ -109,32 +109,153 @@ class ClinicalCaseService {
 
   Future<ClinicalCase?> getTodayCase() async {
     final now = DateTime.now();
-    final date = DateTime(now.year, now.month, now.day).toIso8601String().split('T').first;
-    final row = await _client.from('clinical_cases').select().eq('case_date', date).eq('is_published', true).maybeSingle();
-    return row == null ? null : ClinicalCase.fromMap(Map<String, dynamic>.from(row));
+    final date = DateTime(now.year, now.month, now.day)
+        .toIso8601String()
+        .split('T')
+        .first;
+
+    final row = await _client
+        .from('clinical_cases')
+        .select()
+        .eq('case_date', date)
+        .eq('is_published', true)
+        .maybeSingle();
+
+    return row == null
+        ? null
+        : ClinicalCase.fromMap(Map<String, dynamic>.from(row));
   }
 
   Future<List<ClinicalCase>> getSavedCases() async {
     final user = _client.auth.currentUser;
     if (user == null) return [];
-    final rows = await _client.from('saved_clinical_cases').select('saved_at, clinical_cases(*)').eq('user_id', user.id).order('saved_at', ascending: false);
-    return (rows as List).map((r) => r['clinical_cases']).whereType<Map>().map((r) => ClinicalCase.fromMap(Map<String, dynamic>.from(r))).toList();
+
+    final rows = await _client
+        .from('saved_clinical_cases')
+        .select('''
+          id,
+          case_id,
+          saved_at,
+          title,
+          case_date,
+          short_description,
+          clinical_presentation,
+          clinical_presentation_rich,
+          history,
+          history_rich,
+          examination,
+          examination_rich,
+          investigations,
+          investigations_rich,
+          diagnosis,
+          diagnosis_rich,
+          management,
+          management_rich,
+          medications,
+          medications_rich,
+          image_urls,
+          presentation_image_url,
+          history_image_url,
+          examination_image_url,
+          investigations_image_url,
+          diagnosis_image_url,
+          management_image_url,
+          medications_image_url,
+          card_background_url,
+          font_family,
+          font_size,
+          font_color,
+          is_published
+        ''')
+        .eq('user_id', user.id)
+        .order('saved_at', ascending: false);
+
+    return (rows as List)
+        .map((row) {
+          final data = Map<String, dynamic>.from(row as Map);
+          data['id'] = data['case_id'];
+          return ClinicalCase.fromMap(data);
+        })
+        .toList();
   }
 
   Future<bool> isSaved(String caseId) async {
     final user = _client.auth.currentUser;
     if (user == null) return false;
-    final row = await _client.from('saved_clinical_cases').select('id').eq('user_id', user.id).eq('case_id', caseId).maybeSingle();
+
+    final row = await _client
+        .from('saved_clinical_cases')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('case_id', caseId)
+        .maybeSingle();
+
     return row != null;
   }
 
   Future<void> setSaved(String caseId, bool saved) async {
     final user = _client.auth.currentUser;
     if (user == null) return;
-    if (saved) {
-      await _client.from('saved_clinical_cases').upsert({'user_id': user.id, 'case_id': caseId}, onConflict: 'user_id,case_id');
-    } else {
-      await _client.from('saved_clinical_cases').delete().eq('user_id', user.id).eq('case_id', caseId);
+
+    if (!saved) {
+      await _client
+          .from('saved_clinical_cases')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('case_id', caseId);
+      return;
     }
+
+    // Save a complete snapshot of the case.
+    // Future edits to clinical_cases will not change this saved copy.
+    final row = await _client
+        .from('clinical_cases')
+        .select()
+        .eq('id', caseId)
+        .maybeSingle();
+
+    if (row == null) {
+      throw Exception('Clinical case not found.');
+    }
+
+    final c = ClinicalCase.fromMap(Map<String, dynamic>.from(row));
+
+    await _client.from('saved_clinical_cases').upsert(
+      {
+        'user_id': user.id,
+        'case_id': c.id,
+        'title': c.title,
+        'case_date': c.caseDate.toIso8601String().split('T').first,
+        'short_description': c.shortDescription,
+        'clinical_presentation': c.clinicalPresentation,
+        'clinical_presentation_rich': c.clinicalPresentationRich,
+        'history': c.history,
+        'history_rich': c.historyRich,
+        'examination': c.examination,
+        'examination_rich': c.examinationRich,
+        'investigations': c.investigations,
+        'investigations_rich': c.investigationsRich,
+        'diagnosis': c.diagnosis,
+        'diagnosis_rich': c.diagnosisRich,
+        'management': c.management,
+        'management_rich': c.managementRich,
+        'medications': c.medications,
+        'medications_rich': c.medicationsRich,
+        'image_urls': c.imageUrls,
+        'presentation_image_url': c.presentationImageUrl,
+        'history_image_url': c.historyImageUrl,
+        'examination_image_url': c.examinationImageUrl,
+        'investigations_image_url': c.investigationsImageUrl,
+        'diagnosis_image_url': c.diagnosisImageUrl,
+        'management_image_url': c.managementImageUrl,
+        'medications_image_url': c.medicationsImageUrl,
+        'card_background_url': c.cardBackgroundUrl,
+        'font_family': c.fontFamily,
+        'font_size': c.fontSize,
+        'font_color': c.fontColor,
+        'is_published': c.isPublished,
+      },
+      onConflict: 'user_id,case_id',
+    );
   }
 }
