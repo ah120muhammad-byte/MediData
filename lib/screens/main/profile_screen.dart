@@ -367,7 +367,6 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
 
       await widget.service.updateProfile(
         fullName: name,
-        email: email,
       );
 
       if (!mounted) return;
