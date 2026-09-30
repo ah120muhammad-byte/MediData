@@ -388,7 +388,7 @@ class DownloadsService {
     // ------------------------------------------------------------------------
 
     final signedUrl =
-        await _createSignedUrl(
+        await createSignedUrlForLectureFile(
       fileUrl: fileUrl,
       fileType: fileType,
     );
@@ -427,6 +427,9 @@ class DownloadsService {
       await _dio.download(
         signedUrl,
         uniquePath,
+        options: Options(
+          headers: headersForLectureFile(fileUrl),
+        ),
       );
 
       if (!await tempFile.exists()) {
