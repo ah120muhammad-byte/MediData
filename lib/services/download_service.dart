@@ -629,10 +629,31 @@ class DownloadsService {
     required String fileUrl,
     required String fileType,
   }) async {
+    if (fileUrl.trim().startsWith('telegram:')) {
+      final fileId = _telegramFileIdFromUrl(fileUrl);
+      if (fileId.isEmpty) {
+        throw Exception('Invalid Telegram file ID.');
+      }
+      return '${_telegramBackendBaseUrl()}/api/telegram/file/${Uri.encodeComponent(fileId)}';
+    }
+
     return _createSignedUrl(
       fileUrl: fileUrl,
       fileType: fileType,
     );
+  }
+
+  Map<String, String> headersForLectureFile(String fileUrl) {
+    if (!fileUrl.trim().startsWith('telegram:')) {
+      return const <String, String>{};
+    }
+
+    final token = _supabase.auth.currentSession?.accessToken;
+    if (token == null || token.isEmpty) {
+      throw Exception('Your session has expired. Please sign in again.');
+    }
+
+    return {'Authorization': 'Bearer $token'};
   }
 
   // ==========================================================================
@@ -734,6 +755,9 @@ class DownloadsService {
         tempPath,
         cancelToken:
             cancelToken,
+        options: Options(
+          headers: headersForLectureFile(fileUrl),
+        ),
         deleteOnError:
             true,
         onReceiveProgress:
