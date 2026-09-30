@@ -118,14 +118,24 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
             fileUrl: widget.fileUrl,
             fileType: 'video',
           );
-          controller = VideoPlayerController.networkUrl(Uri.parse(url));
+          controller = VideoPlayerController.networkUrl(
+            Uri.parse(url),
+            httpHeaders: DownloadsService.instance.headersForLectureFile(
+              widget.fileUrl,
+            ),
+          );
         }
       } else {
         final url = await DownloadsService.instance.createSignedUrlForLectureFile(
           fileUrl: widget.fileUrl,
           fileType: 'video',
         );
-        controller = VideoPlayerController.networkUrl(Uri.parse(url));
+        controller = VideoPlayerController.networkUrl(
+            Uri.parse(url),
+            httpHeaders: DownloadsService.instance.headersForLectureFile(
+              widget.fileUrl,
+            ),
+          );
       }
 
       _controller?.removeListener(_videoListener);
