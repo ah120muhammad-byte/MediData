@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'r2_video_service.dart';
+
 class LectureFile {
   final String id;
   final String lectureId;
@@ -57,11 +59,13 @@ class LectureFile {
 
 class LectureContentService {
   final SupabaseClient _supabase;
+  final R2VideoService _r2;
 
   LectureContentService({
     SupabaseClient? supabase,
-  }) : _supabase =
-            supabase ?? Supabase.instance.client;
+    R2VideoService? r2,
+  }) : _supabase = supabase ?? Supabase.instance.client,
+       _r2 = r2 ?? R2VideoService();
 
   // ==========================================================================
   // GET FILES FOR LECTURE
@@ -134,14 +138,13 @@ class LectureContentService {
   Future<String> createSignedUrl(
     LectureFile file,
   ) async {
-    final bucket = bucketForType(
-      file.fileType,
-    );
+    if (file.filePath.trim().startsWith('r2:')) {
+      return _r2.createSignedUrl(file.filePath);
+    }
 
-    final path = _extractStoragePath(
-      file.filePath,
-      bucket,
-    );
+    final bucket = bucketForType(file.fileType);
+
+    final path = _extractStoragePath(file.filePath, bucket);
 
     if (path.isEmpty) {
       throw Exception(
