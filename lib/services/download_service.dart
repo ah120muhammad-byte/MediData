@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'r2_video_service.dart';
+
 class DownloadItem {
   final String id;
   final String lectureId;
@@ -119,6 +121,7 @@ class DownloadsService {
       Supabase.instance.client;
 
   final Dio _dio = Dio();
+  final R2VideoService _r2 = R2VideoService();
 
   final Connectivity _connectivity =
       Connectivity();
@@ -602,6 +605,13 @@ class DownloadsService {
     required String fileUrl,
     required String fileType,
   }) async {
+    final trimmed = fileUrl.trim();
+
+    // R2 videos use r2:<object-key> and must be signed by the R2 backend.
+    if (trimmed.startsWith('r2:')) {
+      return _r2.createSignedUrl(trimmed);
+    }
+
     final bucket =
         _bucketForType(
       fileType,
@@ -632,7 +642,13 @@ class DownloadsService {
     required String fileUrl,
     required String fileType,
   }) async {
-    if (fileUrl.trim().startsWith('telegram:')) {
+    final trimmed = fileUrl.trim();
+
+    if (trimmed.startsWith('r2:')) {
+      return _r2.createSignedUrl(trimmed);
+    }
+
+    if (trimmed.startsWith('telegram:')) {
       final fileId = _telegramFileIdFromUrl(fileUrl);
       if (fileId.isEmpty) {
         throw Exception('Invalid Telegram file ID.');
@@ -647,6 +663,11 @@ class DownloadsService {
   }
 
   Map<String, String> headersForLectureFile(String fileUrl) {
+    // R2 presigned URLs already contain authorization in the URL.
+    if (fileUrl.trim().startsWith('r2:')) {
+      return const <String, String>{};
+    }
+
     if (!fileUrl.trim().startsWith('telegram:')) {
       return const <String, String>{};
     }
