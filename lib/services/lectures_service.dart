@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'r2_video_service.dart';
+
 /// ============================================================================
 /// LECTURE MODEL
 /// ============================================================================
@@ -105,9 +107,13 @@ class StudentLectureFile {
 
 class LecturesService {
   final SupabaseClient _supabase;
+  final R2VideoService _r2;
 
-  LecturesService({SupabaseClient? supabase})
-    : _supabase = supabase ?? Supabase.instance.client;
+  LecturesService({
+    SupabaseClient? supabase,
+    R2VideoService? r2,
+  }) : _supabase = supabase ?? Supabase.instance.client,
+       _r2 = r2 ?? R2VideoService();
 
   /// ==========================================================================
   /// GET LECTURES FOR MODULE
@@ -222,8 +228,11 @@ class LecturesService {
   /// ==========================================================================
 
   Future<String> createSignedUrl(StudentLectureFile file) async {
-    final bucket = bucketForType(file.fileType);
+    if (file.fileUrl.trim().startsWith('r2:')) {
+      return _r2.createSignedUrl(file.fileUrl);
+    }
 
+    final bucket = bucketForType(file.fileType);
     final path = _extractStoragePath(file.fileUrl, bucket);
 
     if (path.isEmpty) {
