@@ -435,13 +435,12 @@ class _WhatsNewCarousel extends StatefulWidget {
 }
 
 class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
-  static const int _centerPage = 50000;
   static const Duration _autoPlayDuration = Duration(seconds: 5);
-  static const Duration _animationDuration = Duration(milliseconds: 500);
+  static const Duration _changeDuration = Duration(milliseconds: 320);
 
-  late final PageController _controller;
   Timer? _timer;
-  int _logicalIndex = 0;
+  int _index = 0;
+  double _dragX = 0;
 
   List<_LectureHomeData> get _items {
     if (widget.lectures.isNotEmpty) return widget.lectures;
@@ -451,18 +450,13 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
     return const <_LectureHomeData>[];
   }
 
-  bool get _looping => _items.length > 1;
+  bool get _hasMultiple => _items.length > 1;
 
   @override
   void initState() {
     super.initState();
-    _controller = PageController(
-      initialPage: _centerPage,
-      viewportFraction: 0.88,
-    );
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _restartAutoPlay();
+      if (mounted) _restartTimer();
     });
   }
 
@@ -470,82 +464,111 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
   void didUpdateWidget(covariant _WhatsNewCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final oldCount = oldWidget.lectures.isNotEmpty
-        ? oldWidget.lectures.length
-        : (oldWidget.fallbackLecture == null ? 0 : 1);
-    final newCount = _items.length;
-
+    final count = _items.length;
     _timer?.cancel();
 
-    if (newCount == 0) {
-      _logicalIndex = 0;
+    if (count == 0) {
+      _index = 0;
       return;
     }
 
-    if (oldCount != newCount) {
-      _logicalIndex %= newCount;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_controller.hasClients) return;
-        _jumpToLogicalIndex(_logicalIndex, newCount);
-      });
-    } else if (newCount > 0) {
-      _logicalIndex %= newCount;
-    }
+    _index %= count;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _restartAutoPlay();
+      if (mounted) _restartTimer();
     });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _controller.dispose();
     super.dispose();
   }
 
-  void _jumpToLogicalIndex(int index, int count) {
-    if (count <= 0 || !_controller.hasClients) return;
-
-    final currentPage = _controller.page?.round() ?? _centerPage;
-    final base = currentPage - (currentPage % count);
-    _controller.jumpToPage(base + index);
-  }
-
-  void _restartAutoPlay() {
+  void _restartTimer() {
     _timer?.cancel();
 
-    if (!mounted || !_looping || !_controller.hasClients) return;
+    if (!mounted || !_hasMultiple) return;
 
-    _timer = Timer(_autoPlayDuration, () async {
-      if (!mounted || !_looping || !_controller.hasClients) return;
-
-      final currentPage = _controller.page?.round() ?? _centerPage;
-      try {
-        await _controller.animateToPage(
-          currentPage + 1,
-          duration: _animationDuration,
-          curve: Curves.easeOutCubic,
-        );
-      } catch (_) {
-        // The page may be rebuilt/disposed while the animation is running.
-      }
-
-      if (mounted) _restartAutoPlay();
+    _timer = Timer(_autoPlayDuration, () {
+      if (!mounted || !_hasMultiple) return;
+      _showNext();
     });
   }
 
-  void _handlePageChanged(int page) {
-    final items = _items;
-    if (!mounted || items.isEmpty) return;
-
-    final nextLogicalIndex = page % items.length;
+  void _showNext() {
+    if (!_hasMultiple) return;
 
     setState(() {
-      _logicalIndex = nextLogicalIndex;
+      _index = (_index + 1) % _items.length;
+      _dragX = 0;
     });
 
-    _restartAutoPlay();
+    _restartTimer();
+  }
+
+  void _showPrevious() {
+    if (!_hasMultiple) return;
+
+    setState(() {
+      _index = (_index - 1 + _items.length) % _items.length;
+      _dragX = 0;
+    });
+
+    _restartTimer();
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    if (!_hasMultiple) return;
+
+    setState(() {
+      _dragX += details.delta.dx;
+      _dragX = _dragX.clamp(-180.0, 180.0);
+    });
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    if (!_hasMultiple) return;
+
+    final velocity = details.primaryVelocity ?? 0;
+    final shouldChange =
+        _dragX.abs() > 55 || velocity.abs() > 450;
+
+    if (!shouldChange) {
+      setState(() => _dragX = 0);
+      _restartTimer();
+      return;
+    }
+
+    if (_dragX < 0 || velocity < 0) {
+      _showNext();
+    } else {
+      _showPrevious();
+    }
+  }
+
+  Widget _buildCard(
+    BuildContext context, {
+    required _LectureHomeData lecture,
+    required int position,
+    required double scale,
+    required double opacity,
+    required VoidCallback onTap,
+  }) {
+    return Opacity(
+      opacity: opacity,
+      child: Transform.scale(
+        scale: scale,
+        alignment: Alignment.center,
+        child: _LatestLectureCard(
+          lecture: lecture,
+          isToday: widget.lectures.isNotEmpty,
+          position: position,
+          total: _items.length,
+          onTap: onTap,
+        ),
+      ),
+    );
   }
 
   @override
@@ -556,62 +579,66 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
       return const _EmptyWhatsNewCard();
     }
 
-    final multiple = items.length > 1;
+    final current = items[_index];
+    final nextIndex = (_index + 1) % items.length;
+    final previousIndex = (_index - 1 + items.length) % items.length;
 
     return Column(
       children: [
         SizedBox(
           height: 270,
-          child: PageView.builder(
-            controller: _controller,
-            itemCount: multiple ? 100000 : 1,
-            padEnds: false,
-            pageSnapping: true,
-            physics: const BouncingScrollPhysics(),
-            onPageChanged: _handlePageChanged,
-            itemBuilder: (context, page) {
-              final lecture = items[page % items.length];
-
-              return AnimatedBuilder(
-                animation: _controller,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 7),
-                  child: _LatestLectureCard(
-                    lecture: lecture,
-                    isToday: widget.lectures.isNotEmpty,
-                    position: (page % items.length) + 1,
-                    total: items.length,
-                    onTap: () => widget.onOpenLecture(lecture),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragUpdate:
+                _hasMultiple ? _onHorizontalDragUpdate : null,
+            onHorizontalDragEnd:
+                _hasMultiple ? _onHorizontalDragEnd : null,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                if (_hasMultiple)
+                  Positioned.fill(
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        left: 18,
+                        right: 18,
+                        top: 7,
+                        bottom: 7,
+                      ),
+                      child: _buildCard(
+                        context,
+                        lecture: items[nextIndex],
+                        position: nextIndex + 1,
+                        scale: 0.94,
+                        opacity: 0.58,
+                        onTap: () => widget.onOpenLecture(items[nextIndex]),
+                      ),
+                    ),
+                  ),
+                AnimatedContainer(
+                  duration: _changeDuration,
+                  curve: Curves.easeOutCubic,
+                  transform: Matrix4.translationValues(_dragX, 0, 0),
+                  child: _buildCard(
+                    context,
+                    lecture: current,
+                    position: _index + 1,
+                    scale: 1,
+                    opacity: 1,
+                    onTap: () => widget.onOpenLecture(current),
                   ),
                 ),
-                builder: (context, child) {
-                  var scale = 0.96;
-
-                  if (_controller.hasClients &&
-                      _controller.position.haveDimensions) {
-                    final currentPage =
-                        _controller.page ?? page.toDouble();
-                    final distance =
-                        (currentPage - page).abs().clamp(0.0, 1.0);
-                    scale = 1.0 - (distance * 0.04);
-                  }
-
-                  return Transform.scale(
-                    scale: scale,
-                    alignment: Alignment.center,
-                    child: child,
-                  );
-                },
-              );
-            },
+              ],
+            ),
           ),
         ),
-        if (multiple) ...[
+        if (_hasMultiple) ...[
           const SizedBox(height: 7),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(items.length, (index) {
-              final selected = index == _logicalIndex;
+            children: List.generate(items.length, (i) {
+              final selected = i == _index;
               final scheme = Theme.of(context).colorScheme;
 
               return AnimatedContainer(
