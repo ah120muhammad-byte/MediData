@@ -50,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final startOfTodayLocal = DateTime(now.year, now.month, now.day);
     final startOfTomorrowLocal = startOfTodayLocal.add(const Duration(days: 1));
 
-    final todayResponse = await _supabase
+    final latestResponse = await _supabase
         .from('lectures')
         .select('''
           id, module_id, title, description, published_at, is_published,
@@ -58,33 +58,27 @@ class _HomeScreenState extends State<HomeScreen> {
         ''')
         .eq('is_active', true)
         .eq('is_published', true)
-        .gte('published_at', startOfTodayLocal.toUtc().toIso8601String())
-        .lt('published_at', startOfTomorrowLocal.toUtc().toIso8601String())
-        .order('published_at', ascending: false);
+        .not('published_at', 'is', null)
+        .order('published_at', ascending: false)
+        .limit(1);
 
-    final todayRows = List<Map<String, dynamic>>.from(
-      (todayResponse as List).map((item) => Map<String, dynamic>.from(item)),
+    final latestRows = List<Map<String, dynamic>>.from(
+      (latestResponse as List).map(
+        (item) => Map<String, dynamic>.from(item),
+      ),
     );
-    final todayLectures = todayRows.map(_lectureFromRow).toList();
 
     _LectureHomeData? latestLecture;
-    if (todayLectures.isEmpty) {
-      final latestResponse = await _supabase
-          .from('lectures')
-          .select('''
-            id, module_id, title, description, published_at, is_published,
-            is_active, modules (id, name)
-          ''')
-          .eq('is_active', true)
-          .eq('is_published', true)
-          .order('published_at', ascending: false)
-          .limit(1);
+    List<_LectureHomeData> todayLectures = const <_LectureHomeData>[];
 
-      final latestRows = List<Map<String, dynamic>>.from(
-        (latestResponse as List).map((item) => Map<String, dynamic>.from(item)),
-      );
-      if (latestRows.isNotEmpty) {
-        latestLecture = _lectureFromRow(latestRows.first);
+    if (latestRows.isNotEmpty) {
+      latestLecture = _lectureFromRow(latestRows.first);
+      final publishedAt = latestLecture.publishedAt;
+
+      if (publishedAt != null &&
+          !publishedAt.isBefore(startOfTodayLocal) &&
+          publishedAt.isBefore(startOfTomorrowLocal)) {
+        todayLectures = <_LectureHomeData>[latestLecture];
       }
     }
 
@@ -265,9 +259,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
-                            _SectionTitle(
-                              title: "What's New",
-                              icon: Icons.auto_awesome_rounded,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _SectionTitle(
+                                    title: "What's New",
+                                    icon: Icons.auto_awesome_rounded,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Refresh',
+                                  onPressed: _refresh,
+                                  icon: const Icon(Icons.refresh_rounded),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 10),
                             _WhatsNewCarousel(
