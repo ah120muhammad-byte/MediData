@@ -5,22 +5,19 @@ plugins {
 }
 
 android {
-    namespace = "com.example.medidata26"
+    namespace = "com.medidata.dataapp"
 
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        // Java 17
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-
-        // Required by flutter_local_notifications
         isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
-        applicationId = "com.example.medidata26"
+        applicationId = "com.medidata.dataapp"
 
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
@@ -28,14 +25,11 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // Required by flutter_local_notifications
         multiDexEnabled = true
     }
 
     buildTypes {
         release {
-            // Temporary debug signing.
-            // Replace with release signing before publishing.
             signingConfig =
                 signingConfigs.getByName("debug")
         }
@@ -54,7 +48,6 @@ flutter {
 }
 
 dependencies {
-    // Required by flutter_local_notifications
     coreLibraryDesugaring(
         "com.android.tools:desugar_jdk_libs:2.1.4"
     )
