@@ -452,9 +452,8 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
   @override
   void initState() {
     super.initState();
-    // Start after the first frame so the PageView has a chance to attach.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _restartAutoPlay();
+      if (mounted) _scheduleNextAutoPlay();
     });
   }
 
@@ -467,23 +466,23 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
         : (oldWidget.fallbackLecture == null ? 0 : 1);
     final newItemsCount = _items.length;
 
+    _autoPlayTimer?.cancel();
+
     if (newItemsCount == 0) {
       _currentPage = 0;
-      _autoPlayTimer?.cancel();
       return;
     }
 
     if (newItemsCount != oldItemsCount || _currentPage >= newItemsCount) {
       _currentPage = 0;
-      if (_pageController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pageController.hasClients) return;
         _pageController.jumpToPage(0);
-      }
+      });
     }
 
-    // Data can arrive after the first frame, so always restart the timer
-    // after a widget update.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _restartAutoPlay();
+      if (mounted) _scheduleNextAutoPlay();
     });
   }
 
@@ -494,15 +493,29 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
     super.dispose();
   }
 
-  void _restartAutoPlay() {
+  void _scheduleNextAutoPlay() {
     _autoPlayTimer?.cancel();
 
-    if (!_hasMultiple || !_pageController.hasClients) return;
+    if (!mounted || !_hasMultiple) return;
 
-    _autoPlayTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (!mounted || !_pageController.hasClients || !_hasMultiple) return;
+    // Keep waiting until the PageView is attached. This matters when Home
+    // is created lazily inside AppShell/IndexedStack.
+    if (!_pageController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scheduleNextAutoPlay();
+      });
+      return;
+    }
 
-      final nextPage = (_currentPage + 1) % _items.length;
+    _autoPlayTimer = Timer(const Duration(seconds: 5), () async {
+      if (!mounted || !_hasMultiple || !_pageController.hasClients) {
+        return;
+      }
+
+      final currentPage =
+          _pageController.page?.round() ?? _currentPage;
+      final nextPage = (currentPage + 1) % _items.length;
+
       try {
         await _pageController.animateToPage(
           nextPage,
@@ -510,7 +523,14 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
           curve: Curves.easeOutCubic,
         );
       } catch (_) {
-        // Ignore an animation that gets cancelled by a rebuild/dispose.
+        // Ignore an animation cancelled by a rebuild/dispose.
+      }
+
+      if (mounted) {
+        _currentPage =
+            _pageController.page?.round() ?? nextPage;
+        setState(() {});
+        _scheduleNextAutoPlay();
       }
     });
   }
@@ -530,13 +550,13 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
           child: PageView.builder(
             controller: _pageController,
             itemCount: items.length,
+            pageSnapping: true,
             physics: const BouncingScrollPhysics(),
             onPageChanged: (index) {
               if (!mounted) return;
               setState(() => _currentPage = index);
-              // Restart the countdown after manual swiping so the next
-              // automatic transition always happens 5 seconds later.
-              _restartAutoPlay();
+              // Manual swipes get a fresh 5-second countdown.
+              _scheduleNextAutoPlay();
             },
             itemBuilder: (context, index) {
               final lecture = items[index];
