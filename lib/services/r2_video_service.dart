@@ -1,9 +1,10 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class R2VideoService {
   static const String backendUrl = String.fromEnvironment(
-    'TELEGRAM_BACKEND_URL',
+    'R2_BACKEND_URL',
     defaultValue: 'https://admin-dashboard-web.ahmedmmunir.blitz.cloud',
   );
 
@@ -33,6 +34,9 @@ class R2VideoService {
         accessToken: token,
       );
     } on DioException catch (error) {
+      debugPrint(
+        'R2 signed-url request failed: status=${error.response?.statusCode}, data=${error.response?.data}, backend=$backendUrl',
+      );
       // A cached access token can become invalid while the app is open.
       // Refresh once and retry the request before asking the user to sign in.
       if (error.response?.statusCode != 401) {
