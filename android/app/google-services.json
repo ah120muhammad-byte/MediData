@@ -12,7 +12,12 @@
           "package_name": "com.example.medidata26"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "595177774591-5cpq6vvqgds2h2t7cusi1tjfvosn07jv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA7Vyu5IIqqD4SK8ee8ER5-xfv-K3Te9ww"
@@ -20,7 +25,41 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "595177774591-5cpq6vvqgds2h2t7cusi1tjfvosn07jv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:595177774591:android:5a75e7d1108027618fdbca",
+        "android_client_info": {
+          "package_name": "com.medidata.dataapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "595177774591-5cpq6vvqgds2h2t7cusi1tjfvosn07jv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7Vyu5IIqqD4SK8ee8ER5-xfv-K3Te9ww"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "595177774591-5cpq6vvqgds2h2t7cusi1tjfvosn07jv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
