@@ -18,6 +18,7 @@ class _AuthGateV2State extends State<AuthGateV2> {
   StreamSubscription<AuthState>? _sub;
   bool _passwordRecovery = false;
   bool _notificationStarted = false;
+  bool _notificationInitializing = false;
 
   @override
   void initState() {
@@ -32,9 +33,25 @@ class _AuthGateV2State extends State<AuthGateV2> {
   void dispose() { _sub?.cancel(); super.dispose(); }
 
   Future<void> _initNotifications() async {
-    if (_notificationStarted || !widget.settings.notificationsEnabled) return;
-    _notificationStarted = true;
-    try { await NotificationService.instance.initialize(); } catch (e) { debugPrint('Notification init error: $e'); }
+    if (_notificationStarted ||
+        _notificationInitializing ||
+        !widget.settings.notificationsEnabled ||
+        _supabase.auth.currentSession == null) {
+      return;
+    }
+
+    _notificationInitializing = true;
+    try {
+      await NotificationService.instance.initialize();
+      _notificationStarted = true;
+      debugPrint('MediData notifications initialized successfully');
+    } catch (e, stack) {
+      _notificationStarted = false;
+      debugPrint('MediData notification initialization failed: $e');
+      debugPrint('$stack');
+    } finally {
+      _notificationInitializing = false;
+    }
   }
 
   @override
@@ -47,7 +64,7 @@ class _AuthGateV2State extends State<AuthGateV2> {
     final session = _supabase.auth.currentSession;
     if (session == null) return _StudentLoginEntry(allowRegistration: s.allowRegistration);
 
-    unawaited(_initNotifications());
+    WidgetsBinding.instance.addPostFrameCallback((_) { unawaited(_initNotifications()); });
     final shell = const AppShell();
     if (s.homeAnnouncement.trim().isEmpty) return shell;
     return Column(children: [
