@@ -435,9 +435,11 @@ class _WhatsNewCarousel extends StatefulWidget {
 }
 
 class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
-  final PageController _pageController = PageController();
+  static const int _initialPage = 10000;
+
+  late final PageController _pageController;
   Timer? _autoPlayTimer;
-  int _currentPage = 0;
+  int _currentLogicalPage = 0;
 
   List<_LectureHomeData> get _items {
     if (widget.lectures.isNotEmpty) return widget.lectures;
@@ -452,6 +454,11 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(
+      initialPage: _initialPage,
+      viewportFraction: 0.88,
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _scheduleNextAutoPlay();
     });
@@ -461,23 +468,24 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
   void didUpdateWidget(covariant _WhatsNewCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final oldItemsCount = oldWidget.lectures.isNotEmpty
-        ? oldWidget.lectures.length
-        : (oldWidget.fallbackLecture == null ? 0 : 1);
     final newItemsCount = _items.length;
-
     _autoPlayTimer?.cancel();
 
     if (newItemsCount == 0) {
-      _currentPage = 0;
+      _currentLogicalPage = 0;
       return;
     }
 
-    if (newItemsCount != oldItemsCount || _currentPage >= newItemsCount) {
-      _currentPage = 0;
+    final oldItemsCount = oldWidget.lectures.isNotEmpty
+        ? oldWidget.lectures.length
+        : (oldWidget.fallbackLecture == null ? 0 : 1);
+
+    if (newItemsCount != oldItemsCount) {
+      _currentLogicalPage %= newItemsCount;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_pageController.hasClients) return;
-        _pageController.jumpToPage(0);
+        final base = _initialPage - (_initialPage % newItemsCount);
+        _pageController.jumpToPage(base + _currentLogicalPage);
       });
     }
 
@@ -496,42 +504,23 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
   void _scheduleNextAutoPlay() {
     _autoPlayTimer?.cancel();
 
-    if (!mounted || !_hasMultiple) return;
-
-    // Keep waiting until the PageView is attached. This matters when Home
-    // is created lazily inside AppShell/IndexedStack.
-    if (!_pageController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _scheduleNextAutoPlay();
-      });
-      return;
-    }
+    if (!mounted || !_hasMultiple || !_pageController.hasClients) return;
 
     _autoPlayTimer = Timer(const Duration(seconds: 5), () async {
-      if (!mounted || !_hasMultiple || !_pageController.hasClients) {
-        return;
-      }
+      if (!mounted || !_hasMultiple || !_pageController.hasClients) return;
 
-      final currentPage =
-          _pageController.page?.round() ?? _currentPage;
-      final nextPage = (currentPage + 1) % _items.length;
-
+      final nextPage = _pageController.page?.round() ?? _initialPage;
       try {
         await _pageController.animateToPage(
-          nextPage,
+          nextPage + 1,
           duration: const Duration(milliseconds: 550),
           curve: Curves.easeOutCubic,
         );
       } catch (_) {
-        // Ignore an animation cancelled by a rebuild/dispose.
+        // Ignore an animation cancelled by rebuild/dispose.
       }
 
-      if (mounted) {
-        _currentPage =
-            _pageController.page?.round() ?? nextPage;
-        setState(() {});
-        _scheduleNextAutoPlay();
-      }
+      if (mounted) _scheduleNextAutoPlay();
     });
   }
 
@@ -543,42 +532,73 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
       return const _EmptyWhatsNewCard();
     }
 
+    if (!_hasMultiple && _pageController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pageController.hasClients) {
+          _pageController.jumpToPage(_initialPage);
+        }
+      });
+    }
+
     return Column(
       children: [
         SizedBox(
-          height: 258,
+          height: 270,
           child: PageView.builder(
             controller: _pageController,
-            itemCount: items.length,
-            pageSnapping: true,
+            itemCount: _hasMultiple ? 200000 : 1,
+            padEnds: false,
             physics: const BouncingScrollPhysics(),
-            onPageChanged: (index) {
-              if (!mounted) return;
-              setState(() => _currentPage = index);
-              // Manual swipes get a fresh 5-second countdown.
+            onPageChanged: (page) {
+              if (!mounted || items.isEmpty) return;
+
+              final logicalPage = page % items.length;
+              setState(() => _currentLogicalPage = logicalPage);
+
+              // Manual swipe starts a fresh 5-second countdown.
               _scheduleNextAutoPlay();
             },
-            itemBuilder: (context, index) {
-              final lecture = items[index];
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 1),
-                child: _LatestLectureCard(
-                  lecture: lecture,
-                  isToday: widget.lectures.isNotEmpty,
-                  position: index + 1,
-                  total: items.length,
-                  onTap: () => widget.onOpenLecture(lecture),
+            itemBuilder: (context, page) {
+              final lecture = items[page % items.length];
+
+              return AnimatedBuilder(
+                animation: _pageController,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 7),
+                  child: _LatestLectureCard(
+                    lecture: lecture,
+                    isToday: widget.lectures.isNotEmpty,
+                    position: (page % items.length) + 1,
+                    total: items.length,
+                    onTap: () => widget.onOpenLecture(lecture),
+                  ),
                 ),
+                builder: (context, child) {
+                  double scale = 0.96;
+
+                  if (_pageController.hasClients &&
+                      _pageController.position.haveDimensions) {
+                    final pageOffset = _pageController.page ?? page.toDouble();
+                    final distance = (pageOffset - page).abs().clamp(0.0, 1.0);
+                    scale = 1.0 - (distance * 0.035);
+                  }
+
+                  return Transform.scale(
+                    scale: scale,
+                    alignment: Alignment.center,
+                    child: child,
+                  );
+                },
               );
             },
           ),
         ),
         if (_hasMultiple) ...[
-          const SizedBox(height: 9),
+          const SizedBox(height: 7),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(items.length, (index) {
-              final selected = index == _currentPage;
+              final selected = index == _currentLogicalPage;
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOut,
