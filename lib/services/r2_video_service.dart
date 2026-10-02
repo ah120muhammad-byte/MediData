@@ -20,23 +20,80 @@ class R2VideoService {
     final cleanKey = key.startsWith('r2:') ? key.substring(3).trim() : key.trim();
     if (cleanKey.isEmpty) throw Exception('R2 video key is empty.');
 
-    final token = _supabase.auth.currentSession?.accessToken;
+    String? token = await _getValidAccessToken();
     if (token == null || token.isEmpty) {
       throw Exception('Your session has expired. Please sign in again.');
     }
 
-    final response = await _dio.post<Map<String, dynamic>>(
-      '$backendUrl/api/r2/signed-url',
-      data: {'key': cleanKey},
-      options: Options(
-        headers: {'Authorization': 'Bearer $token'},
-        contentType: 'application/json',
-        validateStatus: (status) => status != null && status >= 200 && status < 300,
-      ),
-    );
+    late Response<Map<String, dynamic>> response;
+
+    try {
+      response = await _requestSignedUrl(
+        key: cleanKey,
+        accessToken: token,
+      );
+    } on DioException catch (error) {
+      // A cached access token can become invalid while the app is open.
+      // Refresh once and retry the request before asking the user to sign in.
+      if (error.response?.statusCode != 401) {
+        rethrow;
+      }
+
+      token = await _refreshAccessToken();
+      response = await _requestSignedUrl(
+        key: cleanKey,
+        accessToken: token,
+      );
+    }
 
     final url = response.data?['url']?.toString() ?? '';
     if (url.isEmpty) throw Exception('R2 did not return a video URL.');
     return url;
+  }
+
+  Future<String?> _getValidAccessToken() async {
+    final session = _supabase.auth.currentSession;
+
+    if (session == null) {
+      return null;
+    }
+
+    if (session.isExpired) {
+      return _refreshAccessToken();
+    }
+
+    return session.accessToken;
+  }
+
+  Future<String> _refreshAccessToken() async {
+    try {
+      final authResponse = await _supabase.auth.refreshSession();
+      final refreshedSession = authResponse.session;
+      final token = refreshedSession?.accessToken;
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Supabase did not return a refreshed access token.');
+      }
+
+      return token;
+    } catch (_) {
+      throw Exception('Your session has expired. Please sign in again.');
+    }
+  }
+
+  Future<Response<Map<String, dynamic>>> _requestSignedUrl({
+    required String key,
+    required String accessToken,
+  }) {
+    return _dio.post<Map<String, dynamic>>(
+      '$backendUrl/api/r2/signed-url',
+      data: {'key': key},
+      options: Options(
+        headers: {'Authorization': 'Bearer $accessToken'},
+        contentType: 'application/json',
+        validateStatus: (status) =>
+            status != null && status >= 200 && status < 300,
+      ),
+    );
   }
 }
