@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -418,7 +417,7 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _WhatsNewCarousel extends StatefulWidget {
+class _WhatsNewCarousel extends StatelessWidget {
   final List<_LectureHomeData> lectures;
   final _LectureHomeData? fallbackLecture;
   final ValueChanged<_LectureHomeData> onOpenLecture;
@@ -429,152 +428,27 @@ class _WhatsNewCarousel extends StatefulWidget {
     required this.onOpenLecture,
   });
 
-  @override
-  State<_WhatsNewCarousel> createState() => _WhatsNewCarouselState();
-}
-
-class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
-  static const int _initialPage = 100000;
-  static const double _viewportFraction = 0.84;
-
-  late final PageController _pageController;
-  int _currentIndex = 0;
-
-  List<_LectureHomeData> get _items {
-    if (widget.lectures.isNotEmpty) return widget.lectures;
-    if (widget.fallbackLecture != null) {
-      return <_LectureHomeData>[widget.fallbackLecture!];
-    }
-    return const <_LectureHomeData>[];
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController(
-      initialPage: _initialPage,
-      viewportFraction: _viewportFraction,
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant _WhatsNewCarousel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.lectures.length != widget.lectures.length ||
-        oldWidget.fallbackLecture?.id != widget.fallbackLecture?.id) {
-      _currentIndex = 0;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_pageController.hasClients) return;
-        _pageController.jumpToPage(_initialPage);
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  Widget _card({
-    required _LectureHomeData lecture,
-    required int position,
-    required int total,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: _LatestLectureCard(
-        lecture: lecture,
-        isToday: widget.lectures.isNotEmpty,
-        position: position,
-        total: total,
-        onTap: () => widget.onOpenLecture(lecture),
-      ),
-    );
+  _LectureHomeData? get _latest {
+    if (lectures.isNotEmpty) return lectures.first;
+    return fallbackLecture;
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = _items;
+    final lecture = _latest;
 
-    if (items.isEmpty) {
+    if (lecture == null) {
       return const _EmptyWhatsNewCard();
     }
 
-    if (items.length == 1) {
-      return _card(
-        lecture: items.first,
-        position: 1,
-        total: 1,
-      );
-    }
-
-    return Column(
-      children: [
-        SizedBox(
-          height: 258,
-          child: ScrollConfiguration(
-            behavior: const _WhatsNewScrollBehavior(),
-            child: PageView.builder(
-              controller: _pageController,
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padEnds: true,
-              itemBuilder: (context, page) {
-                final index = page % items.length;
-                return _card(
-                  lecture: items[index],
-                  position: index + 1,
-                  total: items.length,
-                );
-              },
-              onPageChanged: (page) {
-                final index = page % items.length;
-                if (mounted && index != _currentIndex) {
-                  setState(() => _currentIndex = index);
-                }
-              },
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(items.length, (i) {
-            final selected = i == _currentIndex;
-            final scheme = Theme.of(context).colorScheme;
-
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: selected ? 22 : 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: selected
-                    ? scheme.primary
-                    : scheme.onSurface.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(999),
-              ),
-            );
-          }),
-        ),
-      ],
+    return _LatestLectureCard(
+      lecture: lecture,
+      isToday: lectures.isNotEmpty,
+      position: 1,
+      total: 1,
+      onTap: () => onOpenLecture(lecture),
     );
   }
-}
-
-class _WhatsNewScrollBehavior extends MaterialScrollBehavior {
-  const _WhatsNewScrollBehavior();
-
-  @override
-  Set<PointerDeviceKind> get dragDevices => {
-        PointerDeviceKind.touch,
-        PointerDeviceKind.mouse,
-        PointerDeviceKind.stylus,
-        PointerDeviceKind.invertedStylus,
-        PointerDeviceKind.trackpad,
-      };
 }
 
 class _EmptyWhatsNewCard extends StatelessWidget {
