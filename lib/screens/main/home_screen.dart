@@ -436,11 +436,15 @@ class _WhatsNewCarousel extends StatefulWidget {
 
 class _WhatsNewCarouselState extends State<_WhatsNewCarousel>
     with SingleTickerProviderStateMixin {
-  static const Duration _changeDuration = Duration(milliseconds: 280);
+  static const Duration _animationDuration = Duration(milliseconds: 300);
+
+  late final AnimationController _animationController;
 
   int _index = 0;
   double _dragX = 0;
-  bool _isAnimating = false;
+  double _animationStart = 0;
+  double _animationEnd = 0;
+  bool _settling = false;
 
   List<_LectureHomeData> get _items {
     if (widget.lectures.isNotEmpty) return widget.lectures;
@@ -453,6 +457,46 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel>
   bool get _hasMultiple => _items.length > 1;
 
   @override
+  void initState() {
+    super.initState();
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: _animationDuration,
+    )..addListener(() {
+        if (!_settling || !mounted) return;
+
+        final value = Curves.easeOutCubic.transform(
+          _animationController.value,
+        );
+
+        setState(() {
+          _dragX = _animationStart +
+              ((_animationEnd - _animationStart) * value);
+        });
+      })
+      ..addStatusListener((status) {
+        if (status != AnimationStatus.completed || !mounted) return;
+
+        final width = MediaQuery.sizeOf(context).width;
+        final threshold = width * 0.30;
+
+        if (_animationEnd.abs() >= threshold && _hasMultiple) {
+          if (_animationEnd < 0) {
+            _index = (_index + 1) % _items.length;
+          } else {
+            _index = (_index - 1 + _items.length) % _items.length;
+          }
+        }
+
+        setState(() {
+          _dragX = 0;
+          _settling = false;
+        });
+      });
+  }
+
+  @override
   void didUpdateWidget(covariant _WhatsNewCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
@@ -460,88 +504,97 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel>
     if (count == 0) {
       _index = 0;
       _dragX = 0;
-      _isAnimating = false;
       return;
     }
 
     if (_index >= count) {
       _index = 0;
     }
+
+    _animationController.stop();
+    _settling = false;
     _dragX = 0;
-    _isAnimating = false;
   }
 
-  void _onHorizontalDragStart(DragStartDetails details) {
-    if (!_hasMultiple || _isAnimating) return;
-    setState(() => _dragX = 0);
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
-  void _onHorizontalDragUpdate(DragUpdateDetails details) {
-    if (!_hasMultiple || _isAnimating) return;
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (!_hasMultiple || _settling) return;
 
     setState(() {
       _dragX += details.delta.dx;
-      _dragX = _dragX.clamp(-260.0, 260.0);
+      _dragX = _dragX.clamp(-MediaQuery.sizeOf(context).width,
+          MediaQuery.sizeOf(context).width);
     });
   }
 
-  Future<void> _finishSwipe(bool toNext) async {
-    if (!_hasMultiple || _isAnimating) return;
+  void _animateBack() {
+    if (_settling) return;
+
+    _animationStart = _dragX;
+    _animationEnd = 0;
+    _settling = true;
+    _animationController
+      ..reset()
+      ..forward();
+  }
+
+  void _animateToNext(bool next) {
+    if (_settling || !_hasMultiple) return;
 
     final width = MediaQuery.sizeOf(context).width;
-    final target = toNext ? -(width + 80) : width + 80;
+    _animationStart = _dragX;
+    _animationEnd = next ? -width : width;
+    _settling = true;
 
-    setState(() {
-      _isAnimating = true;
-      _dragX = target;
-    });
-
-    await Future<void>.delayed(_changeDuration);
-
-    if (!mounted) return;
-
-    setState(() {
-      _index = toNext
-          ? (_index + 1) % _items.length
-          : (_index - 1 + _items.length) % _items.length;
-      _dragX = 0;
-      _isAnimating = false;
-    });
+    _animationController
+      ..reset()
+      ..forward();
   }
 
-  void _onHorizontalDragEnd(DragEndDetails details) {
-    if (!_hasMultiple || _isAnimating) return;
+  void _onDragEnd(DragEndDetails details) {
+    if (!_hasMultiple || _settling) return;
 
     final velocity = details.primaryVelocity ?? 0;
+    final width = MediaQuery.sizeOf(context).width;
     final distance = _dragX.abs();
 
-    if (distance < 55 && velocity.abs() < 450) {
-      setState(() => _dragX = 0);
+    final shouldChange =
+        distance > width * 0.22 || velocity.abs() > 500;
+
+    if (!shouldChange) {
+      _animateBack();
       return;
     }
 
-    final toNext = _dragX < 0 || velocity < 0;
-    _finishSwipe(toNext);
+    final next = _dragX < 0 || velocity < 0;
+    _animateToNext(next);
   }
 
-  Widget _buildCard(
-    BuildContext context, {
+  Widget _card({
     required _LectureHomeData lecture,
     required int position,
+    required double width,
     required double scale,
     required double opacity,
   }) {
-    return Opacity(
-      opacity: opacity,
-      child: Transform.scale(
-        scale: scale,
-        alignment: Alignment.center,
-        child: _LatestLectureCard(
-          lecture: lecture,
-          isToday: widget.lectures.isNotEmpty,
-          position: position,
-          total: _items.length,
-          onTap: () => widget.onOpenLecture(lecture),
+    return SizedBox(
+      width: width,
+      child: Opacity(
+        opacity: opacity,
+        child: Transform.scale(
+          scale: scale,
+          child: _LatestLectureCard(
+            lecture: lecture,
+            isToday: widget.lectures.isNotEmpty,
+            position: position,
+            total: _items.length,
+            onTap: () => widget.onOpenLecture(lecture),
+          ),
         ),
       ),
     );
@@ -556,62 +609,80 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel>
     }
 
     final current = items[_index];
+
+    if (!_hasMultiple) {
+      return _card(
+        lecture: current,
+        position: 1,
+        width: double.infinity,
+        scale: 1,
+        opacity: 1,
+      );
+    }
+
+    final width = MediaQuery.sizeOf(context).width;
+    final cardWidth = width * 0.84;
+    final gap = width * 0.04;
+
     final nextIndex = (_index + 1) % items.length;
     final previousIndex = (_index - 1 + items.length) % items.length;
 
-    // The card in the swipe direction is placed behind the current card.
-    // There is intentionally NO autoplay: changing cards happens only after
-    // the student swipes horizontally.
-    final showingPrevious = _dragX > 0;
-    final backgroundIndex = showingPrevious ? previousIndex : nextIndex;
+    // Three cards are ALWAYS present:
+    // previous ← current → next.
+    // The side cards intentionally remain partially visible.
+    final nextLeft = (width - cardWidth) / 2 + cardWidth + gap + _dragX;
+    final previousLeft =
+        (width - cardWidth) / 2 - cardWidth - gap + _dragX;
+    final currentLeft = (width - cardWidth) / 2 + _dragX;
 
     return Column(
       children: [
         SizedBox(
           height: 270,
+          width: double.infinity,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onHorizontalDragStart:
-                _hasMultiple ? _onHorizontalDragStart : null,
-            onHorizontalDragUpdate:
-                _hasMultiple ? _onHorizontalDragUpdate : null,
-            onHorizontalDragEnd:
-                _hasMultiple ? _onHorizontalDragEnd : null,
+            onHorizontalDragUpdate: _onDragUpdate,
+            onHorizontalDragEnd: _onDragEnd,
             child: Stack(
               clipBehavior: Clip.hardEdge,
-              alignment: Alignment.center,
               children: [
-                if (_hasMultiple)
-                  Positioned.fill(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 7,
-                      ),
-                      child: IgnorePointer(
-                        child: AnimatedScale(
-                          scale: 0.94,
-                          duration: _changeDuration,
-                          curve: Curves.easeOutCubic,
-                          child: _buildCard(
-                            context,
-                            lecture: items[backgroundIndex],
-                            position: backgroundIndex + 1,
-                            scale: 1,
-                            opacity: 0.62,
-                          ),
-                        ),
-                      ),
+                Positioned(
+                  left: previousLeft,
+                  top: 7,
+                  bottom: 7,
+                  child: IgnorePointer(
+                    child: _card(
+                      lecture: items[previousIndex],
+                      position: previousIndex + 1,
+                      width: cardWidth,
+                      scale: 0.94,
+                      opacity: 0.58,
                     ),
                   ),
-                AnimatedContainer(
-                  duration: _changeDuration,
-                  curve: Curves.easeOutCubic,
-                  transform: Matrix4.translationValues(_dragX, 0, 0),
-                  child: _buildCard(
-                    context,
+                ),
+                Positioned(
+                  left: nextLeft,
+                  top: 7,
+                  bottom: 7,
+                  child: IgnorePointer(
+                    child: _card(
+                      lecture: items[nextIndex],
+                      position: nextIndex + 1,
+                      width: cardWidth,
+                      scale: 0.94,
+                      opacity: 0.58,
+                    ),
+                  ),
+                ),
+                AnimatedPositioned(
+                  duration: _settling ? Duration.zero : _animationDuration,
+                  left: currentLeft,
+                  top: 0,
+                  child: _card(
                     lecture: current,
                     position: _index + 1,
+                    width: cardWidth,
                     scale: 1,
                     opacity: 1,
                   ),
@@ -620,29 +691,27 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel>
             ),
           ),
         ),
-        if (_hasMultiple) ...[
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(items.length, (i) {
-              final selected = i == _index;
-              final scheme = Theme.of(context).colorScheme;
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(items.length, (i) {
+            final selected = i == _index;
+            final scheme = Theme.of(context).colorScheme;
 
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: selected ? 22 : 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? scheme.primary
-                      : scheme.onSurface.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              );
-            }),
-          ),
-        ],
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: selected ? 22 : 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: selected
+                    ? scheme.primary
+                    : scheme.onSurface.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            );
+          }),
+        ),
       ],
     );
   }
