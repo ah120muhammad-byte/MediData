@@ -452,26 +452,39 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
   @override
   void initState() {
     super.initState();
-    _startAutoPlay();
+    // Start after the first frame so the PageView has a chance to attach.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _restartAutoPlay();
+    });
   }
 
   @override
   void didUpdateWidget(covariant _WhatsNewCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final oldCount = oldWidget.lectures.length +
-        (oldWidget.lectures.isEmpty && oldWidget.fallbackLecture != null
-            ? 1
-            : 0);
-    final newCount = _items.length;
 
-    if (newCount != oldCount || _currentPage >= newCount) {
+    final oldItemsCount = oldWidget.lectures.isNotEmpty
+        ? oldWidget.lectures.length
+        : (oldWidget.fallbackLecture == null ? 0 : 1);
+    final newItemsCount = _items.length;
+
+    if (newItemsCount == 0) {
+      _currentPage = 0;
+      _autoPlayTimer?.cancel();
+      return;
+    }
+
+    if (newItemsCount != oldItemsCount || _currentPage >= newItemsCount) {
       _currentPage = 0;
       if (_pageController.hasClients) {
         _pageController.jumpToPage(0);
       }
     }
 
-    _startAutoPlay();
+    // Data can arrive after the first frame, so always restart the timer
+    // after a widget update.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _restartAutoPlay();
+    });
   }
 
   @override
@@ -481,19 +494,24 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
     super.dispose();
   }
 
-  void _startAutoPlay() {
+  void _restartAutoPlay() {
     _autoPlayTimer?.cancel();
-    if (!_hasMultiple) return;
 
-    _autoPlayTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    if (!_hasMultiple || !_pageController.hasClients) return;
+
+    _autoPlayTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (!mounted || !_pageController.hasClients || !_hasMultiple) return;
 
       final nextPage = (_currentPage + 1) % _items.length;
-      _pageController.animateToPage(
-        nextPage,
-        duration: const Duration(milliseconds: 550),
-        curve: Curves.easeOutCubic,
-      );
+      try {
+        await _pageController.animateToPage(
+          nextPage,
+          duration: const Duration(milliseconds: 550),
+          curve: Curves.easeOutCubic,
+        );
+      } catch (_) {
+        // Ignore an animation that gets cancelled by a rebuild/dispose.
+      }
     });
   }
 
@@ -516,6 +534,9 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
             onPageChanged: (index) {
               if (!mounted) return;
               setState(() => _currentPage = index);
+              // Restart the countdown after manual swiping so the next
+              // automatic transition always happens 5 seconds later.
+              _restartAutoPlay();
             },
             itemBuilder: (context, index) {
               final lecture = items[index];
