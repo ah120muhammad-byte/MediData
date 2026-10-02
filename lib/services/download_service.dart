@@ -89,28 +89,6 @@ class DownloadProgress {
   });
 }
 
-const String kTelegramBackendUrl = String.fromEnvironment(
-  'TELEGRAM_BACKEND_URL',
-  defaultValue: '',
-);
-
-String _telegramBackendBaseUrl() {
-  var value = kTelegramBackendUrl.trim();
-  while (value.endsWith('/')) {
-    value = value.substring(0, value.length - 1);
-  }
-  if (value.isEmpty) {
-    throw Exception('Telegram Storage backend URL is not configured.');
-  }
-  return value;
-}
-
-String _telegramFileIdFromUrl(String fileUrl) {
-  final value = fileUrl.trim();
-  if (!value.startsWith('telegram:')) return '';
-  return value.substring('telegram:'.length).trim();
-}
-
 class DownloadsService {
   DownloadsService._();
 
@@ -648,14 +626,6 @@ class DownloadsService {
       return _r2.createSignedUrl(trimmed);
     }
 
-    if (trimmed.startsWith('telegram:')) {
-      final fileId = _telegramFileIdFromUrl(fileUrl);
-      if (fileId.isEmpty) {
-        throw Exception('Invalid Telegram file ID.');
-      }
-      return '${_telegramBackendBaseUrl()}/api/telegram/file/${Uri.encodeComponent(fileId)}';
-    }
-
     return _createSignedUrl(
       fileUrl: fileUrl,
       fileType: fileType,
@@ -663,21 +633,7 @@ class DownloadsService {
   }
 
   Map<String, String> headersForLectureFile(String fileUrl) {
-    // R2 presigned URLs already contain authorization in the URL.
-    if (fileUrl.trim().startsWith('r2:')) {
-      return const <String, String>{};
-    }
-
-    if (!fileUrl.trim().startsWith('telegram:')) {
-      return const <String, String>{};
-    }
-
-    final token = _supabase.auth.currentSession?.accessToken;
-    if (token == null || token.isEmpty) {
-      throw Exception('Your session has expired. Please sign in again.');
-    }
-
-    return {'Authorization': 'Bearer $token'};
+    return const <String, String>{};
   }
 
   // ==========================================================================
