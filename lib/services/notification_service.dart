@@ -145,10 +145,12 @@ class NotificationService {
 
       _initialized = true;
       _registeredUserId = userId;
-    } catch (e) {
+    } catch (e, stack) {
       _initialized = false;
       _registeredUserId = null;
       debugPrint('Notification initialization error: $e');
+      debugPrint('$stack');
+      rethrow;
     }
   }
 
