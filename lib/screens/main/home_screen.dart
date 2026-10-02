@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -513,25 +514,28 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
       children: [
         SizedBox(
           height: 258,
-          child: PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padEnds: true,
-            itemBuilder: (context, page) {
-              final index = page % items.length;
-              return _card(
-                lecture: items[index],
-                position: index + 1,
-                total: items.length,
-              );
-            },
-            onPageChanged: (page) {
-              final index = page % items.length;
-              if (mounted && index != _currentIndex) {
-                setState(() => _currentIndex = index);
-              }
-            },
+          child: ScrollConfiguration(
+            behavior: const _WhatsNewScrollBehavior(),
+            child: PageView.builder(
+              controller: _pageController,
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padEnds: true,
+              itemBuilder: (context, page) {
+                final index = page % items.length;
+                return _card(
+                  lecture: items[index],
+                  position: index + 1,
+                  total: items.length,
+                );
+              },
+              onPageChanged: (page) {
+                final index = page % items.length;
+                if (mounted && index != _currentIndex) {
+                  setState(() => _currentIndex = index);
+                }
+              },
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -558,6 +562,19 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
       ],
     );
   }
+}
+
+class _WhatsNewScrollBehavior extends MaterialScrollBehavior {
+  const _WhatsNewScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+        PointerDeviceKind.trackpad,
+      };
 }
 
 class _EmptyWhatsNewCard extends StatelessWidget {
