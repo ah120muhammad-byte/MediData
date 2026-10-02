@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -434,17 +432,12 @@ class _WhatsNewCarousel extends StatefulWidget {
   State<_WhatsNewCarousel> createState() => _WhatsNewCarouselState();
 }
 
-class _WhatsNewCarouselState extends State<_WhatsNewCarousel>
-    with SingleTickerProviderStateMixin {
-  static const Duration _animationDuration = Duration(milliseconds: 300);
+class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
+  static const int _initialPage = 100000;
+  static const double _viewportFraction = 0.84;
 
-  late final AnimationController _animationController;
-
-  int _index = 0;
-  double _dragX = 0;
-  double _animationStart = 0;
-  double _animationEnd = 0;
-  bool _settling = false;
+  late final PageController _pageController;
+  int _currentIndex = 0;
 
   List<_LectureHomeData> get _items {
     if (widget.lectures.isNotEmpty) return widget.lectures;
@@ -454,148 +447,48 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel>
     return const <_LectureHomeData>[];
   }
 
-  bool get _hasMultiple => _items.length > 1;
-
   @override
   void initState() {
     super.initState();
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: _animationDuration,
-    )..addListener(() {
-        if (!_settling || !mounted) return;
-
-        final value = Curves.easeOutCubic.transform(
-          _animationController.value,
-        );
-
-        setState(() {
-          _dragX = _animationStart +
-              ((_animationEnd - _animationStart) * value);
-        });
-      })
-      ..addStatusListener((status) {
-        if (status != AnimationStatus.completed || !mounted) return;
-
-        final width = MediaQuery.sizeOf(context).width;
-        final threshold = width * 0.30;
-
-        if (_animationEnd.abs() >= threshold && _hasMultiple) {
-          if (_animationEnd < 0) {
-            _index = (_index + 1) % _items.length;
-          } else {
-            _index = (_index - 1 + _items.length) % _items.length;
-          }
-        }
-
-        setState(() {
-          _dragX = 0;
-          _settling = false;
-        });
-      });
+    _pageController = PageController(
+      initialPage: _initialPage,
+      viewportFraction: _viewportFraction,
+    );
   }
 
   @override
   void didUpdateWidget(covariant _WhatsNewCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final count = _items.length;
-    if (count == 0) {
-      _index = 0;
-      _dragX = 0;
-      return;
+    if (oldWidget.lectures.length != widget.lectures.length ||
+        oldWidget.fallbackLecture?.id != widget.fallbackLecture?.id) {
+      _currentIndex = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pageController.hasClients) return;
+        _pageController.jumpToPage(_initialPage);
+      });
     }
-
-    if (_index >= count) {
-      _index = 0;
-    }
-
-    _animationController.stop();
-    _settling = false;
-    _dragX = 0;
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _pageController.dispose();
     super.dispose();
-  }
-
-  void _onDragUpdate(DragUpdateDetails details) {
-    if (!_hasMultiple || _settling) return;
-
-    setState(() {
-      _dragX += details.delta.dx;
-      _dragX = _dragX.clamp(-MediaQuery.sizeOf(context).width,
-          MediaQuery.sizeOf(context).width);
-    });
-  }
-
-  void _animateBack() {
-    if (_settling) return;
-
-    _animationStart = _dragX;
-    _animationEnd = 0;
-    _settling = true;
-    _animationController
-      ..reset()
-      ..forward();
-  }
-
-  void _animateToNext(bool next) {
-    if (_settling || !_hasMultiple) return;
-
-    final width = MediaQuery.sizeOf(context).width;
-    _animationStart = _dragX;
-    _animationEnd = next ? -width : width;
-    _settling = true;
-
-    _animationController
-      ..reset()
-      ..forward();
-  }
-
-  void _onDragEnd(DragEndDetails details) {
-    if (!_hasMultiple || _settling) return;
-
-    final velocity = details.primaryVelocity ?? 0;
-    final width = MediaQuery.sizeOf(context).width;
-    final distance = _dragX.abs();
-
-    final shouldChange =
-        distance > width * 0.22 || velocity.abs() > 500;
-
-    if (!shouldChange) {
-      _animateBack();
-      return;
-    }
-
-    final next = _dragX < 0 || velocity < 0;
-    _animateToNext(next);
   }
 
   Widget _card({
     required _LectureHomeData lecture,
     required int position,
-    required double width,
-    required double scale,
-    required double opacity,
+    required int total,
   }) {
-    return SizedBox(
-      width: width,
-      child: Opacity(
-        opacity: opacity,
-        child: Transform.scale(
-          scale: scale,
-          child: _LatestLectureCard(
-            lecture: lecture,
-            isToday: widget.lectures.isNotEmpty,
-            position: position,
-            total: _items.length,
-            onTap: () => widget.onOpenLecture(lecture),
-          ),
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: _LatestLectureCard(
+        lecture: lecture,
+        isToday: widget.lectures.isNotEmpty,
+        position: position,
+        total: total,
+        onTap: () => widget.onOpenLecture(lecture),
       ),
     );
   }
@@ -608,94 +501,44 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel>
       return const _EmptyWhatsNewCard();
     }
 
-    final current = items[_index];
-
-    if (!_hasMultiple) {
+    if (items.length == 1) {
       return _card(
-        lecture: current,
+        lecture: items.first,
         position: 1,
-        width: double.infinity,
-        scale: 1,
-        opacity: 1,
+        total: 1,
       );
     }
-
-    final width = MediaQuery.sizeOf(context).width;
-    final cardWidth = width * 0.84;
-    final gap = width * 0.04;
-
-    final nextIndex = (_index + 1) % items.length;
-    final previousIndex = (_index - 1 + items.length) % items.length;
-
-    // Three cards are ALWAYS present:
-    // previous ← current → next.
-    // The side cards intentionally remain partially visible.
-    final nextLeft = (width - cardWidth) / 2 + cardWidth + gap + _dragX;
-    final previousLeft =
-        (width - cardWidth) / 2 - cardWidth - gap + _dragX;
-    final currentLeft = (width - cardWidth) / 2 + _dragX;
 
     return Column(
       children: [
         SizedBox(
-          height: 270,
-          width: double.infinity,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragUpdate: _onDragUpdate,
-            onHorizontalDragEnd: _onDragEnd,
-            child: Stack(
-              clipBehavior: Clip.hardEdge,
-              children: [
-                Positioned(
-                  left: previousLeft,
-                  top: 7,
-                  bottom: 7,
-                  child: IgnorePointer(
-                    child: _card(
-                      lecture: items[previousIndex],
-                      position: previousIndex + 1,
-                      width: cardWidth,
-                      scale: 0.94,
-                      opacity: 0.58,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: nextLeft,
-                  top: 7,
-                  bottom: 7,
-                  child: IgnorePointer(
-                    child: _card(
-                      lecture: items[nextIndex],
-                      position: nextIndex + 1,
-                      width: cardWidth,
-                      scale: 0.94,
-                      opacity: 0.58,
-                    ),
-                  ),
-                ),
-                AnimatedPositioned(
-                  duration: _settling ? Duration.zero : _animationDuration,
-                  left: currentLeft,
-                  top: 0,
-                  child: _card(
-                    lecture: current,
-                    position: _index + 1,
-                    width: cardWidth,
-                    scale: 1,
-                    opacity: 1,
-                  ),
-                ),
-              ],
-            ),
+          height: 258,
+          child: PageView.builder(
+            controller: _pageController,
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padEnds: true,
+            itemBuilder: (context, page) {
+              final index = page % items.length;
+              return _card(
+                lecture: items[index],
+                position: index + 1,
+                total: items.length,
+              );
+            },
+            onPageChanged: (page) {
+              final index = page % items.length;
+              if (mounted && index != _currentIndex) {
+                setState(() => _currentIndex = index);
+              }
+            },
           ),
         ),
         const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(items.length, (i) {
-            final selected = i == _index;
+            final selected = i == _currentIndex;
             final scheme = Theme.of(context).colorScheme;
 
             return AnimatedContainer(
