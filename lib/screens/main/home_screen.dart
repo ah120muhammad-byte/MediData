@@ -435,32 +435,34 @@ class _WhatsNewCarousel extends StatefulWidget {
 }
 
 class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
-  static const int _initialPage = 10000;
+  static const int _centerPage = 50000;
+  static const Duration _autoPlayDuration = Duration(seconds: 5);
+  static const Duration _animationDuration = Duration(milliseconds: 500);
 
-  late final PageController _pageController;
-  Timer? _autoPlayTimer;
-  int _currentLogicalPage = 0;
+  late final PageController _controller;
+  Timer? _timer;
+  int _logicalIndex = 0;
 
   List<_LectureHomeData> get _items {
     if (widget.lectures.isNotEmpty) return widget.lectures;
-    final fallback = widget.fallbackLecture;
-    return fallback == null
-        ? const <_LectureHomeData>[]
-        : <_LectureHomeData>[fallback];
+    if (widget.fallbackLecture != null) {
+      return <_LectureHomeData>[widget.fallbackLecture!];
+    }
+    return const <_LectureHomeData>[];
   }
 
-  bool get _hasMultiple => _items.length > 1;
+  bool get _looping => _items.length > 1;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(
-      initialPage: _initialPage,
+    _controller = PageController(
+      initialPage: _centerPage,
       viewportFraction: 0.88,
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _scheduleNextAutoPlay();
+      if (mounted) _restartAutoPlay();
     });
   }
 
@@ -468,60 +470,82 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
   void didUpdateWidget(covariant _WhatsNewCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final newItemsCount = _items.length;
-    _autoPlayTimer?.cancel();
+    final oldCount = oldWidget.lectures.isNotEmpty
+        ? oldWidget.lectures.length
+        : (oldWidget.fallbackLecture == null ? 0 : 1);
+    final newCount = _items.length;
 
-    if (newItemsCount == 0) {
-      _currentLogicalPage = 0;
+    _timer?.cancel();
+
+    if (newCount == 0) {
+      _logicalIndex = 0;
       return;
     }
 
-    final oldItemsCount = oldWidget.lectures.isNotEmpty
-        ? oldWidget.lectures.length
-        : (oldWidget.fallbackLecture == null ? 0 : 1);
-
-    if (newItemsCount != oldItemsCount) {
-      _currentLogicalPage %= newItemsCount;
+    if (oldCount != newCount) {
+      _logicalIndex %= newCount;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_pageController.hasClients) return;
-        final base = _initialPage - (_initialPage % newItemsCount);
-        _pageController.jumpToPage(base + _currentLogicalPage);
+        if (!mounted || !_controller.hasClients) return;
+        _jumpToLogicalIndex(_logicalIndex, newCount);
       });
+    } else if (newCount > 0) {
+      _logicalIndex %= newCount;
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _scheduleNextAutoPlay();
+      if (mounted) _restartAutoPlay();
     });
   }
 
   @override
   void dispose() {
-    _autoPlayTimer?.cancel();
-    _pageController.dispose();
+    _timer?.cancel();
+    _controller.dispose();
     super.dispose();
   }
 
-  void _scheduleNextAutoPlay() {
-    _autoPlayTimer?.cancel();
+  void _jumpToLogicalIndex(int index, int count) {
+    if (count <= 0 || !_controller.hasClients) return;
 
-    if (!mounted || !_hasMultiple || !_pageController.hasClients) return;
+    final currentPage = _controller.page?.round() ?? _centerPage;
+    final base = currentPage - (currentPage % count);
+    _controller.jumpToPage(base + index);
+  }
 
-    _autoPlayTimer = Timer(const Duration(seconds: 5), () async {
-      if (!mounted || !_hasMultiple || !_pageController.hasClients) return;
+  void _restartAutoPlay() {
+    _timer?.cancel();
 
-      final nextPage = _pageController.page?.round() ?? _initialPage;
+    if (!mounted || !_looping || !_controller.hasClients) return;
+
+    _timer = Timer(_autoPlayDuration, () async {
+      if (!mounted || !_looping || !_controller.hasClients) return;
+
+      final currentPage = _controller.page?.round() ?? _centerPage;
       try {
-        await _pageController.animateToPage(
-          nextPage + 1,
-          duration: const Duration(milliseconds: 550),
+        await _controller.animateToPage(
+          currentPage + 1,
+          duration: _animationDuration,
           curve: Curves.easeOutCubic,
         );
       } catch (_) {
-        // Ignore an animation cancelled by rebuild/dispose.
+        // The page may be rebuilt/disposed while the animation is running.
       }
 
-      if (mounted) _scheduleNextAutoPlay();
+      if (mounted) _restartAutoPlay();
     });
+  }
+
+  void _handlePageChanged(int page) {
+    final items = _items;
+    if (!mounted || items.isEmpty) return;
+
+    final nextLogicalIndex = page % items.length;
+
+    setState(() {
+      _logicalIndex = nextLogicalIndex;
+    });
+
+    _restartAutoPlay();
   }
 
   @override
@@ -532,37 +556,24 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
       return const _EmptyWhatsNewCard();
     }
 
-    if (!_hasMultiple && _pageController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _pageController.hasClients) {
-          _pageController.jumpToPage(_initialPage);
-        }
-      });
-    }
+    final multiple = items.length > 1;
 
     return Column(
       children: [
         SizedBox(
           height: 270,
           child: PageView.builder(
-            controller: _pageController,
-            itemCount: _hasMultiple ? 200000 : 1,
+            controller: _controller,
+            itemCount: multiple ? 100000 : 1,
             padEnds: false,
+            pageSnapping: true,
             physics: const BouncingScrollPhysics(),
-            onPageChanged: (page) {
-              if (!mounted || items.isEmpty) return;
-
-              final logicalPage = page % items.length;
-              setState(() => _currentLogicalPage = logicalPage);
-
-              // Manual swipe starts a fresh 5-second countdown.
-              _scheduleNextAutoPlay();
-            },
+            onPageChanged: _handlePageChanged,
             itemBuilder: (context, page) {
               final lecture = items[page % items.length];
 
               return AnimatedBuilder(
-                animation: _pageController,
+                animation: _controller,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 7),
                   child: _LatestLectureCard(
@@ -574,13 +585,15 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
                   ),
                 ),
                 builder: (context, child) {
-                  double scale = 0.96;
+                  var scale = 0.96;
 
-                  if (_pageController.hasClients &&
-                      _pageController.position.haveDimensions) {
-                    final pageOffset = _pageController.page ?? page.toDouble();
-                    final distance = (pageOffset - page).abs().clamp(0.0, 1.0);
-                    scale = 1.0 - (distance * 0.035);
+                  if (_controller.hasClients &&
+                      _controller.position.haveDimensions) {
+                    final currentPage =
+                        _controller.page ?? page.toDouble();
+                    final distance =
+                        (currentPage - page).abs().clamp(0.0, 1.0);
+                    scale = 1.0 - (distance * 0.04);
                   }
 
                   return Transform.scale(
@@ -593,25 +606,23 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
             },
           ),
         ),
-        if (_hasMultiple) ...[
+        if (multiple) ...[
           const SizedBox(height: 7),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(items.length, (index) {
-              final selected = index == _currentLogicalPage;
+              final selected = index == _logicalIndex;
+              final scheme = Theme.of(context).colorScheme;
+
               return AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOut,
+                duration: const Duration(milliseconds: 200),
                 margin: const EdgeInsets.symmetric(horizontal: 3),
                 width: selected ? 22 : 7,
                 height: 7,
                 decoration: BoxDecoration(
                   color: selected
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.18),
+                      ? scheme.primary
+                      : scheme.onSurface.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(999),
                 ),
               );
