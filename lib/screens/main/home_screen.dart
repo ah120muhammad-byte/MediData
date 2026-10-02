@@ -434,13 +434,13 @@ class _WhatsNewCarousel extends StatefulWidget {
   State<_WhatsNewCarousel> createState() => _WhatsNewCarouselState();
 }
 
-class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
-  static const Duration _autoPlayDuration = Duration(seconds: 5);
-  static const Duration _changeDuration = Duration(milliseconds: 320);
+class _WhatsNewCarouselState extends State<_WhatsNewCarousel>
+    with SingleTickerProviderStateMixin {
+  static const Duration _changeDuration = Duration(milliseconds: 280);
 
-  Timer? _timer;
   int _index = 0;
   double _dragX = 0;
+  bool _isAnimating = false;
 
   List<_LectureHomeData> get _items {
     if (widget.lectures.isNotEmpty) return widget.lectures;
@@ -453,98 +453,75 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
   bool get _hasMultiple => _items.length > 1;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _restartTimer();
-    });
-  }
-
-  @override
   void didUpdateWidget(covariant _WhatsNewCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     final count = _items.length;
-    _timer?.cancel();
-
     if (count == 0) {
       _index = 0;
+      _dragX = 0;
+      _isAnimating = false;
       return;
     }
 
-    _index %= count;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _restartTimer();
-    });
+    if (_index >= count) {
+      _index = 0;
+    }
+    _dragX = 0;
+    _isAnimating = false;
   }
 
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  void _restartTimer() {
-    _timer?.cancel();
-
-    if (!mounted || !_hasMultiple) return;
-
-    _timer = Timer(_autoPlayDuration, () {
-      if (!mounted || !_hasMultiple) return;
-      _showNext();
-    });
-  }
-
-  void _showNext() {
-    if (!_hasMultiple) return;
-
-    setState(() {
-      _index = (_index + 1) % _items.length;
-      _dragX = 0;
-    });
-
-    _restartTimer();
-  }
-
-  void _showPrevious() {
-    if (!_hasMultiple) return;
-
-    setState(() {
-      _index = (_index - 1 + _items.length) % _items.length;
-      _dragX = 0;
-    });
-
-    _restartTimer();
+  void _onHorizontalDragStart(DragStartDetails details) {
+    if (!_hasMultiple || _isAnimating) return;
+    setState(() => _dragX = 0);
   }
 
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
-    if (!_hasMultiple) return;
+    if (!_hasMultiple || _isAnimating) return;
 
     setState(() {
       _dragX += details.delta.dx;
-      _dragX = _dragX.clamp(-180.0, 180.0);
+      _dragX = _dragX.clamp(-260.0, 260.0);
+    });
+  }
+
+  Future<void> _finishSwipe(bool toNext) async {
+    if (!_hasMultiple || _isAnimating) return;
+
+    final width = MediaQuery.sizeOf(context).width;
+    final target = toNext ? -(width + 80) : width + 80;
+
+    setState(() {
+      _isAnimating = true;
+      _dragX = target;
+    });
+
+    await Future<void>.delayed(_changeDuration);
+
+    if (!mounted) return;
+
+    setState(() {
+      _index = toNext
+          ? (_index + 1) % _items.length
+          : (_index - 1 + _items.length) % _items.length;
+      _dragX = 0;
+      _isAnimating = false;
     });
   }
 
   void _onHorizontalDragEnd(DragEndDetails details) {
-    if (!_hasMultiple) return;
+    if (!_hasMultiple || _isAnimating) return;
 
     final velocity = details.primaryVelocity ?? 0;
-    final shouldChange =
-        _dragX.abs() > 55 || velocity.abs() > 450;
+    final distance = _dragX.abs();
 
-    if (!shouldChange) {
+    if (distance < 55 && velocity.abs() < 450) {
       setState(() => _dragX = 0);
-      _restartTimer();
       return;
     }
 
-    if (_dragX < 0 || velocity < 0) {
-      _showNext();
-    } else {
-      _showPrevious();
-    }
+    final toNext = _dragX < 0 || velocity < 0;
+    _finishSwipe(toNext);
   }
 
   Widget _buildCard(
@@ -553,7 +530,6 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
     required int position,
     required double scale,
     required double opacity,
-    required VoidCallback onTap,
   }) {
     return Opacity(
       opacity: opacity,
@@ -565,7 +541,7 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
           isToday: widget.lectures.isNotEmpty,
           position: position,
           total: _items.length,
-          onTap: onTap,
+          onTap: () => widget.onOpenLecture(lecture),
         ),
       ),
     );
@@ -583,36 +559,48 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
     final nextIndex = (_index + 1) % items.length;
     final previousIndex = (_index - 1 + items.length) % items.length;
 
+    // The card in the swipe direction is placed behind the current card.
+    // There is intentionally NO autoplay: changing cards happens only after
+    // the student swipes horizontally.
+    final showingPrevious = _dragX > 0;
+    final backgroundIndex = showingPrevious ? previousIndex : nextIndex;
+
     return Column(
       children: [
         SizedBox(
           height: 270,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart:
+                _hasMultiple ? _onHorizontalDragStart : null,
             onHorizontalDragUpdate:
                 _hasMultiple ? _onHorizontalDragUpdate : null,
             onHorizontalDragEnd:
                 _hasMultiple ? _onHorizontalDragEnd : null,
             child: Stack(
-              clipBehavior: Clip.none,
+              clipBehavior: Clip.hardEdge,
               alignment: Alignment.center,
               children: [
                 if (_hasMultiple)
                   Positioned.fill(
                     child: Padding(
-                      padding: const EdgeInsets.only(
-                        left: 18,
-                        right: 18,
-                        top: 7,
-                        bottom: 7,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 7,
                       ),
-                      child: _buildCard(
-                        context,
-                        lecture: items[nextIndex],
-                        position: nextIndex + 1,
-                        scale: 0.94,
-                        opacity: 0.58,
-                        onTap: () => widget.onOpenLecture(items[nextIndex]),
+                      child: IgnorePointer(
+                        child: AnimatedScale(
+                          scale: 0.94,
+                          duration: _changeDuration,
+                          curve: Curves.easeOutCubic,
+                          child: _buildCard(
+                            context,
+                            lecture: items[backgroundIndex],
+                            position: backgroundIndex + 1,
+                            scale: 1,
+                            opacity: 0.62,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -626,7 +614,6 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
                     position: _index + 1,
                     scale: 1,
                     opacity: 1,
-                    onTap: () => widget.onOpenLecture(current),
                   ),
                 ),
               ],
@@ -634,7 +621,7 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
           ),
         ),
         if (_hasMultiple) ...[
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(items.length, (i) {
@@ -642,7 +629,7 @@ class _WhatsNewCarouselState extends State<_WhatsNewCarousel> {
               final scheme = Theme.of(context).colorScheme;
 
               return AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: const Duration(milliseconds: 180),
                 margin: const EdgeInsets.symmetric(horizontal: 3),
                 width: selected ? 22 : 7,
                 height: 7,
@@ -666,8 +653,7 @@ class _EmptyWhatsNewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
 
     return Card(
       child: Padding(
@@ -679,7 +665,7 @@ class _EmptyWhatsNewCard extends StatelessWidget {
             Expanded(
               child: Text(
                 'No new lectures available yet.',
-                style: theme.textTheme.bodyMedium,
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
           ],
