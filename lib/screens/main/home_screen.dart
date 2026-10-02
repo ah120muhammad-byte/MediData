@@ -23,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
   final ClinicalCaseService _caseService = ClinicalCaseService.instance;
   late Future<_HomeData> _homeFuture;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
@@ -211,10 +212,30 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refresh() async {
-    if (!mounted) return;
-    final future = _loadHomeData();
-    setState(() => _homeFuture = future);
-    await future;
+    if (!mounted || _isRefreshing) return;
+
+    setState(() => _isRefreshing = true);
+
+    try {
+      final data = await _loadHomeData();
+      if (!mounted) return;
+
+      setState(() {
+        _homeFuture = Future<_HomeData>.value(data);
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Home refresh error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+
+      setState(() {
+        _homeFuture = Future<_HomeData>.error(error, stackTrace);
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
   }
 
   @override
@@ -267,10 +288,38 @@ class _HomeScreenState extends State<HomeScreen> {
                                     icon: Icons.auto_awesome_rounded,
                                   ),
                                 ),
-                                IconButton(
-                                  tooltip: 'Refresh',
-                                  onPressed: _refresh,
-                                  icon: const Icon(Icons.refresh_rounded),
+                                Material(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: _isRefreshing ? null : () => _refresh(),
+                                    child: SizedBox(
+                                      width: 42,
+                                      height: 42,
+                                      child: Center(
+                                        child: _isRefreshing
+                                            ? SizedBox(
+                                                width: 19,
+                                                height: 19,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2.2,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary,
+                                                ),
+                                              )
+                                            : Icon(
+                                                Icons.refresh_rounded,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
