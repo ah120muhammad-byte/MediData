@@ -40,14 +40,26 @@ class R2VideoService {
       // A cached access token can become invalid while the app is open.
       // Refresh once and retry the request before asking the user to sign in.
       if (error.response?.statusCode != 401) {
-        rethrow;
+        final status = error.response?.statusCode;
+        final body = error.response?.data;
+        throw Exception(
+          'R2 signed URL request failed (HTTP $status): ${body ?? error.message ?? error}',
+        );
       }
 
       token = await _refreshAccessToken();
-      response = await _requestSignedUrl(
-        key: cleanKey,
-        accessToken: token,
-      );
+      try {
+        response = await _requestSignedUrl(
+          key: cleanKey,
+          accessToken: token,
+        );
+      } on DioException catch (retryError) {
+        final status = retryError.response?.statusCode;
+        final body = retryError.response?.data;
+        throw Exception(
+          'R2 signed URL retry failed (HTTP $status): ${body ?? retryError.message ?? retryError}',
+        );
+      }
     }
 
     final url = response.data?['url']?.toString() ?? '';
