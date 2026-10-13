@@ -177,7 +177,7 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
       final details = playerError != null && playerError.trim().isNotEmpty
           ? playerError.trim()
           : e.toString();
-      debugPrint('Video player error (${' + 'e.runtimeType}): $details');
+      debugPrint('Video player error (${e.runtimeType}): $details');
       if (!mounted) return;
       setState(() {
         _loading = false;
