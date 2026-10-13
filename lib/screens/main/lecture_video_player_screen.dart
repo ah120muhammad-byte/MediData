@@ -47,6 +47,7 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   bool _completed = false;
   bool _muted = false;
   String? _error;
+  String? _errorDetails;
   double _playbackSpeed = 1.0;
 
   @override
@@ -104,6 +105,14 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
   Future<void> _initializeVideo() async {
     if (_initializing) return;
     _initializing = true;
+
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+        _errorDetails = null;
+      });
+    }
 
     try {
       final downloaded = await DownloadsService.instance.findById(widget.fileId);
@@ -164,11 +173,16 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
       _studyTracker.start();
       _scheduleControlsHide();
     } catch (e) {
-      debugPrint('Video player error: $e');
+      final playerError = _controller?.value.errorDescription;
+      final details = playerError != null && playerError.trim().isNotEmpty
+          ? playerError.trim()
+          : e.toString();
+      debugPrint('Video player error (${' + 'e.runtimeType}): $details');
       if (!mounted) return;
       setState(() {
         _loading = false;
         _error = 'Unable to play this video.';
+        _errorDetails = details.length > 600 ? details.substring(0, 600) : details;
       });
     } finally {
       _initializing = false;
@@ -351,6 +365,14 @@ class _LectureVideoPlayerScreenState extends State<LectureVideoPlayerScreen>
             const Icon(Icons.video_library_outlined, size: 64, color: Colors.white70),
             const SizedBox(height: 16),
             Text(_error ?? 'Unable to play this video.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
+            if (_errorDetails != null && _errorDetails!.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SelectableText(
+                _errorDetails!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 18),
             FilledButton.icon(onPressed: _initializeVideo, icon: const Icon(Icons.refresh_rounded), label: const Text('Retry')),
           ],
