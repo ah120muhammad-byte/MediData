@@ -51,6 +51,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   String? _chatSessionId;
   bool _loading = true;
   bool _sending = false;
+  bool _streamScrollQueued = false;
   AiAttachment? _attachment;
   _AiMode _mode = _AiMode.smart;
 
@@ -356,7 +357,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                 content: partial,
               );
             });
-            unawaited(_scrollToBottom());
+            _queueStreamScroll();
           },
         );
 
@@ -426,7 +427,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
               content: partial,
             );
           });
-          unawaited(_scrollToBottom());
+          _queueStreamScroll();
         },
       );
       if (!mounted) return;
@@ -559,6 +560,16 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     }
   }
 
+  void _queueStreamScroll() {
+    if (_streamScrollQueued) return;
+    _streamScrollQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _streamScrollQueued = false;
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
+  }
+
   String _buildTitle(String text) {
     final value = text.trim();
     if (value.isEmpty) return 'New chat';
@@ -618,10 +629,22 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.auto_awesome_rounded,
-              size: compact ? 20 : 22,
-              color: scheme.primary,
+            Container(
+              width: compact ? 32 : 35,
+              height: compact ? 32 : 35,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [scheme.primary, scheme.tertiary],
+                ),
+              ),
+              child: Icon(
+                Icons.auto_awesome_rounded,
+                size: compact ? 18 : 20,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(width: 8),
             Column(
@@ -732,85 +755,218 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     return ListView.builder(
       controller: _scrollController,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 24),
       itemCount: _messages.length,
-      itemBuilder: (context, index) => _buildMessage(_messages[index], index),
+      itemBuilder: (context, index) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 860),
+          child: _buildMessage(_messages[index], index),
+        ),
+      ),
     );
   }
 
   Widget _buildMessage(AiChatMessage message, int index) {
     final scheme = Theme.of(context).colorScheme;
+    final width = MediaQuery.sizeOf(context).width;
     final user = message.role == 'user';
     final content = message.content;
+    final isLatestAssistant =
+        index == _messages.lastIndexWhere((item) => item.role == 'assistant');
+    final bubbleMaxWidth = width < 600 ? width * .84 : 650.0;
 
-    return Align(
-      alignment: user ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 820),
-        margin: const EdgeInsets.only(bottom: 14),
-        child: Column(
-          crossAxisAlignment:
-              user ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: user
-                    ? scheme.primary.withValues(alpha: .13)
-                    : scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(18),
+    return Padding(
+      padding: EdgeInsets.only(bottom: user ? 20 : 27),
+      child: Row(
+        mainAxisAlignment:
+            user ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (user)
+            Flexible(
+              child: Container(
+                constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 13,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: .82),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                    bottomLeft: Radius.circular(24),
+                    bottomRight: Radius.circular(7),
+                  ),
+                ),
+                child: SelectableText(
+                  content,
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: 15,
+                    height: 1.58,
+                  ),
+                ),
               ),
-              child: user
-                  ? Text(
-                      content,
-                      style: const TextStyle(height: 1.5),
-                    )
-                  : content.isEmpty
-                      ? const _TypingIndicator()
-                      : MarkdownBody(
-                          data: content,
-                          selectable: true,
-                          styleSheet: MarkdownStyleSheet(
-                            p: TextStyle(fontSize: 15, height: 1.6),
-                            h1: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                            ),
-                            h2: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                            ),
-                            h3: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                            ),
+            )
+          else
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [scheme.primary, scheme.tertiary],
                           ),
                         ),
-            ),
-            if (!user && content.isNotEmpty && !_sending)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'Copy',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => _copyText(content),
-                    icon: const Icon(Icons.copy_rounded, size: 17),
+                        child: const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Text(
+                        'MediData AI',
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: .82),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .1,
+                        ),
+                      ),
+                      if (_sending && isLatestAssistant && content.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: scheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  if (index ==
-                      _messages.lastIndexWhere(
-                        (item) => item.role == 'assistant',
-                      ))
-                    IconButton(
-                      tooltip: 'Regenerate',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: _regenerate,
-                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                  const SizedBox(height: 13),
+                  if (content.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 5, bottom: 8),
+                      child: _TypingIndicator(),
+                    )
+                  else
+                    MarkdownBody(
+                      data: content,
+                      selectable: true,
+                      styleSheet: MarkdownStyleSheet(
+                        p: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 15.5,
+                          height: 1.72,
+                        ),
+                        h1: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 25,
+                          height: 1.25,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        h2: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 21,
+                          height: 1.3,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        h3: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 18,
+                          height: 1.35,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        h4: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        strong: TextStyle(
+                          color: scheme.onSurface,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        em: TextStyle(
+                          color: scheme.onSurface,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        code: TextStyle(
+                          color: scheme.primary,
+                          fontFamily: 'monospace',
+                          fontSize: 13.5,
+                          backgroundColor: scheme.surfaceContainerHighest,
+                        ),
+                        codeblockDecoration: BoxDecoration(
+                          color: scheme.surfaceContainerLow,
+                          border: Border.all(
+                            color: scheme.outline.withValues(alpha: .16),
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        codeblockPadding: const EdgeInsets.all(14),
+                        blockquoteDecoration: BoxDecoration(
+                          color: scheme.surfaceContainerLow,
+                          border: Border(
+                            left: BorderSide(
+                              color: scheme.primary.withValues(alpha: .8),
+                              width: 3,
+                            ),
+                          ),
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        blockquotePadding: const EdgeInsets.fromLTRB(
+                          13,
+                          9,
+                          12,
+                          9,
+                        ),
+                        listIndent: 25,
+                        tableCellsPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  if (!user && content.isNotEmpty && !_sending)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10, left: 1),
+                      child: Wrap(
+                        spacing: 3,
+                        children: [
+                          IconButton(
+                            tooltip: 'Copy response',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _copyText(content),
+                            icon: const Icon(Icons.content_copy_rounded, size: 17),
+                          ),
+                          if (isLatestAssistant)
+                            IconButton(
+                              tooltip: 'Regenerate response',
+                              visualDensity: VisualDensity.compact,
+                              onPressed: _regenerate,
+                              icon: const Icon(Icons.refresh_rounded, size: 19),
+                            ),
+                        ],
+                      ),
                     ),
                 ],
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -819,7 +975,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     final scheme = Theme.of(context).colorScheme;
 
     return Material(
-      elevation: 8,
+      elevation: 0,
       color: scheme.surface,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 7, 12, 12),
@@ -878,7 +1034,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                   color: scheme.surfaceContainerHighest.withValues(alpha: .70),
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                    color: scheme.outline.withValues(alpha: .10),
+                    color: scheme.outline.withValues(alpha: .17),
                   ),
                 ),
                 child: Row(
